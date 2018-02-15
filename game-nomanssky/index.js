@@ -15,9 +15,9 @@ function main(context) {
     queryPath: findGame,
     queryModPath: () => path.join('GAMEDATA', 'PCBANKS', 'MODS'),
     logo: 'gameart.png',
-    executable: () => 'NMS.exe',
+    executable: () => 'Binaries/NMS.exe',
     requiredFiles: [
-      'NMS.exe',
+      'Binaries/NMS.exe',
     ],
     details: {
       steamAppId: 275850,
