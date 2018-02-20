@@ -93,13 +93,13 @@ function installContent(files,
 
 function testTL(instructions) {
   return Promise.resolve(instructions.find(
-    instruction => instruction.destination.toLowerCase().startsWith('mods' + path.sep)
+    instruction => !!instruction.destination && instruction.destination.toLowerCase().startsWith('mods' + path.sep)
   ) !== undefined);
 }
 
 function testDLC(instructions) {
   return Promise.resolve(instructions.find(
-    instruction => instruction.destination.toLowerCase().startsWith('dlc' + path.sep)) !== undefined);
+    instruction => !!instruction.destination && instruction.destination.toLowerCase().startsWith('dlc' + path.sep)) !== undefined);
 }
 
 function main(context) {
