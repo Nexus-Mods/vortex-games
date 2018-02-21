@@ -42,7 +42,7 @@ class DarkSouls {
                 { message: 'Modding Dark Souls requires a tool called DSfix' }, [
                   { label: 'Cancel', action: () => reject(new util.UserCanceled()) },
                   { label: 'Go to DSfix page', action: () => {
-                    opn('https://www.nexusmods.com/darksouls/mods/19');
+                    opn('https://www.nexusmods.com/darksouls/mods/19').catch(err => undefined);
                     resolve();
                   } },
                   { label: 'Ignore', action: () => resolve() }
