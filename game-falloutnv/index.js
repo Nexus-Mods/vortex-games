@@ -35,7 +35,7 @@ let tools = [
     logo: 'loot.png',
     executable: () => 'loot.exe',
     parameters: [
-      '--game=falloutnv',
+      '--game=FalloutNV',
     ],
     requiredFiles: [
       'loot.exe',

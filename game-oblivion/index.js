@@ -34,7 +34,7 @@ let tools = [
     logo: 'loot.png',
     executable: () => 'loot.exe',
     parameters: [
-      '--game=oblivion',
+      '--game=Oblivion',
     ],
     requiredFiles: [
       'loot.exe',

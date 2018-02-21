@@ -52,7 +52,7 @@ const tools = [
     logo: 'loot.png',
     executable: () => 'loot.exe',
     parameters: [
-      '--game=skyrimse',
+      '--game="Skyrim Special Edition"',
     ],
     requiredFiles: [
       'loot.exe',

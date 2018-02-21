@@ -52,7 +52,7 @@ let tools = [
     logo: 'loot.png',
     executable: () => 'loot.exe',
     parameters: [
-      '--game=skyrim',
+      '--game=Skyrim',
     ],
     requiredFiles: [
       'loot.exe',
