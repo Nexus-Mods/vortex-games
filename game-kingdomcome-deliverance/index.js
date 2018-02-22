@@ -7,13 +7,36 @@ function findGame() {
       .then(game => game.gamePath);
 }
 
+function test(game, discovery) {
+  if (game.id !== 'kingdomcomedeliverance') {
+    return undefined;
+  }
+
+  return {
+    baseFiles: [
+      {
+        in: path.join(discovery.path, 'user.cfg'),
+        out: 'user.cfg',
+      },
+    ],
+    filter: filePath => path.basename(filePath) === 'user.cfg',
+  };
+}
+
+function merge(filePath, mergeDir) {
+  return fs.readFileAsync(filePath)
+      .then(modData => fs.writeFileAsync(path.join(mergeDir, 'user.cfg'),
+                                         '\n' + modData, {flag: 'a'}));
+}
+
+
 function main(context) {
   context.registerGame({
     id: 'kingdomcomedeliverance',
     name: 'Kingdom Come: Deliverance',
     mergeMods: false,
     queryPath: findGame,
-    queryModPath: () => 'data',
+    queryModPath: () => '.',
     logo: 'gameart.png',
     executable: () => 'Bin/Win64/KingdomCome.exe',
     requiredFiles: [
@@ -23,6 +46,8 @@ function main(context) {
       steamAppId: 379430,
     },
   });
+
+  context.registerMerge(test, merge, '');
 
   return true;
 }
