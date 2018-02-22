@@ -40,16 +40,18 @@ function addinsPath() {
                    'Settings', 'AddIns.xml');
 }
 
+const emptyAddins = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<AddInsList></AddInsList>`;
+
 function test(game) {
   if (game.id !== 'dragonage') {
     return undefined;
   }
 
   return {
-    baseFiles: [
+    baseFiles: () => [
       {
-        in: path.join(appUni.getPath('documents'), 'Bioware', 'Dragon Age',
-                      'Settings', 'AddIns.xml'),
+        in: addinsPath(),
         out: 'Addins.xml',
       },
     ],
@@ -66,7 +68,7 @@ function merge(filePath, mergeDir) {
       })
       .then(() => fs.readFileAsync(path.join(mergeDir, 'AddIns.xml')))
       .catch(err => (err.code === 'ENOENT')
-          ? fs.readFileAsync(addinsPath())
+          ? fs.readFileAsync(addinsPath()).catch(err => emptyAddins)
           : Promise.reject(err))
       .then(addinsData => new Promise((resolve, reject) => {
         resolve(parseXmlString(addinsData));
