@@ -41,7 +41,7 @@ function modPath() {
 function main(context) {
   context.registerGame({
     id: 'teso',
-    name: 'The Elder Scroll Online',
+    name: 'The Elder Scrolls Online',
     mergeMods: false,
     queryPath: findGame,
     queryModPath: modPath,
