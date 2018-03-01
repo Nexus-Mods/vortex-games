@@ -1,4 +1,4 @@
-const { log, util } = require('vortex-api');
+const { fs, log, util } = require('vortex-api');
 
 const path = require('path');
 
@@ -7,18 +7,27 @@ function findGame() {
       .then(game => game.gamePath);
 }
 
+function modPath() {
+  return path.join('GAMEDATA', 'PCBANKS', 'MODS');
+}
+
+function prepareForModding(discovery) {
+  return fs.ensureDirAsync(path.join(discovery.path, modPath()));
+}
+
 function main(context) {
   context.registerGame({
     id: 'nomanssky',
     name: 'No Man\'s Sky',
     mergeMods: false,
     queryPath: findGame,
-    queryModPath: () => path.join('GAMEDATA', 'PCBANKS', 'MODS'),
+    queryModPath: modPath,
     logo: 'gameart.png',
     executable: () => 'Binaries/NMS.exe',
     requiredFiles: [
       'Binaries/NMS.exe',
     ],
+    setup: prepareForModding,
     details: {
       steamAppId: 275850,
     },
