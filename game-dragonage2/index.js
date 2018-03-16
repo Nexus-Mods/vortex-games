@@ -39,7 +39,7 @@ function main(context) {
   context.registerGame({
     id: 'dragonage2',
     name: 'Dragon Age 2',
-    mergeMods: false,
+    mergeMods: true,
     queryPath: findGame,
     queryModPath,
     logo: 'gameart.png',

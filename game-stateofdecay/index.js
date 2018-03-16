@@ -10,7 +10,7 @@ function main(context) {
   context.registerGame({
     id: 'stateofdecay',
     name: 'State of Decay',
-    mergeMods: false,
+    mergeMods: true,
     queryPath: findGame,
     queryModPath: () => 'game',
     logo: 'gameart.png',

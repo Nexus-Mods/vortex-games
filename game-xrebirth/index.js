@@ -90,7 +90,7 @@ function main(context) {
   context.registerGame({
     id: 'xrebirth',
     name: 'X Rebirth',
-    mergeMods: false,
+    mergeMods: true,
     queryPath: findGame,
     queryModPath: () => 'extensions',
     logo: 'gameart.png',

@@ -22,7 +22,7 @@ function main(context) {
   context.registerGame({
     id: 'starbound',
     name: 'Starbound',
-    mergeMods: false,
+    mergeMods: true,
     queryPath: findGame,
     queryModPath: () => 'mods',
     logo: 'gameart.png',

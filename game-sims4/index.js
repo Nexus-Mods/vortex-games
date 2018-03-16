@@ -34,7 +34,7 @@ function main(context) {
   context.registerGame({
     id: 'thesims4',
     name: 'The Sims 4',
-    mergeMods: false,
+    mergeMods: true,
     queryPath: findGame,
     queryModPath: modPath,
     logo: 'gameart.png',

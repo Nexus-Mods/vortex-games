@@ -5,7 +5,7 @@ function main(context) {
     id: 'xcom2',
     name: 'X-COM 2',
     logo: 'gameart.png',
-    mergeMods: false,
+    mergeMods: true,
     queryModPath: () => path.join('XComGame', 'Mods'),
     executable: () => 'Binaries/Win64/XCom2.exe',
     requiredFiles: [

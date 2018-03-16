@@ -5,7 +5,7 @@ class DarkSouls2 {
     this.context = context;
     this.id = 'darksouls2';
     this.name = 'Dark Souls II';
-    this.mergeMods = false;
+    this.mergeMods = true;
     this.logo = 'gameart.png';
     this.details = {
       steamAppId: 236430,

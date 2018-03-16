@@ -11,7 +11,7 @@ function main(context) {
   context.registerGame({
     id: 'breakingwheel',
     name: 'Breaking Wheel',
-    mergeMods: false,
+    mergeMods: true,
     queryPath: findGame,
     queryModPath: () => 'ModdingTools',
     logo: 'gameart.png',

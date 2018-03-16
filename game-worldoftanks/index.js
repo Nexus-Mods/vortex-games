@@ -54,7 +54,7 @@ function main(context) {
   context.registerGame({
     id: 'worldoftanks',
     name: 'World Of Tanks',
-    mergeMods: false,
+    mergeMods: true,
     queryPath: findGame,
     queryModPath,
     logo: 'gameart.png',

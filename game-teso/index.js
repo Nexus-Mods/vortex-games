@@ -42,7 +42,7 @@ function main(context) {
   context.registerGame({
     id: 'teso',
     name: 'The Elder Scrolls Online',
-    mergeMods: false,
+    mergeMods: true,
     queryPath: findGame,
     queryModPath: modPath,
     logo: 'gameart.png',

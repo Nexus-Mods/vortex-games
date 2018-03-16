@@ -19,7 +19,7 @@ function main(context) {
   context.registerGame({
     id: 'grimrock',
     name: 'Legend of Grimrock',
-    mergeMods: false,
+    mergeMods: true,
     queryPath: findGame,
     queryModPath: modPath,
     logo: 'gameart.png',

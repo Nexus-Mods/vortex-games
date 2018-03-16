@@ -10,7 +10,7 @@ function main(context) {
   context.registerGame({
     id: 'warthunder',
     name: 'War Thunder',
-    mergeMods: false,
+    mergeMods: true,
     queryPath: findGame,
     queryModPath: () => 'UserSkins',
     logo: 'gameart.png',

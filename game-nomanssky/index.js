@@ -19,7 +19,7 @@ function main(context) {
   context.registerGame({
     id: 'nomanssky',
     name: 'No Man\'s Sky',
-    mergeMods: false,
+    mergeMods: true,
     queryPath: findGame,
     queryModPath: modPath,
     logo: 'gameart.png',
