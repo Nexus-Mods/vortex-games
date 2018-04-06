@@ -35,15 +35,16 @@ let version;
 
 function queryModPath(gamePath) {
   if (version === undefined) {
-    const data = fs.readFileSync(path.join(gamePath, 'version.xml'), { encoding: 'utf8' });
-    const versionXML = parseXmlString(data);
-
     try {
+      const data = fs.readFileSync(path.join(gamePath, 'version.xml'), { encoding: 'utf8' });
+      const versionXML = parseXmlString(data);
+
       version = versionXML.get('//version.xml/version').text();
       version = version.replace(/ ?v.([0-9.]*) .*/, '$1');
       fs.statSync(path.join(gamePath, 'res_mods', version));
     } catch (parseErr) {
-      throw new Error('failed to determine correct mod directory');
+      throw new util.SetupError('World of Tanks doesn\'t seem to be installed correctly. '
+        + 'Please check the version.xml file in your game directory.');
     }
   }
 
@@ -61,6 +62,7 @@ function main(context) {
     executable: () => 'WorldOfTanks.exe',
     requiredFiles: [
       'WorldOfTanks.exe',
+      'version.xml'
     ],
     details: {
     },
