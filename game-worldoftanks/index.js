@@ -43,6 +43,7 @@ function queryModPath(gamePath) {
       version = version.replace(/ ?v.([0-9.]*) .*/, '$1');
       fs.statSync(path.join(gamePath, 'res_mods', version));
     } catch (parseErr) {
+      version = undefined;
       throw new util.SetupError('World of Tanks doesn\'t seem to be installed correctly. '
         + 'Please check the version.xml file in your game directory.');
     }
