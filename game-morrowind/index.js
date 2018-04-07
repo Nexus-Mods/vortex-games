@@ -10,9 +10,7 @@ function findGame() {
 
   let regKey = new Registry({
     hive: Registry.HKLM,
-    // Morrowind, being an old application, has its registry accesses
-    // redirected post Vista (?)
-    key: '\\Software\\Classes\\VirtualStore\\MACHINE\\SOFTWARE\\Wow6432Node\\bethesda softworks\\Morrowind',
+    key: '\\Software\\Wow6432Node\\bethesda softworks\\Morrowind',
   });
 
   return new Promise((resolve, reject) => {
