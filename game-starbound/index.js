@@ -14,8 +14,8 @@ function gameExecutable() {
   return 'win64/starbound.exe';
 }
 
-function prepareForModding() {
-  return fs.ensureDirAsync('mods');
+function prepareForModding(discovery) {
+  return fs.ensureDirAsync(path.join(discovery.path, 'mods'));
 }
 
 function main(context) {

@@ -29,6 +29,10 @@ function testUserContent(instructions) {
     instruction => path.basename(instruction.destination) !== 'cook.hash'));
 }
 
+function prepareForModding(discovery) {
+  return fs.ensureDirAsync(path.join(discovery.path, 'UserContent'));
+}
+
 function main(context) {
   context.registerGame({
     id: 'witcher2',
@@ -39,6 +43,7 @@ function main(context) {
     queryModPath: () => 'CookedPC',
     logo: 'gameart.png',
     executable: () => 'bin/witcher2.exe',
+    setup: prepareForModding,
     requiredFiles: [
       'bin/witcher2.exe',
       'bin/userContentManager.exe',
