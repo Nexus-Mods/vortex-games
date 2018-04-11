@@ -3,7 +3,7 @@ const path = require('path');
 function main(context) {
   context.registerGame({
     id: 'xcom2',
-    name: 'X-COM 2',
+    name: 'XCOM 2',
     logo: 'gameart.png',
     mergeMods: true,
     queryModPath: () => path.join('XComGame', 'Mods'),
