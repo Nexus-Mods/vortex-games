@@ -1,4 +1,5 @@
 const Promise = require('bluebird');
+const { util } = require('vortex-api');
 const Registry = require('winreg');
 
 function findGame() {
@@ -22,7 +23,7 @@ function findGame() {
     });
   })
   .catch(err =>
-    util.Steam.findByName('Fallout 4')
+    util.steam.findByName('Fallout 4')
       .then(game => game.gamePath)
   );
 }

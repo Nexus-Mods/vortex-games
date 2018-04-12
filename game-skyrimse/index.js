@@ -1,4 +1,4 @@
-const { types } = require('vortex-api');
+const { types, util } = require('vortex-api');
 const Registry = require('winreg');
 
 function findGame() {
@@ -22,7 +22,7 @@ function findGame() {
     });
   })
   .catch(err =>
-    util.Steam.findByName('The Elder Scrolls V: Skyrim Special Edition')
+    util.steam.findByName('The Elder Scrolls V: Skyrim Special Edition')
       .then(game => game.gamePath)
   );
 }

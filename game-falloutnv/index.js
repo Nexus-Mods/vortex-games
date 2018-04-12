@@ -23,7 +23,7 @@ function findGame() {
     });
   })
   .catch(err =>
-    util.Steam.findByName('Fallout: New Vegas')
+    util.steam.findByName('Fallout: New Vegas')
       .then(game => game.gamePath)
   );
 }

@@ -1,4 +1,5 @@
 const Promise = require('bluebird');
+const { util } = require('vortex-api');
 const Registry = require('winreg');
 
 function findGame() {
