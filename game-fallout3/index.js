@@ -23,7 +23,7 @@ function findGame() {
     });
   })
   .catch(err =>
-    util.Steam.findByName('Fallout 3')
+    util.steam.findByName('Fallout 3')
       .then(game => game.gamePath)
   );
 }
