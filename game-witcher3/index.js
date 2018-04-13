@@ -41,8 +41,7 @@ function installTL(files,
   let prefix = files.reduce((prev, file) => {
     const components = file.toLowerCase().split(path.sep);
     const idx = components.indexOf('mods');
-    if ((idx !== -1)
-        && ((prev === undefined) || (idx < prev.length))) {
+    if ((idx > 0) && ((prev === undefined) || (idx < prev.length))) {
       return components.slice(0, idx);
     } else {
       return prev;
