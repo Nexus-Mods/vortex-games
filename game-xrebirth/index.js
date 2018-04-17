@@ -31,47 +31,55 @@ function install(files,
 
   return fs.readFileAsync(path.join(destinationPath, contentPath),
                           { encoding: 'utf8' })
-      .then(data => new Promise((resolve, reject) => {
+      .then(data => {
+        let parsed;
         try {
-          const parsed = parseXmlString(data);
-          const attrInstructions = [];
-
-          outputPath = parsed.get('//content').attr('id').value();
-          if (outputPath === undefined) {
-            return reject(
-                new Error('invalid or unsupported content.xml'));
-          }
-          attrInstructions.push({
-            type: 'attribute',
-            key: 'customFileName',
-            value: parsed.get('//content').attr('name').value().trim(),
-          });
-          attrInstructions.push({
-            type: 'attribute',
-            key: 'description',
-            value: parsed.get('//content').attr('description').value(),
-          });
-          attrInstructions.push({
-            type: 'attribute',
-            key: 'sticky',
-            value: parsed.get('//content').attr('save').value() === 'true',
-          });
-          attrInstructions.push({
-            trype: 'attribute',
-            key: 'author',
-            value: parsed.get('//content').attr('author').value(),
-          });
-          attrInstructions.push({
-            type: 'attribute',
-            key: 'version',
-            value: parsed.get('//content').attr('version').value(),
-          });
-          resolve(attrInstructions);
-        } catch (parseErr) {
-          return reject(
-              new Error('failed to determine correct mod directory'));
+          parsed = parseXmlString(data);
+        } catch (err) { 
+          return Promise.reject(new util.DataInvalid('content.xml invalid: ' + err.message));
         }
-      }))
+        const attrInstructions = [];
+
+        const getAttr = key => {
+          try {
+            return parsed.get('//content').attr(key).value();
+          } catch (err) {
+            log('info', 'attribute missing in content.xml',  { key });
+          }
+        }
+
+        outputPath = getAttr('id');
+        if (outputPath === undefined) {
+          return Promise.reject(
+              new util.DataInvalid('invalid or unsupported content.xml'));
+        }
+        attrInstructions.push({
+          type: 'attribute',
+          key: 'customFileName',
+          value: getAttr('name').trim(),
+        });
+        attrInstructions.push({
+          type: 'attribute',
+          key: 'description',
+          value: getAttr('description'),
+        });
+        attrInstructions.push({
+          type: 'attribute',
+          key: 'sticky',
+          value: getAttr('save') === 'true',
+        });
+        attrInstructions.push({
+          trype: 'attribute',
+          key: 'author',
+          value: getAttr('author'),
+        });
+        attrInstructions.push({
+          type: 'attribute',
+          key: 'version',
+          value: getAttr('version'),
+        });
+        return Promise.resolve(attrInstructions);
+      })
       .then(attrInstructions => {
         let instructions = attrInstructions.concat(
             files.filter(file => file.startsWith(basePath + path.sep) &&
