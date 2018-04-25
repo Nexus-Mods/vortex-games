@@ -31,12 +31,12 @@ class StardewValley {
     // custom properties
     this.defaultPaths = [
       // Linux
-      process.env.ENV_VARIABLE + '/GOG Games/Stardew Valley/game',
-      process.env.ENV_VARIABLE + '/.local/share/Steam/steamapps/common/Stardew Valley',
+      process.env.HOME + '/GOG Games/Stardew Valley/game',
+      process.env.HOME + '/.local/share/Steam/steamapps/common/Stardew Valley',
 
       // Mac
       '/Applications/Stardew Valley.app/Contents/MacOS',
-      process.env.ENV_VARIABLE + '/Library/Application Support/Steam/steamapps/common/Stardew Valley/Contents/MacOS',
+      process.env.HOME + '/Library/Application Support/Steam/steamapps/common/Stardew Valley/Contents/MacOS',
 
       // Windows
       'C:\\Program Files (x86)\\GalaxyClient\\Games\\Stardew Valley',
