@@ -32,7 +32,9 @@ function queryModPath() {
 }
 
 function prepareForModding() {
-  return fs.ensureDirAsync(queryModPath());
+  return fs.ensureDirAsync(queryModPath())
+    .then(() => fs.ensureDirAsync(path.join(appUni.getPath('documents'), 'BioWare', 'Dragon Age', 'AddIns')))
+    .then(() => fs.ensureDirAsync(path.dirname(addinsPath())));
 }
 
 function addinsPath() {
