@@ -73,7 +73,11 @@ function merge(filePath, mergeDir) {
           ? fs.readFileAsync(addinsPath()).catch(err => emptyAddins)
           : Promise.reject(err))
       .then(addinsData => new Promise((resolve, reject) => {
-        resolve(parseXmlString(addinsData));
+        try  {
+          resolve(parseXmlString(addinsData));
+        } catch (err) {
+          resolve(parseXmlString(emptyAddins));
+        }
       }))
       .then(addins => {
         const list = addins.get('//AddInsList');
