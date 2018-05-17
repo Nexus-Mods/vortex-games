@@ -1,4 +1,5 @@
 const Promise = require('bluebird');
+const fs = require('fs');
 const path = require('path');
 const Registry = require('winreg');
 
