@@ -31,7 +31,11 @@ function findGame() {
         resolve(path.join(result.value, 'Launcher'));
       }
     });
-  });
+  })
+  .catch(err =>
+    util.steam.findByName('The Elder Scrolls Online')
+      .then(game => game.gamePath)
+  );
 }
 
 function modPath() {
