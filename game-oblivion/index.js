@@ -14,7 +14,7 @@ function findGame() {
   });
 
   return new Promise((resolve, reject) => {
-    regKey.get('Installed Pathx', (err, result) => {
+    regKey.get('Installed Path', (err, result) => {
       if (err !== null) {
         reject(new Error(err.message));
       } else if (result === null) {
