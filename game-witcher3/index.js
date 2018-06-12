@@ -17,6 +17,8 @@ function findGame() {
     regKey.get('InstallFolder', (err, result) => {
       if (err !== null) {
         reject(new Error(err.message));
+      } else if (result === null) {
+        reject(new Error('empty registry key'));
       } else {
         resolve(result.value);
       }
