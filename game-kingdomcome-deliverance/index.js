@@ -1,7 +1,5 @@
-const Promise = require('bluebird');
-const { remote } = require('electron');
 const path = require('path');
-const { fs, log, selectors, util } = require('vortex-api');
+const { fs, log, util } = require('vortex-api');
 
 function findGame() {
   return util.steam.findByAppId('379430')
@@ -48,7 +46,7 @@ function main(context) {
           log('error', 'kingdomcomedeliverance was not discovered');
           return;
         }
-        fs.ensureDirAsync(path.join(discovery.path, 'Mods'))
+        fs.ensureDirWritableAsync(path.join(discovery.path, 'Mods'))
         .then(() => fs.writeFileAsync(path.join(discovery.path, 'Mods', 'mod_order.txt'),
                                       mods.map(mod => transformId(mod.id)).join('\n')));
       }
