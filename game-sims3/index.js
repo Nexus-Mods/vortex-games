@@ -28,12 +28,25 @@ function findGame() {
   });
 }
 
+const resource = `Priority 500
+PackedFile DCCache/*.dbc
+PackedFile Packages/*.package
+PackedFile Packages/*/*.package
+PackedFile Packages/*/*/*.package
+PackedFile Packages/*/*/*/*.package
+PackedFile Packages/*/*/*/*/*.package
+`;
+
 function prepareForModding() {
-  return fs.ensureDirAsync(modPath());
+  const basePath = modPath();
+  const resPath = path.join(path.dirname(basePath), 'Resource.cfg');
+  return fs.ensureDirAsync(basePath)
+    .then(() => fs.statAsync(resPath))
+    .catch(() => fs.writeFileAsync(resPath, resource, { encoding: 'utf-8' }));
 }
 
 function modPath() {
-  return path.join(remote.app.getPath('documents'), 'Electronic Arts', 'The Sims 3', 'Mods');
+  return path.join(remote.app.getPath('documents'), 'Electronic Arts', 'The Sims 3', 'Mods', 'Packages');
 }
 
 let tools = [];
