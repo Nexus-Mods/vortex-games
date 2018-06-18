@@ -1,9 +1,8 @@
 const Promise = require('bluebird');
-const Registry = require('winreg');
-
 const { remote } = require('electron');
-
 const path = require('path');
+const { fs } = require('vortex-api');
+const Registry = require('winreg');
 
 function findGame() {
   if (Registry === undefined) {
@@ -29,20 +28,15 @@ function findGame() {
   });
 }
 
+function prepareForModding() {
+  return fs.ensureDirAsync(modPath());
+}
+
 function modPath() {
   return path.join(remote.app.getPath('documents'), 'Electronic Arts', 'The Sims 3', 'Mods');
 }
 
-let tools = [
-  {
-    id: 'sevenzip',
-    name: '7-Zip',
-    executable: () => '7zFM.exe',
-    requiredFiles: [
-      '7zFM.exe',
-    ],
-  },
-];
+let tools = [];
 
 function main(context) {
   context.registerGame({
@@ -57,6 +51,7 @@ function main(context) {
       'game/bin/TS3.exe',
     ],
     supportedTools: tools,
+    setup: prepareForModding,
     details: {
       steamAppId: 47890,
     },
