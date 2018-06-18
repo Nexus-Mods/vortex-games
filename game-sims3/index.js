@@ -13,7 +13,7 @@ function findGame() {
 
   const regKey = new Registry({
     hive: Registry.HKLM,
-    key: '\\Software\\Maxis\\The Sims 3',
+    key: '\\Software\\WOW6432Node\\Sims\\The Sims 3',
   });
 
   return new Promise((resolve, reject) => {
