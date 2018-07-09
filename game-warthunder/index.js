@@ -1,9 +1,17 @@
 const path = require('path');
-const { log, util } = require('vortex-api');
+const { fs, log, util } = require('vortex-api');
 
 function findGame() {
   return util.steam.findByName('War Thunder')
       .then(game => game.gamePath);
+}
+
+function modPath() {
+  return 'UserSkins';
+}
+
+function prepareForModding(discovery) {
+  return fs.ensureDirAsync(path.join(discovery.path, modPath()));
 }
 
 function main(context) {
@@ -12,12 +20,13 @@ function main(context) {
     name: 'War Thunder',
     mergeMods: true,
     queryPath: findGame,
-    queryModPath: () => 'UserSkins',
+    queryModPath: modPath,
     logo: 'gameart.png',
-    executable: () => 'aces.exe',
+    executable: () => 'win64/aces.exe',
     requiredFiles: [
-      'aces.exe',
+      'win64/aces.exe',
     ],
+    setup: prepareForModding,
     details: {
       steamAppId: 236390,
     },
