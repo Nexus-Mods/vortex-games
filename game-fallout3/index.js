@@ -32,18 +32,6 @@ function findGame() {
 
 let tools = [
   {
-    id: 'loot',
-    name: 'LOOT',
-    logo: 'loot.png',
-    executable: () => 'loot.exe',
-    parameters: [
-      '--game=Fallout3',
-    ],
-    requiredFiles: [
-      'loot.exe',
-    ],
-  },
-  {
     id: 'fose',
     name: 'FOSE',
     executable: () => 'fose_loader.exe',
