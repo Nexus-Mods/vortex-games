@@ -50,18 +50,6 @@ let tools = [
     ],
   },
   {
-    id: 'loot',
-    name: 'LOOT',
-    logo: 'loot.png',
-    executable: () => 'loot.exe',
-    parameters: [
-      '--game=Skyrim',
-    ],
-    requiredFiles: [
-      'loot.exe',
-    ],
-  },
-  {
     id: 'FNIS',
     name: 'FNIS',
     logo: 'fnis.png',

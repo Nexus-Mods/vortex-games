@@ -30,20 +30,7 @@ function findGame() {
   );
 }
 
-let tools = [
-  {
-    id: 'loot',
-    name: 'LOOT',
-    logo: 'loot.png',
-    executable: () => 'loot.exe',
-    parameters: [
-      '--game=Oblivion',
-    ],
-    requiredFiles: [
-      'loot.exe',
-    ],
-  },
-];
+let tools = [];
 
 function main(context) {
   context.registerGame({

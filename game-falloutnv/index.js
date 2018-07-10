@@ -32,18 +32,6 @@ function findGame() {
 
 let tools = [
   {
-    id: 'loot',
-    name: 'LOOT',
-    logo: 'loot.png',
-    executable: () => 'loot.exe',
-    parameters: [
-      '--game=FalloutNV',
-    ],
-    requiredFiles: [
-      'loot.exe',
-    ],
-  },
-  {
     id: 'nvse',
     name: 'NVSE',
     executable: () => 'nvse_loader.exe',
