@@ -23,7 +23,11 @@ function findGame() {
         resolve(result.value);
       }
     });
-  });
+  })
+  .catch(err =>
+    util.steam.findByAppId('292030')
+      .then(game => game.gamePath)
+  );
 }
 
 function testSupportedTL(files, gameId) {
