@@ -25,7 +25,7 @@ function findGame() {
     });
   })
   .catch(err =>
-    util.steam.findByAppId('292030')
+    util.steam.findByName('The Witcher 3: Wild Hunt')
       .then(game => game.gamePath)
   );
 }
