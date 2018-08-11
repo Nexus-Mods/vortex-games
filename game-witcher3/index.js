@@ -1,6 +1,7 @@
 const Promise = require('bluebird');
 const path = require('path');
 const Registry = require('winreg');
+const { fs } = require('vortex-api');
 
 function findGame() {
   if (Registry === undefined) {
@@ -107,6 +108,10 @@ function testDLC(instructions) {
     instruction => !!instruction.destination && instruction.destination.toLowerCase().startsWith('dlc' + path.sep)) !== undefined);
 }
 
+function prepareForModding(discovery) {
+  return fs.ensureDirAsync(path.join(discovery.path, 'Mods'));
+}
+
 function main(context) {
   context.registerGame({
     id: 'witcher3',
@@ -117,6 +122,7 @@ function main(context) {
     queryModPath: () => 'Mods',
     logo: 'gameart.png',
     executable: () => 'bin/x64/witcher3.exe',
+    setup: prepareForModding,
     requiredFiles: [
       'bin/x64/witcher3.exe',
     ],
