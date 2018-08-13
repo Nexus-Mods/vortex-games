@@ -7,7 +7,8 @@ function findGame() {
 }
 
 function prepareForModding(discovery) {
-  return fs.ensureDirAsync(path.join(discovery.path, 'Mods'));
+  return fs.ensureDirWritableAsync(path.join(discovery.path, 'Mods'),
+    () => Promise.resolve());
 }
 
 function transformId(input) {
