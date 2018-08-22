@@ -27,6 +27,7 @@ class StardewValley {
       steamAppId: 413150
     };
     this.mergeMods = true;
+    this.shell = process.platform == 'win32';
 
     // custom properties
     this.defaultPaths = [
