@@ -5,25 +5,25 @@ const path = require('path');
 const Registry = require('winreg');
 
 function findGame() {
-  if (Registry === undefined) {
-    // linux ? macos ?
-    return null;
-  }
-
-  let regkey;
-
-  if (process.arch === 'x32') {
-    regkey = '\\Software\\Zenimax_Online\\Launcher';
-  } else {
-    regkey = '\\Software\\Wow6432Node\\Zenimax_Online\\Launcher';
-  }
-
-  const regKey = new Registry({
-    hive: Registry.HKLM,
-    key: regkey,
-  });
-
   return new Promise((resolve, reject) => {
+    if (Registry === undefined) {
+      // linux ? macos ?
+      return reject(new Error('No registry'));
+    }
+
+    let regkey;
+
+    if (process.arch === 'x32') {
+      regkey = '\\Software\\Zenimax_Online\\Launcher';
+    } else {
+      regkey = '\\Software\\Wow6432Node\\Zenimax_Online\\Launcher';
+    }
+
+    const regKey = new Registry({
+      hive: Registry.HKLM,
+      key: regkey,
+    });
+
     regKey.get('InstallPath', (err, result) => {
       if (err !== null) {
         reject(new Error(err.message));

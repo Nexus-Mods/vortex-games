@@ -2,17 +2,17 @@ const { types, util } = require('vortex-api');
 const Registry = require('winreg');
 
 function findGame() {
-  if (Registry === undefined) {
-    // linux ? macos ?
-    return null;
-  }
-
-  const regKey = new Registry({
-    hive: Registry.HKLM,
-    key: '\\Software\\Wow6432Node\\Bethesda Softworks\\Skyrim VR',
-  });
-
   return new Promise((resolve, reject) => {
+    if (Registry === undefined) {
+      // linux ? macos ?
+      return reject(new Error('No registry'));
+    }
+
+    const regKey = new Registry({
+      hive: Registry.HKLM,
+      key: '\\Software\\Wow6432Node\\Bethesda Softworks\\Skyrim VR',
+    });
+
     regKey.get('Installed Path', (err, result) => {
       if (err !== null) {
         reject(new Error(err.message));

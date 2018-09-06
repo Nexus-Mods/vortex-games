@@ -3,17 +3,17 @@ const { util } = require('vortex-api');
 const Registry = require('winreg');
 
 function findGame() {
-  if (Registry === undefined) {
-    // linux ? macos ?
-    return null;
-  }
-
-  let regKey = new Registry({
-    hive: Registry.HKLM,
-    key: '\\Software\\Wow6432Node\\Bethesda Softworks\\skyrim',
-  });
-
   return new Promise((resolve, reject) => {
+    if (Registry === undefined) {
+      // linux ? macos ?
+      return reject(new Error('No registry'));
+    }
+
+    let regKey = new Registry({
+      hive: Registry.HKLM,
+      key: '\\Software\\Wow6432Node\\Bethesda Softworks\\skyrim',
+    });
+
     regKey.get('Installed Path', (err, result) => {
       if (err !== null) {
         reject(new Error(err.message));

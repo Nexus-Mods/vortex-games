@@ -3,17 +3,17 @@ const Registry = require('winreg');
 const { util } = require('vortex-api');
 
 function findGame() {
-  if (Registry === undefined) {
-    // linux ? macos ?
-    return null;
-  }
-
-  let regKey = new Registry({
-    hive: Registry.HKLM,
-    key: '\\Software\\Wow6432Node\\Bethesda Softworks\\falloutnv',
-  });
-
   return new Promise((resolve, reject) => {
+    if (Registry === undefined) {
+      // linux ? macos ?
+      return reject(new Error('No registry'));
+    }
+
+    let regKey = new Registry({
+      hive: Registry.HKLM,
+      key: '\\Software\\Wow6432Node\\Bethesda Softworks\\falloutnv',
+    });
+
     regKey.get('Installed Path', (err, result) => {
       if (err !== null) {
         reject(new Error(err.message));

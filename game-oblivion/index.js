@@ -3,18 +3,18 @@ const { util } = require('vortex-api');
 const Registry = require('winreg');
 
 function findGame() {
-  if (Registry === undefined) {
-    // linux ? macos ?
-    return null;
-  }
-
-  let regKey = new Registry({
-    hive: Registry.HKLM,
-    key: '\\Software\\Wow6432Node\\Bethesda Softworks\\oblivion',
-  });
-
   return new Promise((resolve, reject) => {
-    regKey.get('Installed Path', (err, result) => {
+    if (Registry === undefined) {
+      // linux ? macos ?
+      return reject(new Error('No registry'));
+    }
+
+    let regKey = new Registry({
+      hive: Registry.HKLM,
+      key: '\\Software\\Wow6432Node\\Bethesda Softworks\\oblivion',
+    });
+
+     regKey.get('Installed Path', (err, result) => {
       if (err !== null) {
         reject(new Error(err.message));
       } else if (result === null) {

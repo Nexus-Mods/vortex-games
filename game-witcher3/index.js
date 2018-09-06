@@ -4,17 +4,17 @@ const Registry = require('winreg');
 const { fs } = require('vortex-api');
 
 function findGame() {
-  if (Registry === undefined) {
-    // linux ? macos ?
-    return null;
-  }
-
-  let regKey = new Registry({
-    hive: Registry.HKLM,
-    key: '\\Software\\CD Project Red\\The Witcher 3',
-  });
-
   return new Promise((resolve, reject) => {
+    if (Registry === undefined) {
+      // linux ? macos ?
+      return reject(new Error('No registry'));
+    }
+
+    let regKey = new Registry({
+      hive: Registry.HKLM,
+      key: '\\Software\\CD Project Red\\The Witcher 3',
+    });
+
     regKey.get('InstallFolder', (err, result) => {
       if (err !== null) {
         reject(new Error(err.message));
