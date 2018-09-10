@@ -20,6 +20,7 @@ const MOD_EXT_DESTINATION = {
   '.erf': 'erf',
   '.hak': 'hak',
   '.tlk': 'tlk',
+  '.bmu': 'music',
 };
 
 function findGame() {
