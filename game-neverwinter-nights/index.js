@@ -73,7 +73,7 @@ function findGameEE() {
 }
 
 
-function modPath() {
+function modPath(context) {
   const state = context.api.store.getState();
   const discovery = state.settings.gameMode.discovered[NWN_GAME_ID];
   return discovery.path;
@@ -99,7 +99,7 @@ function main(context) {
     name: 'Neverwinter Nights',
     mergeMods: true,
     queryPath: findGame,
-    queryModPath: modPath,
+    queryModPath: () => modPath(context),
     logo: 'gameart.png',
     executable: () => 'nwmain.exe',
     requiredFiles: [
