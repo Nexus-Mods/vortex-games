@@ -25,19 +25,29 @@ function findGame() {
     }),
   };
 
-  let errorText = '';
+  let val = 'Install Dir';
   return new Promise((resolve, reject) => {
-    Object.keys(registryKeys).map((regKey) => {
-      registryKeys[regKey].get('Install Dir', (err, result) => {
-        if (err === null && result !== null) {
-          resolve(result.value);
-        } else {
-          errorText += err + '\n';
-        }
-      });
-    })
-    reject(new Error('Could not resolve registry key: ' + errorText));
-  });
+    registryKeys.regKey1.get(val, (err, result) => {
+      if (err !== null) {
+        reject(new Error(err.message));
+      } else if (result === null) {
+        reject(new Error('empty registry key'));
+      } else {
+        resolve(result.value);
+      }
+    });
+  }).catch(() => { 
+    new Promise((resolve, reject) => {
+    registryKeys.regKey2.get(val, (err, result) => {
+      if (err !== null) {
+        reject(new Error(err.message));
+      } else if (result === null) {
+        reject(new Error('empty registry key'));
+      } else {
+        resolve(result.value);
+      }
+    });
+  })});
 }
 
 function queryModPath() {
