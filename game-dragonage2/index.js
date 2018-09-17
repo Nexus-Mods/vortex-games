@@ -10,26 +10,38 @@ function findGame() {
     return null;
   }
 
-  let regKey = new Registry({
-    hive: Registry.HKLM,
-    key: '\\Software\\Wow6432Node\\BioWare\\Dragon Age II',
-  });
+  // Dragon Age 2 seems to store the installation directory information
+  //  in different registry paths (possibly tied to game edition or localisation),
+  //  namely within HKLM...\Dragon Age 2\Install Dir; OR HKLM...\Dragon Age II\Install Dir;
+  //  we're going to test both.
+  const registryKeys = {
+    regKey1: new Registry({
+      hive: Registry.HKLM,
+      key: '\\Software\\Wow6432Node\\BioWare\\Dragon Age 2',
+    }),
+    regKey2: new Registry({
+      hive: Registry.HKLM,
+      key: '\\Software\\Wow6432Node\\BioWare\\Dragon Age II',
+    }),
+  };
 
+  let errorText = '';
   return new Promise((resolve, reject) => {
-    regKey.get('Install Dir', (err, result) => {
-      if (err !== null) {
-        reject(new Error(err.message));
-      } else if (result === null) {
-        reject(new Error('empty registry key'));
-      } else {
-        resolve(result.value);
-      }
-    });
+    Object.keys(registryKeys).map((regKey) => {
+      registryKeys[regKey].get('Install Dir', (err, result) => {
+        if (err === null && result !== null) {
+          resolve(result.value);
+        } else {
+          errorText += err + '\n';
+        }
+      });
+    })
+    reject(new Error('Could not resolve registry key: ' + errorText));
   });
 }
 
 function queryModPath() {
-  return path.join(appUni.getPath('documents'), 'BioWare', 'Dragon Age II', 'packages', 'core', 'override');
+  return path.join(appUni.getPath('documents'), 'BioWare', 'Dragon Age 2', 'packages', 'core', 'override');
 }
 
 function prepareForModding() {
