@@ -100,10 +100,10 @@ function main(context) {
     queryPath: findGame,
     queryModPath,
     logo: 'gameart.png',
-    executable: () => 'daorigins.exe',
+    executable: () => 'bin_ship/daorigins.exe',
     setup: prepareForModding,
     requiredFiles: [
-      'daorigins.exe',
+      'bin_ship/daorigins.exe',
     ],
     details: {
       steamAppId: 17450,

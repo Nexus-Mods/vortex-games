@@ -12,11 +12,11 @@ function findGame() {
 
   let regKey = new Registry({
     hive: Registry.HKLM,
-    key: '\\Software\\Wow6432Node\\BioWare\\Dragon Age 2',
+    key: '\\Software\\Wow6432Node\\BioWare\\Dragon Age II',
   });
 
   return new Promise((resolve, reject) => {
-    regKey.get('Path', (err, result) => {
+    regKey.get('Install Dir', (err, result) => {
       if (err !== null) {
         reject(new Error(err.message));
       } else if (result === null) {
@@ -29,7 +29,7 @@ function findGame() {
 }
 
 function queryModPath() {
-  return path.join(appUni.getPath('documents'), 'BioWare', 'Dragon Age 2', 'packages', 'core', 'override');
+  return path.join(appUni.getPath('documents'), 'BioWare', 'Dragon Age II', 'packages', 'core', 'override');
 }
 
 function prepareForModding() {
@@ -45,10 +45,10 @@ function main(context) {
     queryPath: findGame,
     queryModPath,
     logo: 'gameart.png',
-    executable: () => 'dragonage2.exe',
+    executable: () => 'bin_ship/dragonage2.exe',
     setup: prepareForModding,
     requiredFiles: [
-      'dragonage2.exe',
+      'bin_ship/dragonage2.exe',
     ],
     details: {
     },
