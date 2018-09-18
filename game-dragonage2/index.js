@@ -1,9 +1,27 @@
 const { app, remote } = require('electron');
 const path = require('path');
-const { fs, log, util } = require('vortex-api');
+const { fs } = require('vortex-api');
 const Registry = require('winreg');
 
 const appUni = app || remote.app;
+
+function regget(key, val) {
+  return new Promise((resolve, reject) => {
+    const regKey = new Registry({
+      hive: Registry.HKLM,
+      key,
+    });
+    regKey.get(val, (err, result) => {
+      if (err !== null) {
+        reject(new Error(err.message));
+      } else if (result === null) {
+        reject(new Error('empty registry key'));
+      } else {
+        resolve(result.value);
+      }
+    });
+  })
+}
 
 function findGame() {
   if (Registry === undefined) {
@@ -14,40 +32,8 @@ function findGame() {
   //  in different registry paths (possibly tied to game edition or localisation),
   //  namely within HKLM...\Dragon Age 2\Install Dir; OR HKLM...\Dragon Age II\Install Dir;
   //  we're going to test both.
-  const registryKeys = {
-    regKey1: new Registry({
-      hive: Registry.HKLM,
-      key: '\\Software\\Wow6432Node\\BioWare\\Dragon Age 2',
-    }),
-    regKey2: new Registry({
-      hive: Registry.HKLM,
-      key: '\\Software\\Wow6432Node\\BioWare\\Dragon Age II',
-    }),
-  };
-
-  let val = 'Install Dir';
-  return new Promise((resolve, reject) => {
-    registryKeys.regKey1.get(val, (err, result) => {
-      if (err !== null) {
-        reject(new Error(err.message));
-      } else if (result === null) {
-        reject(new Error('empty registry key'));
-      } else {
-        resolve(result.value);
-      }
-    });
-  }).catch(() => { 
-    new Promise((resolve, reject) => {
-    registryKeys.regKey2.get(val, (err, result) => {
-      if (err !== null) {
-        reject(new Error(err.message));
-      } else if (result === null) {
-        reject(new Error('empty registry key'));
-      } else {
-        resolve(result.value);
-      }
-    });
-  })});
+  return regget('\\Software\\Wow6432Node\\BioWare\\Dragon Age 2', 'Install Dir')
+    .catch(() => regget('\\Software\\Wow6432Node\\BioWare\\Dragon Age II', 'Install Dir'));
 }
 
 function queryModPath() {
