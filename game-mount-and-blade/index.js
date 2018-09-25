@@ -149,10 +149,11 @@ function installContent(files,
   return Promise.resolve({instructions});
 }
 
-function testSupportedContent(files) {
+function testSupportedContent(files, gameId) {
   // Make sure we have a module.ini configuration file, or known overridable files within the archive.
-  const supported = (files.find((file => path.basename(file).toLowerCase() === MAB_MODULE_FILE)) !== undefined) 
-    || (files.find(file => path.extname(file).toLowerCase() in MOD_EXT_DESTINATION) !== undefined)
+  const supported = (gameId in MAB_GAMES) 
+    && ((files.find((file => path.basename(file).toLowerCase() === MAB_MODULE_FILE)) !== undefined) 
+    || (files.find(file => path.extname(file).toLowerCase() in MOD_EXT_DESTINATION) !== undefined))
   return Promise.resolve({
     supported,
     requiredFiles: [],
