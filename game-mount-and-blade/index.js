@@ -106,12 +106,6 @@ function findGame(mabGame) {
   );
 }
 
-function modPath(context, mabGame) {
-  const state = context.api.store.getState();
-  const modPath = path.join(state.settings.gameMode.discovered[mabGame.id].path, 'modules');
-  return modPath;
-}
-
 function prepareForModding(discovery) {
     return fs.ensureDirAsync(path.join(discovery.path, 'modules'));
 }
@@ -124,7 +118,7 @@ function main(context) {
       name: mabGame.name,
       mergeMods: true,
       queryPath: () => findGame(mabGame),
-      queryModPath: () => modPath(context, mabGame),
+      queryModPath: () => 'modules',
       logo: mabGame.logo,
       executable: () => mabGame.exec,
       requiredFiles: [
@@ -146,7 +140,7 @@ function installContent(files,
                         destinationPath,
                         gameId,
                         progressDelegate) {
-  let instructions;
+  let instructions = [];
   if (files.find((file => path.basename(file).toLowerCase() === MAB_MODULE_FILE)) !== undefined) {
     instructions = installModuleMod(files);
   } else if (files.find(file => path.extname(file).toLowerCase() in MOD_EXT_DESTINATION) !== undefined) {
@@ -191,23 +185,18 @@ function installModuleMod(files) {
   //  is the root directory of the module.
   //  - We're going to ignore any files that are outside the root directory.
   const filePath = path.dirname(files.find((file => path.basename(file).toLowerCase() === MAB_MODULE_FILE)));
-  const splitPath = filePath.split(path.sep);
-  const modRoot = splitPath[splitPath.length - 1];
   const instructions = files
-    .filter(file => path.dirname(file) === filePath)
+    .filter(file => path.dirname(file).indexOf(filePath) !== -1)
     .map(file => {
-      // Is this file part of the module root dir ?
-      if (file.indexOf(modRoot) !== -1) {
         // Remove all precedent folders up to the modRoot directory.
         //  this way we ensure we don't create huge pointless folder structures
         //  which the M&B game can't support.
-        const finalDestination = file.substr(file.indexOf(modRoot));
+        const finalDestination = file.substr(file.indexOf(filePath));
         return {
           type: 'copy',
           source: file,
           destination: finalDestination,
         };
-      }
     });
 
   return instructions;
