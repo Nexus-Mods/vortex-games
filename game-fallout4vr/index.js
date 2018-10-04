@@ -64,6 +64,9 @@ function main(context) {
     requiredFiles: [
       'Fallout4VR.exe',
     ],
+    environment: {
+      SteamAPPId: '611660',
+    },
     details: {
       steamAppId: 611660,
     }

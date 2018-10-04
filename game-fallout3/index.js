@@ -55,6 +55,9 @@ function main(context) {
     requiredFiles: [
       'fallout3.exe',
     ],
+    environment: {
+      SteamAPPId: '22300',
+    },
     details: {
       steamAppId: 22300,
     }

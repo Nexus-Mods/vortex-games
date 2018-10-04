@@ -56,6 +56,9 @@ function main(context) {
     requiredFiles: [
       'FalloutNV.exe',
     ],
+    environment: {
+      SteamAPPId: '22380',
+    },
     details: {
       steamAppId: 22380,
     }

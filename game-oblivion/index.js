@@ -45,6 +45,9 @@ function main(context) {
     requiredFiles: [
       'oblivion.exe',
     ],
+    environment: {
+      SteamAPPId: '22330',
+    },
     details: {
       steamAppId: 22330,
     },

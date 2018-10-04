@@ -74,6 +74,9 @@ function main(context) {
     requiredFiles: [
       'Fallout4.exe',
     ],
+    environment: {
+      SteamAPPId: '377160',
+    },
     details: {
       steamAppId: 377160,
     }
