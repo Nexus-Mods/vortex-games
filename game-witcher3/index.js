@@ -1,7 +1,7 @@
 const Promise = require('bluebird');
 const path = require('path');
 const Registry = require('winreg');
-const { fs } = require('vortex-api');
+const { fs, util } = require('vortex-api');
 
 function findGame() {
   return new Promise((resolve, reject) => {
