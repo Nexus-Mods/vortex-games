@@ -2,7 +2,7 @@ const Promise = require('bluebird');
 const { remote } = require('electron');
 const path = require('path');
 const Registry = require('winreg');
-const { fs } = require('vortex-api');
+const { fs, util } = require('vortex-api');
 
 const NWN_GAME_ID = 'nwn';
 const NWNEE_GAME_ID = 'nwnee';
