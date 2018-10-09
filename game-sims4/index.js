@@ -1,8 +1,23 @@
 const Promise = require('bluebird');
 const Registry = require('winreg');
 
-const { remote } = require('electron');
+const { remote, app } = require('electron');
 const path = require('path');
+const fs = require('fs');
+
+const appUni = app || remote.app;
+
+// The Sims 4 mods folder may be affected by localization.
+//  Judging by Origin's install manifest the game will generally
+//  use the en_US localization form for most locales except for
+//  de_DE, es_ES, fr_FR and nl_NL.
+const LOCALE_MODS_FOLDER = {
+  en_US: 'The Sims 4',
+  de_DE: 'Die Sims 4',
+  es_ES: 'Los Sims 4',
+  fr_FR: 'Les Sims 4',
+  nl_NL: 'De Sims 4',
+}
 
 function findGame() {
   if (Registry === undefined) {
@@ -28,8 +43,23 @@ function findGame() {
   });
 }
 
+// Given that registerGame does not accept mod paths asynchronously
+//  we're adding a temporary "hack" that loops through each possible localization
+//  mod path and return the first one we find.
+// TODO: Modify registerGame to accept mod paths asynchronously so
+//  we can query the Locale registry key and use that to retrieve the
+//  correct mod path.
 function modPath() {
-  return path.join(remote.app.getPath('documents'), 'Electronic Arts', 'The Sims 4', 'Mods');
+  for (let key in LOCALE_MODS_FOLDER) {
+    const modsFolder = path.join(appUni.getPath('documents'), 'Electronic Arts', LOCALE_MODS_FOLDER[key], 'Mods');
+    try {
+      if (fs.statSync(modsFolder) !== undefined) {
+        return modsFolder;
+      }
+    } catch(err) {
+      // do nothing
+    }
+  }
 }
 
 function main(context) {
