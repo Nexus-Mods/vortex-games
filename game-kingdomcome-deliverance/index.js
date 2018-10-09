@@ -47,7 +47,7 @@ function main(context) {
           log('error', 'kingdomcomedeliverance was not discovered');
           return;
         }
-        fs.ensureDirWritableAsync(path.join(discovery.path, 'Mods'))
+        prepareForModding(discovery)
         .then(() => fs.writeFileAsync(path.join(discovery.path, 'Mods', 'mod_order.txt'),
                                       mods.map(mod => transformId(mod.id)).join('\n')));
       }
