@@ -44,6 +44,9 @@ function main(context) {
     requiredFiles: [
       'morrowind.exe',
     ],
+    environment: {
+      SteamAPPId: '22320',
+    },
     details: {
       steamAppId: 22320,
     },
