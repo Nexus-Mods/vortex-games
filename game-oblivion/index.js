@@ -49,6 +49,16 @@ let tools = [
       'Wrye Bash.exe',
     ],
   },
+  {
+    id: 'obse',
+    name: 'Oblivion Script Extender',
+    shortName: 'OBSE',
+    executable: () => 'obse_loader.exe',
+    requiredFiles: [
+      'obse_loader.exe',
+    ],
+    relative: true,
+  },
 ];
 
 function main(context) {
