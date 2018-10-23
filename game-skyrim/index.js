@@ -35,12 +35,12 @@ let tools = [
     id: 'TES5Edit',
     name: 'TES5Edit',
     logo: 'tes5edit.png',
-    executable: () => 'tes5edit.exe',
+    executable: () => 'TES5Edit.exe',
     requiredFiles: [
-      'tes5edit.exe',
+      'TES5Edit.exe',
     ],
   },
-   {
+  {
     id: 'WryeBash',
     name: 'WryeBash',
     logo: 'wrye.png',

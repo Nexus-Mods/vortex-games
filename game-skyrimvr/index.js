@@ -31,12 +31,12 @@ function findGame() {
 
 const tools = [
   {
-    id: 'SSEEdit',
-    name: 'SSEEdit',
+    id: 'TES5VREdit',
+    name: 'TES5VREdit',
     logo: 'tes5edit.png',
-    executable: () => 'sseedit.exe',
+    executable: () => 'TES5VREdit.exe',
     requiredFiles: [
-      'tes5edit.exe',
+      'TES5VREdit.exe',
     ],
   },
   {

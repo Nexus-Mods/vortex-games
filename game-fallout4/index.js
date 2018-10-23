@@ -35,9 +35,9 @@ let tools = [
     id: 'FO4Edit',
     name: 'FO4Edit',
     logo: 'fo3edit.png',
-    executable: () => 'xedit.exe',
+    executable: () => 'FO4Edit.exe',
     requiredFiles: [
-      'tes5edit.exe',
+      'FO4Edit.exe',
     ],
   },
   {

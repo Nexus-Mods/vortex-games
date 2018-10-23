@@ -34,9 +34,9 @@ const tools = [
     id: 'SSEEdit',
     name: 'SSEEdit',
     logo: 'tes5edit.png',
-    executable: () => 'sseedit.exe',
+    executable: () => 'SSEEdit.exe',
     requiredFiles: [
-      'tes5edit.exe',
+      'SSEEdit.exe',
     ],
   },
   {
