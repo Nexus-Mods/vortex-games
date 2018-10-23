@@ -50,11 +50,11 @@ const tools = [
     relative: true,
   },
   {
-    id: 'skse64',
-    name: 'SKSE64',
-    executable: () => 'skse64_loader.exe',
+    id: 'sksevr',
+    name: 'SKSEVR',
+    executable: () => 'sksevr_loader.exe',
     requiredFiles: [
-      'skse64_loader.exe',
+      'sksevr_loader.exe',
     ],
     relative: true,
   },
