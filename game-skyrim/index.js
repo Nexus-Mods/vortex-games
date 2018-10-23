@@ -61,7 +61,8 @@ let tools = [
   },
   {
     id: 'skse',
-    name: 'SKSE',
+    name: 'Skyrim Script Extender',
+    shortName: 'SKSE',
     executable: () => 'skse_loader.exe',
     requiredFiles: [
       'skse_loader.exe',

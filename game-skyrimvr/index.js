@@ -51,7 +51,8 @@ const tools = [
   },
   {
     id: 'sksevr',
-    name: 'SKSEVR',
+    name: 'Skyrim Script Extender VR',
+    shortName: 'SKSEVR',
     executable: () => 'sksevr_loader.exe',
     requiredFiles: [
       'sksevr_loader.exe',

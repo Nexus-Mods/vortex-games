@@ -60,7 +60,8 @@ const tools = [
   },
   {
     id: 'skse64',
-    name: 'SKSE64',
+    name: 'Skyrim Script Extender 64',
+    shortName: 'SKSE64',
     executable: () => 'skse64_loader.exe',
     requiredFiles: [
       'skse64_loader.exe',

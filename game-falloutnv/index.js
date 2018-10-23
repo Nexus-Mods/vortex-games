@@ -51,7 +51,8 @@ let tools = [
   },
   {
     id: 'nvse',
-    name: 'NVSE',
+    name: 'New Vegas Script Extender',
+    shortName: 'NVSE',
     executable: () => 'nvse_loader.exe',
     requiredFiles: [
       'nvse_loader.exe',

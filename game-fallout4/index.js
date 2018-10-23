@@ -51,7 +51,8 @@ let tools = [
   },
   {
     id: 'f4se',
-    name: 'F4SE',
+    name: 'Fallout 4 Script Extender',
+    shortName: 'F4SE',
     executable: () => 'f4se_loader.exe',
     requiredFiles: [
       'f4se_loader.exe',

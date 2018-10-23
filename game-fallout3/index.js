@@ -51,7 +51,8 @@ let tools = [
   },
   {
     id: 'fose',
-    name: 'FOSE',
+    name: 'Fallout Script Extender',
+    shortName: 'FOSE',
     executable: () => 'fose_loader.exe',
     requiredFiles: [
       'fose_loader.exe',
