@@ -41,16 +41,6 @@ let tools = [
     ],
   },
   {
-    id: 'FNIS',
-    name: 'FNIS',
-    logo: 'fnis.png',
-    executable: () => 'GenerateFNISForUsers.exe',
-    requiredFiles: [
-      'GenerateFNISForUsers.exe',
-    ],
-    relative: true,
-  },
-  {
     id: 'f4se',
     name: 'F4SE',
     executable: () => 'f4se_loader.exe',

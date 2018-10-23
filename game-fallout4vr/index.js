@@ -40,15 +40,6 @@ let tools = [
       'tes5edit.exe',
     ],
   },
-  {
-    id: 'FNIS',
-    name: 'FNIS',
-    logo: 'fnis.png',
-    executable: () => 'GenerateFNISForUsers.exe',
-    requiredFiles: [
-      'GenerateFNISForUsers.exe',
-    ],
-  },
 ];
 
 function main(context) {
