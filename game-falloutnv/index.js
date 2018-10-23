@@ -41,6 +41,15 @@ let tools = [
     ],
   },
   {
+    id: 'WryeBash',
+    name: 'Wrye Bash',
+    logo: 'wrye.png',
+    executable: () => 'Wrye Bash.exe',
+    requiredFiles: [
+      'Wrye Bash.exe',
+    ],
+  },
+  {
     id: 'nvse',
     name: 'NVSE',
     executable: () => 'nvse_loader.exe',

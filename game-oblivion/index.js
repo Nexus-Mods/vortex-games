@@ -40,6 +40,15 @@ let tools = [
       'TES4Edit.exe',
     ],
   },
+  {
+    id: 'WryeBash',
+    name: 'Wrye Bash',
+    logo: 'wrye.png',
+    executable: () => 'Wrye Bash.exe',
+    requiredFiles: [
+      'Wrye Bash.exe',
+    ],
+  },
 ];
 
 function main(context) {
