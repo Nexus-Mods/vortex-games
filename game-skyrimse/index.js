@@ -41,11 +41,11 @@ const tools = [
   },
   {
     id: 'WryeBash',
-    name: 'WryeBash',
+    name: 'Wrye Bash',
     logo: 'wrye.png',
-    executable: () => 'wryebash.exe',
+    executable: () => 'Wrye Bash.exe',
     requiredFiles: [
-      'wryebash.exe',
+      'Wrye Bash.exe',
     ],
   },
   {
