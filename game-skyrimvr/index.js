@@ -40,15 +40,6 @@ const tools = [
     ],
   },
   {
-    id: 'WryeBash',
-    name: 'WryeBash',
-    logo: 'wrye.png',
-    executable: () => 'wryebash.exe',
-    requiredFiles: [
-      'wryebash.exe',
-    ],
-  },
-  {
     id: 'FNIS',
     name: 'FNIS',
     logo: 'fnis.png',
