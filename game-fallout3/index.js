@@ -32,6 +32,15 @@ function findGame() {
 
 let tools = [
   {
+    id: 'FO3Edit',
+    name: 'FO3Edit',
+    logo: 'fo3edit.png',
+    executable: () => 'FO3Edit.exe',
+    requiredFiles: [
+      'FO3Edit.exe',
+    ],
+  },
+  {
     id: 'fose',
     name: 'FOSE',
     executable: () => 'fose_loader.exe',

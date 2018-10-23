@@ -30,7 +30,17 @@ function findGame() {
   );
 }
 
-let tools = [];
+let tools = [
+  {
+    id: 'TES4Edit',
+    name: 'TES4Edit',
+    logo: 'tes5edit.png',
+    executable: () => 'TES4Edit.exe',
+    requiredFiles: [
+      'TES4Edit.exe',
+    ],
+  },
+];
 
 function main(context) {
   context.registerGame({

@@ -32,6 +32,15 @@ function findGame() {
 
 let tools = [
   {
+    id: 'FNVEdit',
+    name: 'FNVEdit',
+    logo: 'fo3edit.png',
+    executable: () => 'FNVEdit.exe',
+    requiredFiles: [
+      'FNVEdit.exe',
+    ],
+  },
+  {
     id: 'nvse',
     name: 'NVSE',
     executable: () => 'nvse_loader.exe',
