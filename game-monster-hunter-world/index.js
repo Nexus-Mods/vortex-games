@@ -96,7 +96,7 @@ function installContent(files,
 function isSupported(files, gameId) {
   // Ensure that the archive structure has the nativePC Folder present.
   const supported = (gameId === 'monsterhunterworld') 
-    && (files.find(file => path.dirname(file).toLowerCase() === NATIVE_PC_FOLDER) !== undefined)
+    && (files.find(file => file.toLowerCase().indexOf(NATIVE_PC_FOLDER) !== -1) !== undefined)
   return Promise.resolve({
     supported,
     requiredFiles: [],
