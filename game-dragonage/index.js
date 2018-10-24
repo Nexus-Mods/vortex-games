@@ -59,7 +59,7 @@ function test(game) {
         out: 'Addins.xml',
       },
     ],
-    filter: filePath => path.basename(filePath) === 'Manifest.xml',
+    filter: filePath => path.basename(filePath).toLowerCase() === 'manifest.xml',
   };
 }
 
