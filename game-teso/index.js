@@ -6,11 +6,9 @@ const winapi = require('winapi-bindings');
 
 function findGame() {
   try {
-    if (process.arch === 'x32') {
-      regkey = 'Software\\Zenimax_Online\\Launcher';
-    } else {
-      regkey = 'Software\\Wow6432Node\\Zenimax_Online\\Launcher';
-    }
+    let regKey = (process.arch === 'x32')
+      ? 'Software\\Zenimax_Online\\Launcher'
+      : 'Software\\Wow6432Node\\Zenimax_Online\\Launcher';
 
     const instPath = winapi.RegGetValue(
       'HKEY_LOCAL_MACHINE',
