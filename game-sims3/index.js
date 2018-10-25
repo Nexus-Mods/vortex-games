@@ -2,30 +2,24 @@ const Promise = require('bluebird');
 const { remote } = require('electron');
 const path = require('path');
 const { fs } = require('vortex-api');
-const Registry = require('winreg');
+const winapi = require('winapi-bindings');
 
 function findGame() {
-  if (Registry === undefined) {
-    // linux ? macos ?
-    return null;
+  if (process.platform !== 'win32') {
+    return Promise.reject(new Error('Currently only discovered on windows'));
   }
-
-  const regKey = new Registry({
-    hive: Registry.HKLM,
-    key: '\\Software\\WOW6432Node\\Sims\\The Sims 3',
-  });
-
-  return new Promise((resolve, reject) => {
-    regKey.get('Install Dir', (err, result) => {
-      if (err !== null) {
-        reject(new Error(err.message));
-      } else if (result === null) {
-        reject(new Error('empty registry key'));
-      } else {
-        resolve(result.value);
-      }
-    });
-  });
+  try {
+    const instPath = winapi.RegGetValue(
+      'HKEY_LOCAL_MACHINE',
+      'Software\\WOW6432Node\\Sims\\The Sims 3',
+      'Install Dir');
+    if (!instPath) {
+      throw new Error('empty registry key');
+    }
+    return Promise.resolve(instPath.value);
+  } catch (err) {
+    return Promise.reject(err);
+  }
 }
 
 const resource = `Priority 500

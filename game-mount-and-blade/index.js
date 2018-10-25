@@ -6,7 +6,7 @@
 */
 const Promise = require('bluebird');
 const path = require('path');
-const Registry = require('winreg');
+const winapi = require('winapi-bindings');
 const { fs, util } = require('vortex-api');
 
 // Mount and Blade module based mods have a module.ini
@@ -80,30 +80,20 @@ const MAB_GAMES = {
 
 function findGame(mabGame) {
   const { name, regPath } = mabGame;
-  if (Registry === undefined) {
-    // linux ? macos ?
-    return null;
+
+  try {
+    const instPath = winapi.RegGetValue(
+      'HKEY_LOCAL_MACHINE',
+      regPath,
+      'InstallLocation');
+    if (!instPath) {
+      throw new Error('empty registry key');
+    }
+    return Promise.resolve(instPath.value);
+  } catch (err) {
+    return util.steam.findByName(name)
+      .then(game => game.gamePath);
   }
-
-  let regKey = new Registry({
-    hive: Registry.HKLM,
-    key: regPath,
-  });
-
-  return new Promise((resolve, reject) => {
-    regKey.get('InstallLocation', (err, result) => {
-      if (err !== null) {
-        reject(new Error(err.message));
-      } else if (result === null) {
-        reject(new Error('empty registry key'));
-      } else {
-        resolve(result.value);
-      }
-    });
-  }).catch(err =>
-    util.steam.findByName(name)
-      .then(game => game.gamePath)
-  );
 }
 
 function prepareForModding(discovery) {

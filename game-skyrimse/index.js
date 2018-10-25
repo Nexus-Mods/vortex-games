@@ -1,32 +1,20 @@
-const { types, util } = require('vortex-api');
-const Registry = require('winreg');
+const { util } = require('vortex-api');
+const winapi = require('winapi-bindings');
 
 function findGame() {
-  return new Promise((resolve, reject) => {
-    if (Registry === undefined) {
-      // linux ? macos ?
-      return reject(new Error('No registry'));
+  try {
+    const instPath = winapi.RegGetValue(
+      'HKEY_LOCAL_MACHINE',
+      'Software\\Wow6432Node\\Bethesda Softworks\\Skyrim Special Edition',
+      'Installed Path');
+    if (!instPath) {
+      throw new Error('empty registry key');
     }
-
-    const regKey = new Registry({
-      hive: Registry.HKLM,
-      key: '\\Software\\Wow6432Node\\Bethesda Softworks\\Skyrim Special Edition',
-    });
-
-    regKey.get('Installed Path', (err, result) => {
-      if (err !== null) {
-        reject(new Error(err.message));
-      } else if (result === null) {
-        reject(new Error('empty registry key'));
-      } else {
-        resolve(result.value);
-      }
-    });
-  })
-  .catch(err =>
-    util.steam.findByName('The Elder Scrolls V: Skyrim Special Edition')
-      .then(game => game.gamePath)
-  );
+    return Promise.resolve(instPath.value);
+  } catch (err) {
+    return util.steam.findByName('The Elder Scrolls V: Skyrim Special Edition')
+      .then(game => game.gamePath);
+  }
 }
 
 const tools = [

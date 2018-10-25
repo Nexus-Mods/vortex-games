@@ -1,6 +1,6 @@
 const Promise = require('bluebird');
 const path = require('path');
-const Registry = require('winreg');
+const winapi = require('winapi-bindings');
 const { fs, util } = require('vortex-api');
 
 // Monster Hunter: World mods are consistently contained within
@@ -14,35 +14,24 @@ const NATIVE_PC_FOLDER = 'nativePC';
 //  of course only valid for steam installations.
 //  TODO: Find and test a regkey which does not depend
 //  on steam to cater for non-steam installations.
-const steamReg = '\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Steam App 582010';
+const steamReg = 'SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Steam App 582010';
 
 const MHW_EXEC = 'MonsterHunterWorld.exe';
 
 function findGame() {
-  if (Registry === undefined) {
-    // linux ? macos ?
-    return null;
+  try {
+    const instPath = winapi.RegGetValue(
+      'HKEY_LOCAL_MACHINE',
+      steamReg,
+      'InstallLocation');
+    if (!instPath) {
+      throw new Error('empty registry key');
+    }
+    return Promise.resolve(instPath.value);
+  } catch (err) {
+    return util.steam.findByName('MONSTER HUNTER: WORLD')
+      .then(game => game.gamePath);
   }
-
-  let regKey = new Registry({
-    hive: Registry.HKLM,
-    key: steamReg,
-  });
-
-  return new Promise((resolve, reject) => {
-    regKey.get('InstallLocation', (err, result) => {
-      if (err !== null) {
-        reject(new Error(err.message));
-      } else if (result === null) {
-        reject(new Error('empty registry key'));
-      } else {
-        resolve(result.value);
-      }
-    });
-  }).catch(err =>
-    util.steam.findByName('MONSTER HUNTER: WORLD')
-      .then(game => game.gamePath)
-  );
 }
 
 function prepareForModding(discovery) {

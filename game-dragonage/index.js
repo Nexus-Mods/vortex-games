@@ -1,32 +1,27 @@
 const { app, remote } = require('electron');
 const path = require('path');
-const { fs, log, util } = require('vortex-api');
-const Registry = require('winreg');
+const { fs } = require('vortex-api');
 const { parseXmlString } = require('libxmljs');
+const winapi = require('winapi-bindings');
 
 const appUni = app || remote.app;
 
 function findGame() {
-  if (Registry === undefined) {
-    return null;
+  if (process.platform !== 'win32') {
+    return Promise.reject(new Error('Currently only discovered on windows'));
   }
-
-  let regKey = new Registry({
-    hive: Registry.HKLM,
-    key: '\\Software\\Wow6432Node\\BioWare\\Dragon Age',
-  });
-
-  return new Promise((resolve, reject) => {
-    regKey.get('Path', (err, result) => {
-      if (err !== null) {
-        reject(new Error(err.message));
-      } else if (result === null) {
-        reject(new Error('empty registry key'));
-      } else {
-        resolve(result.value);
-      }
-    });
-  });
+  try {
+    const instPath = winapi.RegGetValue(
+      'HKEY_LOCAL_MACHINE',
+      'Software\\Wow6432Node\\BioWare\\Dragon Age',
+      'Path');
+    if (!instPath) {
+      throw new Error('empty registry key');
+    }
+    return Promise.resolve(instPath.value);
+  } catch (err) {
+    return Promise.reject(err);
+  }
 }
 
 function queryModPath() {

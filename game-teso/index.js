@@ -2,42 +2,28 @@ const { log, util } = require('vortex-api');
 
 const { remote } = require('electron');
 const path = require('path');
-const Registry = require('winreg');
+const winapi = require('winapi-bindings');
 
 function findGame() {
-  return new Promise((resolve, reject) => {
-    if (Registry === undefined) {
-      // linux ? macos ?
-      return reject(new Error('No registry'));
-    }
-
-    let regkey;
-
+  try {
     if (process.arch === 'x32') {
-      regkey = '\\Software\\Zenimax_Online\\Launcher';
+      regkey = 'Software\\Zenimax_Online\\Launcher';
     } else {
-      regkey = '\\Software\\Wow6432Node\\Zenimax_Online\\Launcher';
+      regkey = 'Software\\Wow6432Node\\Zenimax_Online\\Launcher';
     }
 
-    const regKey = new Registry({
-      hive: Registry.HKLM,
-      key: regkey,
-    });
-
-    regKey.get('InstallPath', (err, result) => {
-      if (err !== null) {
-        reject(new Error(err.message));
-      } else if (result === null) {
-        reject(new Error('empty registry key'));
-      } else {
-        resolve(path.join(result.value, 'Launcher'));
-      }
-    });
-  })
-  .catch(err =>
-    util.steam.findByName('The Elder Scrolls Online')
-      .then(game => game.gamePath)
-  );
+    const instPath = winapi.RegGetValue(
+      'HKEY_LOCAL_MACHINE',
+      regKey,
+      'InstallPath');
+    if (!instPath) {
+      throw new Error('empty registry key');
+    }
+    return Promise.resolve(path.join(instPath.value, 'Launcher'));
+  } catch (err) {
+    return util.steam.findByName('The Elder Scrolls Online')
+      .then(game => game.gamePath);
+  }
 }
 
 function modPath() {

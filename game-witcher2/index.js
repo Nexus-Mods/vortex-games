@@ -1,30 +1,24 @@
 const Promise = require('bluebird');
 const path = require('path');
 const { fs } = require('vortex-api');
-const Registry = require('winreg');
+const winapi = require('winapi-bindings');
 
 function findGame() {
-  if (Registry === undefined) {
-    // linux ? macos ?
-    return null;
+  if (process.platform !== 'win32') {
+    return Promise.reject(new Error('Currently only discovered on windows'));
   }
-
-  let regKey = new Registry({
-    hive: Registry.HKLM,
-    key: '\\Software\\CD Project Red\\The Witcher 2',
-  });
-
-  return new Promise((resolve, reject) => {
-    regKey.get('InstallFolder', (err, result) => {
-      if (err !== null) {
-        reject(new Error(err.message));
-      } else if (result === null) {
-        reject(new Error('empty registry key'));
-      } else {
-        resolve(result.value);
-      }
-    });
-  });
+  try {
+    const instPath = winapi.RegGetValue(
+      'HKEY_LOCAL_MACHINE',
+      'Software\\CD Project Red\\The Witcher 2',
+      'InstallFolder');
+    if (!instPath) {
+      throw new Error('empty registry key');
+    }
+    return Promise.resolve(instPath.value);
+  } catch (err) {
+    return Promise.reject(err);
+  }
 }
 
 function testUserContent(instructions) {

@@ -1,7 +1,7 @@
 const Promise = require('bluebird');
 const { remote } = require('electron');
 const path = require('path');
-const Registry = require('winreg');
+const winapi = require('winapi-bindings');
 const { fs, util } = require('vortex-api');
 
 const NWN_GAME_ID = 'nwn';
@@ -24,52 +24,37 @@ const MOD_EXT_DESTINATION = {
 };
 
 function findGame() {
-  if (Registry === undefined) {
-    // linux ? macos ?
-    return null;
+  if (process.platform !== 'win32') {
+    return Promise.reject(new Error('Currently only discovered on windows'));
   }
-
-  let regKey = new Registry({
-    hive: Registry.HKLM,
-    key: '\\Software\\Wow6432Node\\Bioware\\NWN\\Neverwinter',
-  });
-
-  return new Promise((resolve, reject) => {
-    regKey.get('Location', (err, result) => {
-      if (err !== null) {
-        reject(new Error(err.message));
-      } else if (result === null) {
-        reject(new Error('empty registry key'));
-      } else {
-        resolve(result.value);
-      }
-    });
-  })
+  try {
+    const instPath = winapi.RegGetValue(
+      'HKEY_LOCAL_MACHINE',
+      'Software\\Wow6432Node\\Bioware\\NWN\\Neverwinter',
+      'Location');
+    if (!instPath) {
+      throw new Error('empty registry key');
+    }
+    return Promise.resolve(instPath.value);
+  } catch (err) {
+    return Promise.reject(err);
+  }
 }
 
 function findGameEE() {
-  return new Promise((resolve, reject) => {
-    if (Registry === undefined) {
-      return reject(new Error('not windows'));
+  try {
+    const instPath = winapi.RegGetValue(
+      'HKEY_LOCAL_MACHINE',
+      'SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Steam App 704450',
+      'InstallLocation');
+    if (!instPath) {
+      throw new Error('empty registry key');
     }
-    let regKey = new Registry({
-      hive: Registry.HKLM,
-      key: '\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Steam App 704450',
-    });
-
-    regKey.get('InstallLocation', (err, result) => {
-      if (err !== null) {
-        reject(new Error(err.message));
-      } else if (result === null) {
-        reject(new Error('empty registry key'));
-      } else {
-        resolve(result.value);
-      }
-    });
-  }).catch(err =>
-    util.steam.findByName('Neverwinter Nights: Enhanced Edition')
-      .then(game => game.gamePath)
-  );
+    return Promise.resolve(instPath.value);
+  } catch (err) {
+    return util.steam.findByName('Neverwinter Nights: Enhanced Edition')
+      .then(game => game.gamePath);
+  }
 }
 
 

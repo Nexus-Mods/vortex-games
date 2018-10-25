@@ -1,35 +1,23 @@
 const Promise = require('bluebird');
 const path = require('path');
-const Registry = require('winreg');
+const winapi = require('winapi-bindings');
 const { fs, util } = require('vortex-api');
 
 function findGame() {
-  return new Promise((resolve, reject) => {
-    if (Registry === undefined) {
-      // linux ? macos ?
-      return reject(new Error('No registry'));
+  try {
+    const instPath = winapi.RegGetValue(
+      'HKEY_LOCAL_MACHINE',
+      'Software\\CD Project Red\\The Witcher 3',
+      'InstallFolder');
+    if (!instPath) {
+      throw new Error('empty registry key');
     }
-
-    let regKey = new Registry({
-      hive: Registry.HKLM,
-      key: '\\Software\\CD Project Red\\The Witcher 3',
-    });
-
-    regKey.get('InstallFolder', (err, result) => {
-      if (err !== null) {
-        reject(new Error(err.message));
-      } else if (result === null) {
-        reject(new Error('empty registry key'));
-      } else {
-        resolve(result.value);
-      }
-    });
-  })
-  .catch(err =>
-    util.steam.findByName('The Witcher 3: Wild Hunt')
+    return Promise.resolve(instPath.value);
+  } catch (err) {
+    return util.steam.findByName('The Witcher 3: Wild Hunt')
       .catch(() => util.steam.findByAppId('499450'))
-      .then(game => game.gamePath)
-  );
+      .then(game => game.gamePath);
+  }
 }
 
 function testSupportedTL(files, gameId) {

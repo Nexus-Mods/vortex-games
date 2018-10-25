@@ -4,7 +4,7 @@ const
   path = require('path'),
   { promisify } = require('util'),
   { actions, util } = require('vortex-api'),
-  Registry = require('winreg');
+  winapi = require('winapi-bindings');
 
 class StardewValley {
   /*********
@@ -64,8 +64,8 @@ class StardewValley {
 
     // check GOG Galaxy
     let path =
-      await this.readRegistryKeyAsync(Registry.HKLM, '\\SOFTWARE\\GOG.com\\Games\\1453375253', 'PATH')
-      || await this.readRegistryKeyAsync(Registry.HKLM, '\\SOFTWARE\\WOW6432Node\\GOG.com\\Games\\1453375253', 'PATH');
+      await this.readRegistryKeyAsync('HKEY_LOCAL_MACHINE', 'SOFTWARE\\GOG.com\\Games\\1453375253', 'PATH')
+      || await this.readRegistryKeyAsync('HKEY_LOCAL_MACHINE', 'SOFTWARE\\WOW6432Node\\GOG.com\\Games\\1453375253', 'PATH');
     if (path && await this.getPathExistsAsync(path))
       return path;
 
@@ -159,13 +159,15 @@ class StardewValley {
    */
   async readRegistryKeyAsync(hive, key, name)
   {
-    if (!Registry)
-      return Promise.resolve(undefined); // not Windows
-
-    let regKey = new Registry({ hive: hive, key: key });
-    return new Promise((resolve, reject) => {
-      regKey.get(name, (err, result) => resolve(err ? undefined : result.value));
-    });
+    try {
+      const instPath = winapi.RegGetValue(hive, key, name);
+      if (!instPath) {
+        throw new Error('empty registry key');
+      }
+      return Promise.resolve(instPath.value);
+    } catch (err) {
+      return Promise.resolve(undefined);
+    }
   }
 }
 
