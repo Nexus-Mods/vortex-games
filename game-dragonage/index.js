@@ -62,7 +62,11 @@ function merge(filePath, mergeDir) {
   let manifest;
   return fs.readFileAsync(filePath)
       .then(xmlData => {
-        manifest = parseXmlString(xmlData);
+        try {
+          manifest = parseXmlString(xmlData);
+        } catch (err) {
+          return Promise.reject(new ProcessCanceled(`File invalid "${filePath}"`));
+        }
         return Promise.resolve();
       })
       .then(() => fs.readFileAsync(path.join(mergeDir, 'AddIns.xml')))
