@@ -13,6 +13,9 @@ class DarkSouls {
     this.details = {
       steamAppId: 211420,
     };
+    this.environment = {
+      SteamAPPId: '211420',
+    };
     this.requiredFiles = ['DATA/DARKSOULS.exe'];
   }
 
