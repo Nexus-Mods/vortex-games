@@ -18,7 +18,36 @@ function findGame() {
   }
 }
 
-let tools = [];
+let tools = [
+  {
+    id: 'TES4Edit',
+    name: 'TES4Edit',
+    logo: 'tes5edit.png',
+    executable: () => 'TES4Edit.exe',
+    requiredFiles: [
+      'TES4Edit.exe',
+    ],
+  },
+  {
+    id: 'WryeBash',
+    name: 'Wrye Bash',
+    logo: 'wrye.png',
+    executable: () => 'Wrye Bash.exe',
+    requiredFiles: [
+      'Wrye Bash.exe',
+    ],
+  },
+  {
+    id: 'obse',
+    name: 'Oblivion Script Extender',
+    shortName: 'OBSE',
+    executable: () => 'obse_loader.exe',
+    requiredFiles: [
+      'obse_loader.exe',
+    ],
+    relative: true,
+  },
+];
 
 function main(context) {
   context.registerGame({

@@ -22,25 +22,25 @@ let tools = [
   {
     id: 'FO4Edit',
     name: 'FO4Edit',
-    logo: 'tes5edit.png',
-    executable: () => 'xedit.exe',
+    logo: 'fo3edit.png',
+    executable: () => 'FO4Edit.exe',
     requiredFiles: [
-      'tes5edit.exe',
+      'FO4Edit.exe',
     ],
   },
   {
-    id: 'FNIS',
-    name: 'FNIS',
-    logo: 'fnis.png',
-    executable: () => 'GenerateFNISForUsers.exe',
+    id: 'WryeBash',
+    name: 'Wrye Bash',
+    logo: 'wrye.png',
+    executable: () => 'Wrye Bash.exe',
     requiredFiles: [
-      'GenerateFNISForUsers.exe',
+      'Wrye Bash.exe',
     ],
-    relative: true,
   },
   {
     id: 'f4se',
-    name: 'F4SE',
+    name: 'Fallout 4 Script Extender',
+    shortName: 'F4SE',
     executable: () => 'f4se_loader.exe',
     requiredFiles: [
       'f4se_loader.exe',

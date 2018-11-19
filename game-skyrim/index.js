@@ -23,23 +23,24 @@ let tools = [
     id: 'TES5Edit',
     name: 'TES5Edit',
     logo: 'tes5edit.png',
-    executable: () => 'tes5edit.exe',
+    executable: () => 'TES5Edit.exe',
     requiredFiles: [
-      'tes5edit.exe',
+      'TES5Edit.exe',
     ],
   },
-   {
+  {
     id: 'WryeBash',
-    name: 'WryeBash',
+    name: 'Wrye Bash',
     logo: 'wrye.png',
-    executable: () => 'wryebash.exe',
+    executable: () => 'Wrye Bash.exe',
     requiredFiles: [
-      'wryebash.exe',
+      'Wrye Bash.exe',
     ],
   },
   {
     id: 'FNIS',
-    name: 'FNIS',
+    name: 'Fores New Idles in Skyrim',
+    shortName: 'FNIS',
     logo: 'fnis.png',
     executable: () => 'GenerateFNISForUsers.exe',
     requiredFiles: [
@@ -49,7 +50,8 @@ let tools = [
   },
   {
     id: 'skse',
-    name: 'SKSE',
+    name: 'Skyrim Script Extender',
+    shortName: 'SKSE',
     executable: () => 'skse_loader.exe',
     requiredFiles: [
       'skse_loader.exe',

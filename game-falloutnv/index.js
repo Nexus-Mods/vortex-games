@@ -20,8 +20,27 @@ function findGame() {
 
 let tools = [
   {
+    id: 'FNVEdit',
+    name: 'FNVEdit',
+    logo: 'fo3edit.png',
+    executable: () => 'FNVEdit.exe',
+    requiredFiles: [
+      'FNVEdit.exe',
+    ],
+  },
+  {
+    id: 'WryeBash',
+    name: 'Wrye Bash',
+    logo: 'wrye.png',
+    executable: () => 'Wrye Bash.exe',
+    requiredFiles: [
+      'Wrye Bash.exe',
+    ],
+  },
+  {
     id: 'nvse',
-    name: 'NVSE',
+    name: 'New Vegas Script Extender',
+    shortName: 'NVSE',
     executable: () => 'nvse_loader.exe',
     requiredFiles: [
       'nvse_loader.exe',
