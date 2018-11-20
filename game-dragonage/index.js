@@ -1,6 +1,6 @@
 const { app, remote } = require('electron');
 const path = require('path');
-const { fs } = require('vortex-api');
+const { fs, util } = require('vortex-api');
 const { parseXmlString } = require('libxmljs');
 const winapi = require('winapi-bindings');
 
@@ -65,7 +65,7 @@ function merge(filePath, mergeDir) {
         try {
           manifest = parseXmlString(xmlData);
         } catch (err) {
-          return Promise.reject(new ProcessCanceled(`File invalid "${filePath}"`));
+          return Promise.reject(new util.ProcessCanceled(`File invalid "${filePath}"`));
         }
         return Promise.resolve();
       })
