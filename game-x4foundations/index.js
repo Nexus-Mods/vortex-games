@@ -94,6 +94,11 @@ function install(files,
       });
 }
 
+function prepareForModding(discovery) {
+  return fs.ensureDirWritableAsync(path.join(discovery.path, 'extensions'),
+    () => Promise.resolve());
+}
+
 function main(context) {
   context.registerGame({
     id: 'x4foundations',
@@ -103,6 +108,7 @@ function main(context) {
     queryModPath: () => 'extensions',
     logo: 'gameart.png',
     executable: () => 'X4.exe',
+    setup: prepareForModding,
     requiredFiles: [
       'X4.exe',
     ],
