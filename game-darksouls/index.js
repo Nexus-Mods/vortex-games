@@ -25,7 +25,7 @@ class DarkSouls {
   }
 
   queryModPath() {
-    return path.join('DATA', 'dsfix');
+    return path.join('DATA', 'dsfix', 'tex_override');
   }
 
   executable() {
