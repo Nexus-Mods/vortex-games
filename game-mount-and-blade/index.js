@@ -132,7 +132,8 @@ function installContent(files,
                         progressDelegate) {
   let instructions = [];
   if (files.find((file => path.basename(file).toLowerCase() === MAB_MODULE_FILE)) !== undefined) {
-    instructions = installModuleMod(files);
+    const modName = path.parse(path.basename(destinationPath)).name;
+    instructions = installModuleMod(files, modName);
   } else if (files.find(file => path.extname(file).toLowerCase() in MOD_EXT_DESTINATION) !== undefined) {
     instructions = installOverrideMod(files, MAB_GAMES[gameId].nativeModuleName);
   }
@@ -171,26 +172,31 @@ function installOverrideMod(files, nativeModuleName) {
   return instructions;
 }
 
-function installModuleMod(files) {
+function installModuleMod(files, moduleName) {
   // We're going to assume that the folder where we find the module.ini file
   //  is the root directory of the module.
   //  - We're going to ignore any files that are outside the root directory.
-  const filePath = path.dirname(files.find((file => path.basename(file).toLowerCase() === MAB_MODULE_FILE)));
-  const instructions = files
-    .filter(file => path.dirname(file).indexOf(filePath) !== -1)
-    .map(file => {
+  const filtered = files.filter(file => path.extname(file) !== '');
+  const trimIndex = filtered.find((file => path.basename(file).toLowerCase() === MAB_MODULE_FILE)).indexOf(MAB_MODULE_FILE);
+  const instructions = filtered.map(file => {
         // Remove all precedent folders up to the modRoot directory.
         //  this way we ensure we don't create huge pointless folder structures
         //  which the M&B game can't support.
-        const finalDestination = file.substr(file.indexOf(filePath));
-        return {
+        const finalDestination = trimIndex !== 0 
+          ? path.join(moduleName, file.substr(trimIndex))
+          : path.join(moduleName, file);
+        
+        const instruction = {
           type: 'copy',
           source: file,
           destination: finalDestination,
-        };
+        }
+        return (instruction.destination !== path.join(moduleName, ''))
+          ? instruction
+          : undefined;
     });
 
-  return instructions;
+  return instructions.filter(inst => inst !== undefined);
 }
 
 module.exports = {
