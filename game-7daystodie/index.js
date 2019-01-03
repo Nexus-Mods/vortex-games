@@ -31,7 +31,7 @@ function main(context) {
     name: '7 Days to Die',
     mergeMods: true,
     queryPath: findGame,
-    queryModPath: () => '',
+    queryModPath: () => '.',
     logo: 'gameart.png',
     executable: gameExecutable,
     requiredFiles: [
