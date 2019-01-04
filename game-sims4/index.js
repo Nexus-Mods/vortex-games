@@ -3,7 +3,7 @@ const winapi = require('winapi-bindings');
 
 const { remote, app } = require('electron');
 const path = require('path');
-const fs = require('fs');
+const { fs } = require('vortex-api');
 
 const appUni = app || remote.app;
 
@@ -45,15 +45,21 @@ function findGame() {
 //  correct mod path.
 function modPath() {
   for (let key in LOCALE_MODS_FOLDER) {
-    const modsFolder = path.join(appUni.getPath('documents'), 'Electronic Arts', LOCALE_MODS_FOLDER[key], 'Mods');
+    const modsFolder = path.join(appUni.getPath('documents'), 'Electronic Arts', LOCALE_MODS_FOLDER[key]);
     try {
       if (fs.statSync(modsFolder) !== undefined) {
-        return modsFolder;
+        return path.join(modsFolder, 'Mods');
       }
     } catch(err) {
       // do nothing
     }
   }
+  throw new Error('Couldn\'t find the mods directory for Sims 4. Please make sure you have run it at least once. '
+    + 'If you report this as a bug, please let us know what the directory actually is on your system.');
+}
+
+function prepareForModding() {
+  return fs.ensureDirAsync(modPath());
 }
 
 function main(context) {
@@ -65,6 +71,7 @@ function main(context) {
     queryModPath: modPath,
     logo: 'gameart.png',
     executable: () => 'game/bin/TS4.exe',
+    setup: prepareForModding,
     supportedTools: [
       {
         id: 'exe64bit',
