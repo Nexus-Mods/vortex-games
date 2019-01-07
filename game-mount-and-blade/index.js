@@ -169,7 +169,7 @@ function installOverrideMod(files, nativeModuleName) {
       };
     });
 
-  return instructions;
+    return Promise.resolve({ instructions });
 }
 
 function installModuleMod(files, moduleName) {
@@ -194,9 +194,9 @@ function installModuleMod(files, moduleName) {
         return (instruction.destination !== path.join(moduleName, ''))
           ? instruction
           : undefined;
-    });
+    }).filter(inst => inst !== undefined);
 
-  return instructions.filter(inst => inst !== undefined);
+  return Promise.resolve({ instructions });
 }
 
 module.exports = {
