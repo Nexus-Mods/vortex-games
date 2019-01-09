@@ -1,8 +1,6 @@
 const path = require('path');
 const { fs, log, util } = require('vortex-api');
 
-const MOD_MANIFEST = 'mod.manifest';
-
 function findGame() {
   return util.steam.findByAppId('379430')
       .then(game => game.gamePath);
@@ -15,45 +13,7 @@ function prepareForModding(discovery) {
 
 function transformId(input) {
   // the game doesn't like spaces in its mod names
-  return input.replace(/[0-9 -.]/g, '');
-}
-
-function findModManifest(files) {
-  return files.find(file => path.basename(file).toLowerCase() === MOD_MANIFEST);
-}
-
-function testSupported(files, gameId) {
-  if (gameId !== 'kingdomcomedeliverance') {
-    return Promise.resolve({ supported: false });
-  }
-
-  return Promise.resolve({ 
-    supported: findModManifest(files) !== undefined,
-    requiredFiles: []
-  });
-}
-
-function install(files, destinationPath, gameId, progressDelegate) {
-  const modRootIndex = findModManifest(files).indexOf(MOD_MANIFEST);
-  let modName = path.parse(path.basename(destinationPath)).name;
-  modName = transformId(modName);
-
-  const filtered = files.filter(file => 
-    (path.dirname(file) !== '.') && (path.extname(file) !== ''));
-
-  const instructions = filtered.map(file => {
-    const destination = modRootIndex !== 0
-      ? path.join(modName, file.substr(modRootIndex))
-      : path.join(modName, file);
-
-    return {
-      type: 'copy',
-      source: file,
-      destination: destination,
-    };
-  })
-
-  return Promise.resolve({ instructions });
+  return input.replace(/[ -.]/g, '');
 }
 
 function main(context) {
@@ -93,8 +53,6 @@ function main(context) {
       }
     });
   })
-
-  context.registerInstaller('kcd-mod-installer', 50, testSupported, install);
 
   return true;
 }
