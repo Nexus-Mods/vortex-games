@@ -5,7 +5,6 @@ const opn = require('opn');
 const path = require('path');
 const { actions, util } = require('vortex-api');
 
-
 class Subnautica {
   constructor(context) {
     this.context = context;
@@ -32,6 +31,13 @@ class Subnautica {
     this.details = {
       steamAppId: 264710,
     };
+  }
+
+  async requiresLauncher() {
+    return util.epicGamesLauncher.isGameInstalled('Jaguar')
+      .then(epic => epic
+        ? { launcher: 'epic', addInfo: 'Jaguar' }
+        : undefined);
   }
 
   async queryPath() {

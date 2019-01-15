@@ -42,11 +42,11 @@ const KOTOR_GAMES = {
   },
 }
 
-function requiresSteamExecution(gamePath) {
+function requiresLauncher(gamePath) {
   return fs.readdirAsync(gamePath)
     .then(files => files.find(file => file.indexOf(STEAM_DLL) !== -1) !== undefined 
-      ? Promise.resolve(true) 
-      : Promise.resolve(false))
+      ? Promise.resolve({ launcher: 'steam' }) 
+      : Promise.resolve(undefined))
     .catch(err => Promise.reject(err));
 }
 
@@ -80,9 +80,9 @@ function main(context) {
       mergeMods: true,
       queryPath: () => findGame(game.regPath),
       queryModPath: () => OVERRIDE_FOLDER,
-      requiresSteamStart: game.id === 'kotor2' 
-        ? requiresSteamExecution 
-        : Promise.resolve(false),
+      requiresLauncher: game.id === 'kotor2' 
+        ? requiresLauncher 
+        : undefined,
       logo: game.logo,
       executable: () => game.exec,
       requiredFiles: [
