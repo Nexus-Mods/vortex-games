@@ -31,7 +31,7 @@ class DarkSouls {
   }
 
   requiresLauncher(gamePath) {
-    return fs.readdirAsync(path.join(gamePath, 'DATA'))
+    return fs.readdirAsync(gamePath)
       .then(files => files.find(file => file.indexOf(STEAM_DLL) !== -1) !== undefined 
         ? Promise.resolve({ launcher: 'steam' }) 
         : Promise.resolve(undefined))
