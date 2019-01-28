@@ -93,6 +93,10 @@ function merge(filePath, mergeDir) {
       }))
       .then(addins => {
         const list = addins.get('//AddInsList');
+        if (list === undefined) {
+          return Promise.reject(new util.ProcessCanceled(`Addins file is invalid - "${path.join(mergeDir, 'Settings', ADDINS_FILE)}"`));
+        }
+
         manifest.find('//Manifest/AddInsList/AddInItem').forEach(item => {
           list.addChild(item);
         });
@@ -103,10 +107,10 @@ function merge(filePath, mergeDir) {
 
 function readAddinsData(mergeDir) {
   return fs.readFileAsync(path.join(mergeDir, 'Settings', ADDINS_FILE))
-    .catch(err => (err.code === 'ENOENT'
+    .catch(err => (err.code === 'ENOENT')
       ? fs.readFileAsync(addinsPath()).catch(err => emptyAddins)
       : Promise.reject(err)
-    ));
+    );
 }
 
 function main(context) {
