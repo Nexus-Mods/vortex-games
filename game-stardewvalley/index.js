@@ -6,6 +6,8 @@ const
   { actions, util } = require('vortex-api'),
   winapi = require('winapi-bindings');
 
+const MANIFEST_FILE = 'manifest.json';
+
 class StardewValley {
   /*********
   ** Vortex API
@@ -26,7 +28,8 @@ class StardewValley {
     this.details = {
       steamAppId: 413150
     };
-    this.mergeMods = true;
+    this.mergeMods = false;
+    this.requiresCleanup = true;
     this.shell = process.platform == 'win32';
 
     // custom properties
@@ -171,8 +174,41 @@ class StardewValley {
   }
 }
 
+async function testSupported(files, gameId) {
+  const supported = (gameId === 'stardewvalley') && 
+    (files.find(file => path.basename(file).toLowerCase() === MANIFEST_FILE) !== undefined)
+  return { supported }
+}
+
+async function install(files,
+                destinationPath,
+                gameId,
+                progressDelegate) {
+  // We're going to assume that the mod's root directory is wherever
+  //  the manifest.json file is located. Everything outside the root
+  //  will be removed.
+  const filtered = files.filter(file => 
+    (path.dirname(file) !== '.') 
+    && (path.extname(file) !== ''));
+
+    const manifestFile = files.find(file => path.basename(file).toLowerCase() === MANIFEST_FILE).toLowerCase();
+    const manifestIndex = manifestFile.indexOf(MANIFEST_FILE);
+    const instructions = filtered.map(file => {
+      const destination = file.substr(manifestIndex);
+
+      return {
+        type: 'copy',
+        source: file,
+        destination: destination,
+      };
+    });
+
+  return Promise.resolve({ instructions })
+}
+
 module.exports = {
   default: function(context) {
     context.registerGame(new StardewValley(context));
+    context.registerInstaller('stardew-valley-installer', 50, testSupported, install);
   }
 }
