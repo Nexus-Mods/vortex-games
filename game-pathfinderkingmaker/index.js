@@ -1,6 +1,6 @@
 const Promise = require('bluebird');
-const { util } = require('vortex-api');
-const winapi = require('winapi-bindings');
+const path = require('path');
+const { fs, util } = require('vortex-api');
 
 function findGame() {
     return util.steam.findByName('Pathfinder: Kingmaker')
@@ -19,6 +19,11 @@ let tools = [
   },
 ];
 
+function prepareForModding(discovery) {
+  return fs.ensureDirWritableAsync(path.join(discovery.path, 'Mods'),
+    () => Promise.resolve());
+}
+
 function main(context) {
   context.registerGame({
     id: 'pathfinderkingmaker',
@@ -29,6 +34,7 @@ function main(context) {
     queryModPath: () => 'Mods',
     logo: 'gameart.png',
     executable: () => 'Kingmaker.exe',
+    setup: prepareForModding,
     requiredFiles: [
       'Kingmaker.exe',
     ],

@@ -20,8 +20,27 @@ function findGame() {
 
 let tools = [
   {
+    id: 'FO3Edit',
+    name: 'FO3Edit',
+    logo: 'fo3edit.png',
+    executable: () => 'FO3Edit.exe',
+    requiredFiles: [
+      'FO3Edit.exe',
+    ],
+  },
+  {
+    id: 'WryeBash',
+    name: 'Wrye Bash',
+    logo: 'wrye.png',
+    executable: () => 'Wrye Bash.exe',
+    requiredFiles: [
+      'Wrye Bash.exe',
+    ],
+  },
+  {
     id: 'fose',
-    name: 'FOSE',
+    name: 'Fallout Script Extender',
+    shortName: 'FOSE',
     executable: () => 'fose_loader.exe',
     requiredFiles: [
       'fose_loader.exe',

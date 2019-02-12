@@ -3,6 +3,8 @@ const path = require('path');
 const thunk = require('redux-thunk');
 const { actions, fs, util } = require('vortex-api');
 
+const STEAM_DLL = 'steam_api.dll';
+
 class DarkSouls {
   constructor(context) {
     this.context = context;
@@ -13,6 +15,9 @@ class DarkSouls {
     this.details = {
       steamAppId: 211420,
     };
+    this.environment = {
+      SteamAPPId: '211420',
+    };
     this.requiredFiles = ['DATA/DARKSOULS.exe'];
   }
 
@@ -22,7 +27,15 @@ class DarkSouls {
   }
 
   queryModPath() {
-    return path.join('DATA', 'dsfix');
+    return path.join('DATA', 'dsfix', 'tex_override');
+  }
+
+  requiresLauncher(gamePath) {
+    return fs.readdirAsync(gamePath)
+      .then(files => files.find(file => file.indexOf(STEAM_DLL) !== -1) !== undefined 
+        ? Promise.resolve({ launcher: 'steam' }) 
+        : Promise.resolve(undefined))
+      .catch(err => Promise.reject(err));
   }
 
   executable() {

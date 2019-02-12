@@ -5,11 +5,11 @@ const opn = require('opn');
 const path = require('path');
 const { actions, util } = require('vortex-api');
 
-class Subnautica {
+class SubnauticaBelowZero {
   constructor(context) {
     this.context = context;
-    this.id = 'subnautica';
-    this.name = 'Subnautica';
+    this.id = 'subnauticabelowzero';
+    this.name = 'Subnautica: Below Zero';
     this.mergeMods = true;
     this.queryModPath = () => 'QMods';
 	  this.supportedTools = [
@@ -24,12 +24,12 @@ class Subnautica {
       }
     ];
     this.logo = 'gameart.png';
-    this.executable = () => 'Subnautica.exe';
+    this.executable = () => 'SubnauticaZero.exe';
     this.requiredFiles = [
-      'Subnautica.exe'
+      'SubnauticaZero.exe'
     ];
     this.details = {
-      steamAppId: 264710,
+      steamAppId: 848450,
     };
   }
 
@@ -41,7 +41,7 @@ class Subnautica {
   }
 
   async queryPath() {
-    return util.steam.findByAppId('264710')
+    return util.steam.findByAppId('848450')
         .then(game => game.gamePath);
   }
 
@@ -57,7 +57,7 @@ class Subnautica {
   
   async setup(discovery) {
     // skip if QModManager found
-    let qmodPath = path.join(discovery.path, 'Subnautica_Data', 'Managed', 'QModManager.exe')
+    let qmodPath = path.join(discovery.path, 'SubnauticaZero_Data', 'Managed', 'QModManager.exe')
     let qmodFound = await this.getPathExistsAsync(qmodPath);
     if (qmodFound) {
       return;
@@ -70,10 +70,10 @@ class Subnautica {
         actions.showDialog(
           'question',
           'Action required',
-          { message: 'You must install QModManager to use mods with Subnautica.' },
+          { message: 'You must install QModManager to use mods with Subnautica: Below Zero.' },
           [
             { label: 'Cancel', action: () => reject(new util.UserCanceled()) },
-            { label: 'Go to QModManager page', action: () => { opn('https://www.nexusmods.com/subnautica/mods/16/').catch(err => undefined); reject(new util.UserCanceled()); } }
+            { label: 'Go to QModManager page', action: () => { opn('https://www.nexusmods.com/subnauticabelowzero/mods/1/').catch(err => undefined); reject(new util.UserCanceled()); } }
           ]
         )
       );
@@ -83,6 +83,6 @@ class Subnautica {
 
 module.exports = {
   default: function(context) {
-    context.registerGame(new Subnautica(context));
+    context.registerGame(new SubnauticaBelowZero(context));
   }
 };

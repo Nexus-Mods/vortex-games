@@ -19,26 +19,18 @@ function findGame() {
 
 const tools = [
   {
-    id: 'SSEEdit',
-    name: 'SSEEdit',
+    id: 'TES5VREdit',
+    name: 'TES5VREdit',
     logo: 'tes5edit.png',
-    executable: () => 'sseedit.exe',
+    executable: () => 'TES5VREdit.exe',
     requiredFiles: [
-      'tes5edit.exe',
-    ],
-  },
-  {
-    id: 'WryeBash',
-    name: 'WryeBash',
-    logo: 'wrye.png',
-    executable: () => 'wryebash.exe',
-    requiredFiles: [
-      'wryebash.exe',
+      'TES5VREdit.exe',
     ],
   },
   {
     id: 'FNIS',
-    name: 'FNIS',
+    name: 'Fores New Idles in Skyrim',
+    shortName: 'FNIS',
     logo: 'fnis.png',
     executable: () => 'GenerateFNISForUsers.exe',
     requiredFiles: [
@@ -47,11 +39,12 @@ const tools = [
     relative: true,
   },
   {
-    id: 'skse64',
-    name: 'SKSE64',
-    executable: () => 'skse64_loader.exe',
+    id: 'sksevr',
+    name: 'Skyrim Script Extender VR',
+    shortName: 'SKSEVR',
+    executable: () => 'sksevr_loader.exe',
     requiredFiles: [
-      'skse64_loader.exe',
+      'sksevr_loader.exe',
     ],
     relative: true,
   },

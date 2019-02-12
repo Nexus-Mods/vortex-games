@@ -1,10 +1,16 @@
 const { app, remote } = require('electron');
 const path = require('path');
-const { fs } = require('vortex-api');
+const { fs, util } = require('vortex-api');
 const { parseXmlString } = require('libxmljs');
 const winapi = require('winapi-bindings');
 
 const appUni = app || remote.app;
+
+const ADDINS_FILE = 'AddIns.xml';
+
+// Static variables to store paths we resolve using appUni.
+let _ADDINS_PATH = undefined;
+let _MODS_PATH = undefined;
 
 function findGame() {
   if (process.platform !== 'win32') {
@@ -25,7 +31,11 @@ function findGame() {
 }
 
 function queryModPath() {
-  return path.join(appUni.getPath('documents'), 'BioWare', 'Dragon Age', 'packages', 'core', 'override');
+  if (_MODS_PATH === undefined) {
+    _MODS_PATH = path.join(appUni.getPath('documents'), 'BioWare', 'Dragon Age', 'packages', 'core', 'override');
+  }
+  
+  return _MODS_PATH;
 }
 
 function prepareForModding() {
@@ -35,8 +45,12 @@ function prepareForModding() {
 }
 
 function addinsPath() {
-  return path.join(appUni.getPath('documents'), 'Bioware', 'Dragon Age',
-                   'Settings', 'AddIns.xml');
+  if (_ADDINS_PATH === undefined) {
+    _ADDINS_PATH = path.join(appUni.getPath('documents'), 'Bioware', 'Dragon Age',
+      'Settings', ADDINS_FILE);
+  }
+
+  return _ADDINS_PATH;
 }
 
 const emptyAddins = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -51,7 +65,7 @@ function test(game) {
     baseFiles: () => [
       {
         in: addinsPath(),
-        out: 'Addins.xml',
+        out: path.join('Settings', ADDINS_FILE),
       },
     ],
     filter: filePath => path.basename(filePath).toLowerCase() === 'manifest.xml',
@@ -65,14 +79,11 @@ function merge(filePath, mergeDir) {
         try {
           manifest = parseXmlString(xmlData);
         } catch (err) {
-          return Promise.reject(new ProcessCanceled(`File invalid "${filePath}"`));
+          return Promise.reject(new util.ProcessCanceled(`File invalid "${filePath}"`));
         }
         return Promise.resolve();
       })
-      .then(() => fs.readFileAsync(path.join(mergeDir, 'AddIns.xml')))
-      .catch(err => (err.code === 'ENOENT')
-          ? fs.readFileAsync(addinsPath()).catch(err => emptyAddins)
-          : Promise.reject(err))
+      .then(() => readAddinsData(mergeDir))
       .then(addinsData => new Promise((resolve, reject) => {
         try  {
           resolve(parseXmlString(addinsData));
@@ -82,12 +93,24 @@ function merge(filePath, mergeDir) {
       }))
       .then(addins => {
         const list = addins.get('//AddInsList');
+        if (list === undefined) {
+          return Promise.reject(new util.ProcessCanceled(`Addins file is invalid - "${path.join(mergeDir, 'Settings', ADDINS_FILE)}"`));
+        }
+
         manifest.find('//Manifest/AddInsList/AddInItem').forEach(item => {
           list.addChild(item);
         });
-        return fs.writeFileAsync(path.join(mergeDir, 'AddIns.xml'),
+        return fs.writeFileAsync(path.join(mergeDir, 'Settings', ADDINS_FILE),
                                  addins.toString(), { encoding: 'utf-8' });
       });
+}
+
+function readAddinsData(mergeDir) {
+  return fs.readFileAsync(path.join(mergeDir, 'Settings', ADDINS_FILE))
+    .catch(err => (err.code === 'ENOENT')
+      ? fs.readFileAsync(addinsPath()).catch(err => emptyAddins)
+      : Promise.reject(err)
+    );
 }
 
 function main(context) {
@@ -108,7 +131,7 @@ function main(context) {
       steamAppId: 17450,
     },
   });
-  context.registerMerge(test, merge, 'dragonage-settings');
+  context.registerMerge(test, merge, 'dazip');
 
   return true;
 }

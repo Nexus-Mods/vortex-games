@@ -17,6 +17,7 @@ const { fs, util } = require('vortex-api');
 //  Unforunately this means we can only rely on Steam for
 //  registry discovery.
 const steamReg = 'SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Steam App ';
+const STEAM_DLL = 'steam_api.dll';
 
 const OVERRIDE_FOLDER = 'override';
 
@@ -39,6 +40,14 @@ const KOTOR_GAMES = {
     logo: 'gameartkotor2.png',
     exec: 'swkotor2.exe',
   },
+}
+
+function requiresLauncher(gamePath) {
+  return fs.readdirAsync(gamePath)
+    .then(files => files.find(file => file.indexOf(STEAM_DLL) !== -1) !== undefined 
+      ? Promise.resolve({ launcher: 'steam' }) 
+      : Promise.resolve(undefined))
+    .catch(err => Promise.reject(err));
 }
 
 function findGame(kotorGame) {
@@ -71,6 +80,9 @@ function main(context) {
       mergeMods: true,
       queryPath: () => findGame(game.regPath),
       queryModPath: () => OVERRIDE_FOLDER,
+      requiresLauncher: game.id === 'kotor2' 
+        ? requiresLauncher 
+        : undefined,
       logo: game.logo,
       executable: () => game.exec,
       requiredFiles: [

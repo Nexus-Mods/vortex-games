@@ -41,7 +41,6 @@ function main(context) {
         const store = context.api.store;
         const state = store.getState();
         const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', gameId], undefined);
-        console.log('discovery', discovery, gameId, mods);
         if (discovery === undefined) {
           // should never happen and if it does it will cause errors elsewhere as well
           log('error', 'kingdomcomedeliverance was not discovered');

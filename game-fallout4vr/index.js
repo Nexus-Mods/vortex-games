@@ -20,21 +20,12 @@ function findGame() {
 
 let tools = [
   {
-    id: 'FO4Edit',
-    name: 'FO4Edit',
-    logo: 'tes5edit.png',
-    executable: () => 'xedit.exe',
+    id: 'FO4VREdit',
+    name: 'FO4VREdit',
+    logo: 'fo3edit.png',
+    executable: () => 'FO4VREdit.exe',
     requiredFiles: [
-      'tes5edit.exe',
-    ],
-  },
-  {
-    id: 'FNIS',
-    name: 'FNIS',
-    logo: 'fnis.png',
-    executable: () => 'GenerateFNISForUsers.exe',
-    requiredFiles: [
-      'GenerateFNISForUsers.exe',
+      'FO4VREdit.exe',
     ],
   },
 ];
