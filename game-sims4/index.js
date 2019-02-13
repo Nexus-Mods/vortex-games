@@ -55,7 +55,7 @@ function modPath() {
     }
   }
   throw new Error('Couldn\'t find the mods directory for Sims 4. Please make sure you have run it at least once. '
-    + 'If you report this as a bug, please let us know what the directory actually is on your system.');
+    + 'If you report this as a bug, please let us know where the directory is located on your system.');
 }
 
 function prepareForModding() {
