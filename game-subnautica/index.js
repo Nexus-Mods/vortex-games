@@ -73,7 +73,7 @@ class Subnautica {
           { message: 'You must install QModManager to use mods with Subnautica.' },
           [
             { label: 'Cancel', action: () => reject(new util.UserCanceled()) },
-            { label: 'Go to QModManager page', action: () => { opn('https://www.nexusmods.com/subnautica/mods/16/').catch(err => undefined); reject(new util.UserCanceled()); } }
+            { label: 'Go to QModManager page', action: () => { opn('https://www.nexusmods.com/subnautica/mods/201').catch(err => undefined); reject(new util.UserCanceled()); } }
           ]
         )
       );
