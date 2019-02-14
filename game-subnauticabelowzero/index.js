@@ -34,9 +34,9 @@ class SubnauticaBelowZero {
   }
 
   async requiresLauncher() {
-    return util.epicGamesLauncher.isGameInstalled('Jaguar')
+    return util.epicGamesLauncher.isGameInstalled('foxglove')
       .then(epic => epic
-        ? { launcher: 'epic', addInfo: 'Jaguar' }
+        ? { launcher: 'epic', addInfo: 'foxglove' }
         : undefined);
   }
 
@@ -73,7 +73,7 @@ class SubnauticaBelowZero {
           { message: 'You must install QModManager to use mods with Subnautica: Below Zero.' },
           [
             { label: 'Cancel', action: () => reject(new util.UserCanceled()) },
-            { label: 'Go to QModManager page', action: () => { opn('https://www.nexusmods.com/subnauticabelowzero/mods/1/').catch(err => undefined); reject(new util.UserCanceled()); } }
+            { label: 'Go to QModManager page', action: () => { opn('https://www.nexusmods.com/subnauticabelowzero/mods/1').catch(err => undefined); reject(new util.UserCanceled()); } }
           ]
         )
       );
