@@ -39,7 +39,7 @@ function gameExecutable() {
 function main(context) {
   context.registerGame({
     id: 'witcher',
-    name: 'The Witcher: Enhanced Edition',
+    name: 'The Witcher',
     mergeMods: true,
     queryPath: findGame,
     supportedTools: [],
