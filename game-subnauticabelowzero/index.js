@@ -19,7 +19,7 @@ class SubnauticaBelowZero {
       executable: () => 'QModManager.exe',
       requiredFiles: [
         'QModManager.exe',
-      ],
+      ], 
       relative: true,
       }
     ];
