@@ -44,9 +44,13 @@ function main(context) {
     function findUnityModManager() {
         let result = '';
         if (IsWin) {
-            const path = winapi.RegGetValue('HKEY_CURRENT_USER', 'Software\\UnityModManager', 'Path');
-            if (path) {
-                result = path.value;
+            try {
+                const path = winapi.RegGetValue('HKEY_CURRENT_USER', 'Software\\UnityModManager', 'Path');
+                if (path) {
+                    result = path.value;
+                }
+            } catch (err) {
+                // UMM not installed, leave result as ''
             }
         }
 
