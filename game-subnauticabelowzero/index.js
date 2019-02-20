@@ -12,7 +12,7 @@ class SubnauticaBelowZero {
     this.name = 'Subnautica: Below Zero';
     this.mergeMods = true;
     this.queryModPath = () => 'QMods';
-	  this.supportedTools = [
+    this.supportedTools = [
       {
       id: 'qmods',
       name: 'QModManager',
@@ -42,7 +42,7 @@ class SubnauticaBelowZero {
 
   async queryPath() {
     return util.steam.findByAppId('848450')
-        .then(game => game.gamePath);
+      .then(game => game.gamePath);
   }
 
   async getPathExistsAsync(path) {
