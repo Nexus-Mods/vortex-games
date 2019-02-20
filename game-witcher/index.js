@@ -29,7 +29,7 @@ function testUserContent(instructions) {
 }
 
 function prepareForModding(discovery) {
-  return fs.ensureDirAsync(path.join(discovery.path, 'Data/Override'));
+  return fs.ensureDirAsync(path.join(discovery.path, 'Data', 'Override'));
 }
 
 function gameExecutable() {
@@ -58,7 +58,7 @@ function main(context) {
   const getPath = (game) => {
     const state = context.api.store.getState();
     const discovery = state.settings.gameMode.discovered[game.id];
-    return path.join(discovery.path, 'Data/Override');
+    return path.join(discovery.path, 'Data', 'Override');
   };
 
   context.registerModType('witcheruser', 25, gameId => gameId === 'witcher', getPath, testUserContent);
