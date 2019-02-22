@@ -57,8 +57,9 @@ function main(context) {
     supportedTools: tools,
     queryModPath: () => 'data',
     logo: 'gameart.png',
-    executable: () => 'TESV.exe',
+    executable: () => 'Enderal Launcher.exe',
     requiredFiles: [
+      'Enderal Launcher.exe',
       'TESV.exe',
     ],
     environment: {
