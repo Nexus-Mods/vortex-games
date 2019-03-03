@@ -1,53 +1,103 @@
+const fs = require('fs');
 const Promise = require('bluebird');
+const opn = require('opn');
 const path = require('path');
-const { fs, util } = require('vortex-api');
+const winapi = require('winapi-bindings');
+const {log, actions, util} = require('vortex-api');
 
-function findGame() {
-    return util.steam.findByName('Pathfinder: Kingmaker')
-      .then(game => game.gamePath);  
+const IsWin = process.platform === 'win32';
+
+const NexusId = 'pathfinderkingmaker';
+const Name = 'Pathfinder: Kingmaker';
+const ExeName = 'Kingmaker';
+const SteamId = 640820;
+
+function main(context) 
+{
+    context.registerGame(
+	{
+        id: NexusId,
+        name: Name,
+        logo: 'gameart.png',
+        mergeMods: true,
+        queryPath: findGame,
+        queryModPath: () => 'Mods',
+        executable: () => ExeName + '.exe',
+        requiredFiles: [ExeName + '.exe'],
+        details: 
+		{
+            steamAppId: SteamId,
+        },
+        setup: setup,
+        supportedTools: [
+            {
+                id: 'UnityModManager',
+                name: 'Unity Mod Manager',
+                logo: 'umm.png',
+                queryPath : findUnityModManager,
+                executable: () => 'UnityModManager.exe',
+                requiredFiles: ['UnityModManager.exe'],
+            }],
+    });
+
+    function findGame() 
+	{
+        return util.steam.findByAppId(SteamId.toString()).then(game => game.gamePath);
+    }
+
+    function findUnityModManager() 
+	{
+        let result = '';
+        if (IsWin) 
+		{
+            try 
+			{
+                const path = winapi.RegGetValue('HKEY_CURRENT_USER', 'Software\\UnityModManager', 'Path');
+                if (path) 
+				{
+                    result = path.value;
+                }
+            } 
+			catch (err) 
+			{
+				
+            }
+        }
+
+        return Promise.resolve(result);
+    }
+
+    function setup(discovery) 
+	{
+        if (fs.existsSync(path.join(discovery.path, ExeName + '_Data', 'Managed', 'UnityModManager', 'UnityModManager.dll'))) {
+            return;
+        }
+        return new Promise((resolve, reject) => 
+		{
+            context.api.store.dispatch(
+                actions.showDialog(
+                    'question',
+                    'Action required',
+                    {message: 'You must install UnityModManager to use mods with ' + Name},
+                    [
+                        {label: 'Cancel', action: () => reject(new util.UserCanceled())},
+                        {
+                            label: 'Go to UnityModManager page', action: () => 
+							{
+                                opn('https://www.nexusmods.com/site/mods/21/').catch(err => undefined);
+                                reject(new util.UserCanceled());
+                            }
+                        }
+                    ]
+                )
+            );
+        });
+    }
+
+    return true;
 }
 
-let tools = [
-  {
-    id: 'UnityModManager',
-    name: 'Unity Mod Manager',
-    logo: 'umm.png',
-    executable: () => 'UnityModManager.exe',
-    requiredFiles: [
-      'UnityModManager.exe',
-    ],
-  },
-];
-
-function prepareForModding(discovery) {
-  return fs.ensureDirWritableAsync(path.join(discovery.path, 'Mods'),
-    () => Promise.resolve());
-}
-
-function main(context) {
-  context.registerGame({
-    id: 'pathfinderkingmaker',
-    name: 'Pathfinder: Kingmaker',
-    mergeMods: true,
-    queryPath: findGame,
-    supportedTools: tools,
-    queryModPath: () => 'Mods',
-    logo: 'gameart.png',
-    executable: () => 'Kingmaker.exe',
-    setup: prepareForModding,
-    requiredFiles: [
-      'Kingmaker.exe',
-    ],
-    environment: {
-      SteamAPPId: '640820',
-    },
-    details: {
-      steamAppId: 640820,
-    },
-  });
-  return true;
-}
-
-module.exports = {
-  default: main
+module.exports = 
+{
+    default: main
 };
