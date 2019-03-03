@@ -7,10 +7,10 @@ const {log, actions, util} = require('vortex-api');
 
 const IsWin = process.platform === 'win32';
 
-const NexusId = 'pathfinderkingmaker';
-const Name = 'Pathfinder: Kingmaker';
-const ExeName = 'Kingmaker';
-const SteamId = 640820;
+const NexusId = 'gardenpaws';
+const Name = 'Garden Paws';
+const ExeName = 'GardenPaws';
+const SteamId = 840010;
 
 function main(context) 
 {
