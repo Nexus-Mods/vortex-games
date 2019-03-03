@@ -48,7 +48,14 @@ function main(context) {
         }
         prepareForModding(discovery)
         .then(() => fs.writeFileAsync(path.join(discovery.path, 'Mods', 'mod_order.txt'),
-                                      mods.map(mod => transformId(mod.id)).join('\n')));
+                                      mods.map(mod => transformId(mod.id)).join('\n')))
+        .catch(err => {
+          const errorMessage = ['EPERM', 'ENOENT'].indexOf(err.code) !== -1
+            ? 'Please ensure that the file exists, and that you have full write permissions to it.'
+            : err;
+          context.api.showErrorNotification('Unable to manipulate mod_order.txt',
+          errorMessage, { allowReport: ['EPERM', 'ENOENT'].indexOf(err.code) === -1 })
+        });
       }
     });
   })

@@ -100,8 +100,10 @@ function merge(filePath, mergeDir) {
         manifest.find('//Manifest/AddInsList/AddInItem').forEach(item => {
           list.addChild(item);
         });
-        return fs.writeFileAsync(path.join(mergeDir, 'Settings', ADDINS_FILE),
-                                 addins.toString(), { encoding: 'utf-8' });
+        const destPath = path.join(mergeDir, 'Settings');
+        return fs.ensureDirAsync(destPath)
+          .then(() => fs.writeFileAsync(path.join(destPath, ADDINS_FILE),
+            addins.toString(), { encoding: 'utf-8' }))
       });
 }
 
