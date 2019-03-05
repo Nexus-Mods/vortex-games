@@ -1,9 +1,20 @@
 const { util } = require('vortex-api');
+const winapi = require('winapi-bindings');
 
 function findGame() {
-  // enderal doesn't seem to have a registry entry
-  return util.steam.findByName('Enderal: Forgotten Stories')
-    .then(game => game.gamePath);
+  try {
+    const instPath = winapi.RegGetValue(
+      'HKEY_CURRENT_USER',
+      'Software\\SureAI\\Enderal',
+      'Install_Path');
+    if (!instPath) {
+      throw new Error('empty registry key');
+    }
+    return Promise.resolve(instPath.value);
+  } catch (err) {
+    return util.steam.findByName('Enderal: Forgotten Stories')
+      .then(game => game.gamePath);
+  }
 }
 
 let tools = [
