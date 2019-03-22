@@ -1,11 +1,21 @@
+const { app, remote } = require('electron');
 const Promise = require('bluebird');
 const { parseXmlString } = require('libxmljs');
 const path = require('path');
 const { fs, log, util } = require('vortex-api');
+const Big = require('big.js');
+
+const APPUNI = app || remote.app;
+
+let _STEAM_USER_ID = '';
+let _STEAM_ENTRY;
 
 function findGame() {
   return util.steam.findByName('X4: Foundations')
-      .then(game => game.gamePath);
+    .then(game => {
+      _STEAM_ENTRY = game;
+      return _STEAM_ENTRY.gamePath;
+    });
 }
 
 function testSupported(files, gameId) {
@@ -94,8 +104,26 @@ function install(files,
       });
 }
 
+function steamUserId32Bit() {
+  if (_STEAM_USER_ID !== '') {
+    return _STEAM_USER_ID;
+  }
+
+  if ((_STEAM_ENTRY !== undefined) && (_STEAM_ENTRY.lastUser !== undefined)) {
+    const id64Bit = new Big(_STEAM_ENTRY.lastUser);
+    const id32Bit = id64Bit.mod(Big(2).pow(32));
+    _STEAM_USER_ID = id32Bit.toFixed();
+  }
+
+  return _STEAM_USER_ID;
+}
+
+function queryModPath() {
+  return path.join(APPUNI.getPath('documents'), 'Egosoft', 'X4', steamUserId32Bit(), 'extensions');
+}
+
 function prepareForModding(discovery) {
-  return fs.ensureDirWritableAsync(path.join(discovery.path, 'extensions'),
+  return fs.ensureDirWritableAsync(queryModPath(),
     () => Promise.resolve());
 }
 
@@ -105,7 +133,7 @@ function main(context) {
     name: 'X4: Foundations',
     mergeMods: true,
     queryPath: findGame,
-    queryModPath: () => 'extensions',
+    queryModPath,
     logo: 'gameart.png',
     executable: () => 'X4.exe',
     setup: prepareForModding,
