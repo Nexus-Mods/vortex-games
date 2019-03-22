@@ -8,6 +8,18 @@ const AHATINTIME_ID = 'ahatintime';
 //  root folder.
 const MOD_INFO = 'modinfo.ini';
 
+let tools = [
+  {
+    id: 'HatinTimeEditor',
+    name: 'Modding Tools',
+    logo: 'HatinTimeEditor.png',
+    executable: () => 'Binaries/ModManager.exe',
+    requiredfiles: [
+      'Binaries/ModManager.exe',
+    ],
+  }
+]
+
 function findGame() {
   return util.steam.findByAppId('253230')
       .then(game => game.gamePath);
@@ -63,6 +75,7 @@ function main(context) {
     name: 'A Hat in Time',
     mergeMods: true,
     queryPath: findGame,
+    supportedTools: tools,
     queryModPath: () => 'HatInTimeGame/Mods',
     logo: 'gameart.png',
     executable: () => 'Binaries/Win64/HatInTimeGame.exe',
