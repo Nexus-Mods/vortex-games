@@ -14,7 +14,7 @@ let tools = [
     name: 'Modding Tools',
     logo: 'HatinTimeEditor.png',
     executable: () => 'Binaries/ModManager.exe',
-    requiredfiles: [
+    requiredFiles: [
       'Binaries/ModManager.exe',
     ],
   }
