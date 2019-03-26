@@ -6,6 +6,8 @@ const
   { actions, util } = require('vortex-api'),
   winapi = require('winapi-bindings');
 
+const MANIFEST_FILE = 'manifest.json';
+
 class StardewValley {
   /*********
   ** Vortex API
@@ -27,6 +29,7 @@ class StardewValley {
       steamAppId: 413150
     };
     this.mergeMods = true;
+    this.requiresCleanup = true;
     this.shell = process.platform == 'win32';
 
     // custom properties
@@ -171,8 +174,55 @@ class StardewValley {
   }
 }
 
+async function getModName(path) {
+  try {
+    const file = await promisify(fs.readFile)(path);
+    const data = JSON.parse(file);
+    return (data.Name !== undefined)
+      ? Promise.resolve(data.Name.replace(/[^a-zA-Z0-9]/g, ''))
+      : Promise.reject(new util.DataInvalid('Invalid manifest.json file'));
+  } catch(err) {
+    return Promise.reject(new util.DataInvalid('Unable to parse manifest.json file'));
+  }
+}
+
+async function testSupported(files, gameId) {
+  const supported = (gameId === 'stardewvalley') && 
+    (files.find(file => path.basename(file).toLowerCase() === MANIFEST_FILE) !== undefined)
+  return { supported }
+}
+
+async function install(files,
+                destinationPath,
+                gameId,
+                progressDelegate) {
+  // We're going to assume that the mod's root directory is wherever
+  //  the manifest.json file is located. Everything outside the root
+  //  will be removed.
+  const manifestFile = files.find(file => path.basename(file).toLowerCase() === MANIFEST_FILE).toLowerCase();
+  const rootFolder = path.dirname(manifestFile);
+  const manifestIndex = manifestFile.indexOf(MANIFEST_FILE);
+  let modName = await getModName(path.join(destinationPath, manifestFile));
+  const filtered = files.filter(file =>
+    (file.toLowerCase().indexOf(rootFolder) !== -1)
+    && (path.dirname(file) !== '.')
+    && (path.extname(file) !== ''));
+
+  const instructions = filtered.map(file => {
+    const destination = path.join(modName, file.substr(manifestIndex));
+    return {
+      type: 'copy',
+      source: file,
+      destination: destination,
+    };
+  });
+
+  return Promise.resolve({ instructions });
+}
+
 module.exports = {
   default: function(context) {
     context.registerGame(new StardewValley(context));
+    context.registerInstaller('stardew-valley-installer', 50, testSupported, install);
   }
 }
