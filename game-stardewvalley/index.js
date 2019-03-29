@@ -2,8 +2,9 @@ const
   fs = require('fs'),
   opn = require('opn'),
   path = require('path'),
+  rjson = require('relaxed-json'),
   { promisify } = require('util'),
-  { actions, util } = require('vortex-api'),
+  { actions, log, util } = require('vortex-api'),
   winapi = require('winapi-bindings');
 
 const MANIFEST_FILE = 'manifest.json';
@@ -174,15 +175,18 @@ class StardewValley {
   }
 }
 
-async function getModName(path) {
+async function getModName(manifestPath) {
   try {
-    const file = await promisify(fs.readFile)(path);
-    const data = JSON.parse(file);
+    const file = await promisify(fs.readFile)(manifestPath, { encoding: 'utf8' });
+    // it seems to be not uncommon that these files are not valid json,
+    // so we use relaxed-json to improve our chances of parsing successfully
+    const data = rjson.parse(util.deBOM(file));
     return (data.Name !== undefined)
       ? Promise.resolve(data.Name.replace(/[^a-zA-Z0-9]/g, ''))
       : Promise.reject(new util.DataInvalid('Invalid manifest.json file'));
   } catch(err) {
-    return Promise.reject(new util.DataInvalid('Unable to parse manifest.json file'));
+    log('error', 'Unable to parse manifest.json file', manifestPath);
+    return path.basename(manifestPath, path.extname(manifestPath));
   }
 }
 
