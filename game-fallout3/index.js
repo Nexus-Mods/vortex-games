@@ -1,5 +1,6 @@
 const Promise = require('bluebird');
-const { util } = require('vortex-api');
+const path = require('path');
+const { fs, util } = require('vortex-api');
 const winapi = require('winapi-bindings');
 
 function findGame() {
@@ -58,9 +59,21 @@ function main(context) {
     supportedTools: tools,
     queryModPath: () => 'data',
     logo: 'gameart.png',
-    executable: () => 'fallout3.exe',
+    executable: (discoveryPath) => {
+      if (discoveryPath === undefined) {
+        return 'fallout3.exe';
+      } else {
+        try {
+          fs.statSync(path.join(discoveryPath, 'fallout3ng.exe'));
+          return 'fallout3ng.exe';
+        } catch (err) {
+          return 'fallout3.exe';
+        }
+      }
+    },
     requiredFiles: [
-      'fallout3.exe',
+      'falloutlauncher.exe',
+      'data/fallout3.esm'
     ],
     environment: {
       SteamAPPId: '22300',
