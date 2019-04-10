@@ -1,3 +1,4 @@
+const Promise = require('bluebird');
 const path = require('path');
 const { fs, log, util } = require('vortex-api');
 
@@ -46,9 +47,39 @@ function main(context) {
           log('error', 'kingdomcomedeliverance was not discovered');
           return;
         }
+
+        const modOrderFile = path.join(discovery.path, 'Mods', 'mod_order.txt');
+        const transformedMods = mods.map(mod => transformId(mod.id));
         prepareForModding(discovery)
-        .then(() => fs.writeFileAsync(path.join(discovery.path, 'Mods', 'mod_order.txt'),
-                                      mods.map(mod => transformId(mod.id)).join('\n')))
+        .then(() => fs.readFileAsync(modOrderFile, { encoding: 'utf-8' }))
+          .catch(err => (err.code === 'ENOENT')
+            ? Promise.resolve(null) // No mod order file? no problem.
+            : Promise.reject(err))
+        .then(data => {
+          if (data === null) {
+            return Promise.resolve();
+          } else {
+            // We need to lookup pre-existing mods and ensure we don't remove them.
+            //  We rely on the mods being separated by newLine (but so does the game afaik)
+            const currentMods = data.split(/\r?\n/g); // Pattern should work for both Windows and *nix
+            const diff = currentMods.filter(current =>
+              transformedMods.find(newMod => newMod === current) === undefined);
+            return Promise.each(diff, mod => {
+              // Ensure that the mod manifest exists as that's a clear indication that
+              //  the mod is still installed.
+              return fs.statAsync(path.join(discovery.path, 'Mods', mod, 'mod.manifest'))
+              .tap(() => transformedMods.push(mod))
+              .catch(err => {
+                if (['ENOENT', 'UNKNOWN'].indexOf(err.code) === -1) {
+                  transformedMods.push(mod);
+                }
+
+                return Promise.resolve();
+              })
+            })
+          }
+        })
+        .then(() => fs.writeFileAsync(modOrderFile, transformedMods.join('\n')))
         .catch(err => {
           const errorMessage = ['EPERM', 'ENOENT'].indexOf(err.code) !== -1
             ? 'Please ensure that the file exists, and that you have full write permissions to it.'
