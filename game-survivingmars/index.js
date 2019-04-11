@@ -15,32 +15,6 @@ const SURVIVINGMARS_ID = 'survivingmars';
 const STEAM_EXE = 'MarsSteam.exe';
 const GOG_EXE = 'MarsGOG.exe'
 
-// We're currently unable to assign executables during runtime;
-//  to support both GOG and Steam versions, we're going to add both
-//  as tools and allow the user to switch between them as appropriate.
-const tools = [
-  {
-    id: 'MarsSteam',
-    name: 'Steam Version',
-    logo: 'Mars.png',
-    executable: () => STEAM_EXE,
-    requiredFiles: [
-      STEAM_EXE,
-    ],
-    relative: true,
-  },
-  {
-    id: 'MarsGOG',
-    name: 'GOG Version',
-    logo: 'Mars.png',
-    executable: () => GOG_EXE,
-    requiredFiles: [
-      GOG_EXE,
-    ],
-    relative: true,
-  },
-]
-
 function findGame() {
   try {
     const instPath = winapi.RegGetValue(
@@ -104,6 +78,21 @@ function testSupportedContent(files, gameId) {
   });
 }
 
+function getExecutable(discoveryPath) {
+  if (discoveryPath === undefined) {
+    return STEAM_EXE;
+  }
+
+  let execFile = GOG_EXE;
+  try {
+    fs.statSync(path.join(discoveryPath, GOG_EXE))
+  } catch (err) {
+    execFile = STEAM_EXE;
+  }
+
+  return execFile;
+}
+
 function main(context) {
   // We're going to register the game with the steam
   //  executable by default as theoretically we expect more users
@@ -114,9 +103,8 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: modPath,
-    supportedTools: tools,
     logo: 'gameart.jpg',
-    executable: () => STEAM_EXE,
+    executable: (discoveryPath) => getExecutable(discoveryPath),
     requiredFiles: [],
     setup: prepareForModding,
     details: {
