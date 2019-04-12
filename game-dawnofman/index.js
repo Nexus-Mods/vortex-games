@@ -8,6 +8,7 @@ const { actions, fs, util } = require('vortex-api');
 const uniApp = app || remote.app;
 
 let _API;
+let _UMM_PATH;
 const GAME_ID = 'dawnofman';
 const STEAM_ID = 858810;
 const GOG_ID = 1899257943;
@@ -20,10 +21,8 @@ const tools = [{
   id: 'UnityModManager',
   name: 'Unity Mod Manager',
   logo: 'umm.png',
-  queryPath: findUnityModManager,
   executable: () => 'UnityModManager.exe',
   requiredFiles: ['UnityModManager.exe'],
-  relative: true,
 }]
 
 function readRegistryKey(hive, key, name) {
@@ -40,10 +39,49 @@ function readRegistryKey(hive, key, name) {
 
 function findUnityModManager(ummPath) {
   return readRegistryKey('HKEY_CURRENT_USER', 'Software\\UnityModManager', 'Path')
-    .then(value => fs.statAsync(value)
-      .then(() => Promise.resolve(value))
-      .catch(() => fs.statAsync(ummPath))
-      .then(() => Promise.resolve(ummPath)));
+    .then(value => fs.statAsync(path.join(value, UMM_DLL))
+      .then(() => {
+        _UMM_PATH = value;
+        return setUMMPath(value);
+      })
+      .catch(err => {
+        return (ummPath !== undefined) 
+          ? fs.statAsync(path.join(ummPath, UMM_DLL))
+          : Promise.reject(err);
+      })
+      .then(() => {
+        _UMM_PATH = ummPath;
+        return setUMMPath(ummPath);
+      }));
+}
+
+function createUMMTool(ummPath, toolId) {
+  _API.store.dispatch(actions.addDiscoveredTool(GAME_ID, toolId, {
+    path: path.join(ummPath, 'UnityModManager.exe'),
+    hidden: false,
+    custom: false,
+    workingDirectory: ummPath,
+  }));
+
+  return Promise.resolve();
+}
+
+function setUMMPath(resolvedPath) {
+  const state = _API.store.getState();
+  const tools = util.getSafe(state, ['settings', 'gameMode', 'dawnofman', 'tools'], undefined);
+
+  if (tools !== undefined) {
+    const UMM = (Object.keys(tools).map(key => tools[key]))
+      .find(tool => tool.path.endsWith('UnityModManager.exe'));
+
+    return (UMM !== undefined)
+      ? ((UMM.path !== undefined) && (path.dirname(UMM.path) === resolvedPath))
+        ? Promise.resolve()
+        : createUMMTool(resolvedPath, UMM.id)
+      : createUMMTool(resolvedPath, 'UnityModManager');
+  } else {
+    return createUMMTool(resolvedPath, 'UnityModManager');
+  }
 }
 
 function findGame() {
@@ -61,11 +99,21 @@ function prepareForModding(discovery) {
   const showUMMDialog = () => new Promise((resolve, reject) => {
     _API.store.dispatch(actions.showDialog('question', 'Action required',
       {
-        message: 'Most Dawn of Man mods require "Unity Mod Manager" to be installed to run correctly.\n'
-               + 'Simpler "Scenario" mods can be used without UMM.'
+        message: 'Most Dawn of Man mods require Unity Mod Manager to be installed to run correctly.\n'
+               + 'Once installed, UMM must be used to inject your mods into the game itself.\n'
+               + 'For ease of use, UMM comes pre-added as a tool for Dawn of Man but you may have\n'
+               + 'to configure it manually.\n'
+               + 'For usage information and download link please see UMM\'s page.\n\n'
+               + 'Please note: simpler "Scenario" mods can be used without UMM.'
       },
       [
         { label: 'Continue', action: () => resolve() },
+        { label: 'More on Vortex Tools', action: () => {
+          opn('https://wiki.nexusmods.com/index.php/Category:Tool_Setup')
+            .then(() => showUMMDialog())
+            .catch(err => undefined);
+          resolve();
+        }},
         { label: 'Go to UMM page', action: () => {
           opn('https://www.nexusmods.com/site/mods/21/').catch(err => undefined);
           // We want to go forward even if UMM is not installed as the scenario modType
@@ -75,13 +123,13 @@ function prepareForModding(discovery) {
       ]));
   });
 
-  // UMM's dll path when installed using Vortex.
-  const unityModManagerDllPath = path.join(discovery.path, 'UnityModManager', UMM_DLL);
+  // UMM's path when installed using Vortex.
+  const unityModManagerPath = path.join(discovery.path, 'UnityModManager');
 
   return fs.ensureDirWritableAsync(SCENE_FOLDER, () => Promise.resolve())
     .then(() => fs.ensureDirWritableAsync(path.join(discovery.path, 'Mods'),
       () => Promise.resolve()))
-    .then(() => findUnityModManager(unityModManagerDllPath))
+    .then(() => findUnityModManager(unityModManagerPath))
     .catch(err => (err.code === 'ENOENT')
       ? showUMMDialog()
       : Promise.reject(err));
@@ -109,7 +157,9 @@ function installSceneMod(files, destinationPath) {
   return Promise.resolve({ instructions });
 }
 
-function installUMM(files) {
+function installUMM(files, destinationPath) {
+  const dirPath = path.dirname(destinationPath);
+  const folderName = path.basename(destinationPath, '.installing');
   const dllFile = files.find(file => file.endsWith(UMM_DLL));
   const idx = dllFile.indexOf(UMM_DLL);
   const instructions = files.map(file => {
@@ -120,7 +170,8 @@ function installUMM(files) {
     };
   })
 
-  return Promise.resolve({ instructions });
+  return createUMMTool(path.join(dirPath, folderName), 'UnityModManager')
+    .then(() => Promise.resolve({ instructions }));
 }
 
 function installMod(files, destinationPath) {
@@ -196,16 +247,8 @@ function main(context) {
     supportedTools: tools,
   });
 
-  const getUMMPath = (game) => {
-    const state = context.api.store.getState();
-    const discovery = state.settings.gameMode.discovered[game.id];
-    return ((discovery === undefined) || (discovery.path === undefined))
-      ? undefined
-      : path.join(discovery.path, 'UnityModManager');
-  };
-
   context.registerModType('dom-umm-modtype', 25,
-    (gameId) => gameId === GAME_ID, getUMMPath,
+    (gameId) => gameId === GAME_ID, () => _UMM_PATH,
     (instructions) => endsWithPattern(instructions, UMM_DLL));
 
   context.registerModType('dom-scene-modtype', 25,
