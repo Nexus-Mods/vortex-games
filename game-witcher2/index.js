@@ -31,6 +31,7 @@ function prepareForModding(discovery) {
 }
 
 function main(context) {
+  var win32 = process.platform === 'win32';
   context.registerGame({
     id: 'witcher2',
     name: 'The Witcher 2',
@@ -39,16 +40,24 @@ function main(context) {
     supportedTools: [],
     queryModPath: () => 'CookedPC',
     logo: 'gameart.png',
-    executable: () => 'bin/witcher2.exe',
+    executable: win32 ?
+      () => 'bin/witcher2.exe' :
+      () => 'launcher',
     setup: prepareForModding,
-    requiredFiles: [
+    requiredFiles: win32 ? [
       'bin/witcher2.exe',
       'bin/userContentManager.exe',
+    ] : [
+      'launcher',
+      'saferun.sh',
+      'tenfoot-launcher',
+      'desktop-launcher',
     ],
     details: {
       steamAppId: 20920,
     }
   });
+}
 
   const getPath = (game) => {
     const state = context.api.store.getState();
