@@ -1,5 +1,13 @@
 const path = require('path');
-const { fs, log, util } = require('vortex-api');
+const { fs, util } = require('vortex-api');
+
+const AUDIO_EXT = '.fsb';
+const CONFIG_FILE = 'config.blk';
+const SOUND_CONFIG = `sound{
+  speakerMode:t="auto"
+  fmod_sound_enable:b=yes
+  enable_mod:b=yes
+}`;
 
 function findGame() {
   return util.steam.findByName('War Thunder')
@@ -10,8 +18,26 @@ function modPath() {
   return 'UserSkins';
 }
 
+function modifyConfigFile(gameRootPath) {
+  const configFilePath = path.join(gameRootPath, CONFIG_FILE);
+  return fs.readFileAsync(configFilePath, { encoding: 'utf-8' })
+    .then(data => {
+      const modifiedData = data.replace(/^sound{[\s\S]*?}$/m, SOUND_CONFIG);
+      return fs.writeFileAsync(configFilePath, modifiedData, { encoding: 'utf8' });
+    })
+    .catch(err => Promise.reject(new util.DataInvalid('Failed to read/write to config.blk')));
+}
+
 function prepareForModding(discovery) {
-  return fs.ensureDirAsync(path.join(discovery.path, modPath()));
+  const soundModPath = path.join(discovery.path, 'sound', 'mod');
+  return fs.ensureDirAsync(path.join(discovery.path, modPath()))
+    .then(() => fs.ensureDirAsync(soundModPath))
+    .then(() => modifyConfigFile(discovery.path));
+}
+
+function isAudioModType(instructions) {
+  return Promise.resolve(instructions.find(inst =>
+    inst.source.endsWith(AUDIO_EXT)) !== undefined);
 }
 
 function main(context) {
@@ -31,6 +57,15 @@ function main(context) {
       steamAppId: 236390,
     },
   });
+
+  const getSoundModPath = (game) => {
+    const state = context.api.store.getState();
+    const discovery = state.settings.gameMode.discovered[game.id];
+    return path.join(discovery.path, 'sound', 'mod');
+  };
+
+  context.registerModType('warthunder-audio-modtype', 25,
+    gameId => gameId === 'warthunder', getSoundModPath, isAudioModType);
 
   return true;
 }
