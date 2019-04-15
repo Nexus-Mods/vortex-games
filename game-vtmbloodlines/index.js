@@ -34,14 +34,16 @@ function prepareForModding(discovery) {
   return fs.ensureDirWritableAsync(path.join(discovery.path, 'Vampire'), Promise.resolve());
 }
 
-function isUPModType(instructions) {
+function getUnofficialModPath() {
   const state = _API.store.getState();
   const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID]);
-  return ((discovery !== undefined) && (discovery.path !== undefined))
-    ? fs.statAsync(path.join(discovery.path, 'Unofficial_Patch'))
-        .then(() => Promise.resolve(true))
-        .catch(() => Promise.resolve(false))
-    : Promise.resolve(false);
+  return path.join(discovery.path, 'Unofficial_Patch');
+}
+
+function isUPModType(instructions) {
+  return fs.statAsync(getUnofficialModPath())
+    .then(() => Promise.resolve(true))
+    .catch(() => Promise.resolve(false));
 }
 
 function main(context) {
@@ -64,7 +66,7 @@ function main(context) {
   // The "unofficial patch" mod modifies the mods folder. GoG seems to include
   //  this by default ?
   context.registerModType('vtmb-up-modtype', 25,
-    (gameId) => gameId === GAME_ID, () => 'Unofficial_Patch',
+    (gameId) => gameId === GAME_ID, () => getUnofficialModPath(),
     (instructions) => isUPModType(instructions));
 }
 
