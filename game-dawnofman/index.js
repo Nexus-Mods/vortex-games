@@ -39,20 +39,20 @@ function readRegistryKey(hive, key, name) {
 
 function findUnityModManager(ummPath) {
   return readRegistryKey('HKEY_CURRENT_USER', 'Software\\UnityModManager', 'Path')
-    .then(value => fs.statAsync(path.join(value, UMM_DLL))
-      .then(() => {
-        _UMM_PATH = value;
-        return setUMMPath(value);
-      })
-      .catch(err => {
-        return (ummPath !== undefined) 
-          ? fs.statAsync(path.join(ummPath, UMM_DLL))
-          : Promise.reject(err);
-      })
-      .then(() => {
-        _UMM_PATH = ummPath;
-        return setUMMPath(ummPath);
-      }));
+    .then(value => fs.statAsync(path.join(value, UMM_DLL)))
+    .then(() => {
+      _UMM_PATH = value;
+      return setUMMPath(value);
+    })
+    .catch(err => {
+      return (ummPath !== undefined)
+        ? fs.statAsync(path.join(ummPath, UMM_DLL))
+        : Promise.reject(err);
+    })
+    .then(() => {
+      _UMM_PATH = ummPath;
+      return setUMMPath(ummPath);
+    });
 }
 
 function createUMMTool(ummPath, toolId) {
