@@ -57,7 +57,6 @@ function main(context) {
       steamAppId: 20920,
     }
   });
-}
 
   const getPath = (game) => {
     const state = context.api.store.getState();
