@@ -27,16 +27,14 @@ function readRegistryKey(hive, key, name) {
     }
     return Promise.resolve(instPath.value);
   } catch (err) {
-    return Promise.resolve(undefined);
+    return Promise.reject(new util.ProcessCanceled(err));
   }
 }
 
 function findUnityModManager() {
   return readRegistryKey('HKEY_CURRENT_USER', 'Software\\UnityModManager', 'Path')
     .then(value => fs.statAsync(path.join(value, UMM_DLL))
-    .then(() => Promise.resolve())
-    .catch(err => fs.statAsync(path.join(UMM_VORTEX_PATH, UMM_DLL))
-      .then(() => Promise.resolve())));
+      .catch(err => fs.statAsync(path.join(UMM_VORTEX_PATH, UMM_DLL))));
 }
 
 function findGame() {
@@ -78,8 +76,6 @@ function prepareForModding(discovery) {
       ]));
   });
 
-  // UMM's path when installed using Vortex.
-  //const unityModManagerPath = path.join(discovery.path, 'UnityModManager');
   return fs.ensureDirWritableAsync(SCENE_FOLDER, () => Promise.resolve())
     .then(() => fs.ensureDirWritableAsync(path.join(discovery.path, 'Mods'), () => Promise.resolve()))
     .then(() => findUnityModManager()
