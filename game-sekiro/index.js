@@ -20,7 +20,7 @@ function prepareForModding(discovery) {
     _API.store.dispatch(actions.showDialog('question', 'Action required',
       {
         message: 'Sekiro requires "Sekiro Mod Engine" for mods to install and function correctly.\n' 
-               + 'Vortex is able to install Mod Engine automatically (as a mod) but please ensure it is enabled.\n'
+               + 'Vortex is able to install Mod Engine automatically (as a mod) but please ensure it is enabled\n'
                + 'and deployed at all times.'
       },
       [
