@@ -7,7 +7,7 @@ let _API;
 const GAME_ID = 'sekiro';
 const STEAM_ID = 814380;
 const DINPUT = 'dinput8.dll';
-const DCX_EXT = '.dcx';
+const PARTS_DCX_EXT = '.partsbnd.dcx';
 
 function findGame() {
   return util.steam.findByAppId(STEAM_ID.toString())
@@ -41,14 +41,14 @@ function prepareForModding(discovery) {
 }
 
 function hasLooseParts(files) {
-  const dcxFiles = files.filter(file => file.endsWith(DCX_EXT));
+  const dcxFiles = files.filter(file => file.endsWith(PARTS_DCX_EXT));
   return (dcxFiles.length > 0)
     ? dcxFiles[0].indexOf(path.sep + 'parts' + path.sep) === -1
     : false;
 }
 
 function installLooseMod(files, destinationPath) {
-  const dcxFiles = files.filter(file => file.endsWith(DCX_EXT));
+  const dcxFiles = files.filter(file => file.endsWith(PARTS_DCX_EXT));
   const instructions = dcxFiles.map(file => {
     return {
       type: 'copy',
