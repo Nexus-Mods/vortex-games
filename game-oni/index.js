@@ -1,9 +1,8 @@
-const fs = require('fs');
 const Promise = require('bluebird');
 const opn = require('opn');
 const path = require('path');
 const winapi = require('winapi-bindings');
-const {log, actions, util} = require('vortex-api');
+const { actions, fs, util } = require('vortex-api');
 
 const IsWin = process.platform === 'win32';
 
@@ -12,81 +11,78 @@ const Name = 'Oxygen Not Included';
 const ExeName = 'OxygenNotIncluded';
 const SteamId = 457140;
 
+const UMM_DLL = 'UnityModManager.dll';
+
 function main(context) {
-    context.registerGame({
-        id: NexusId,
-        name: Name,
-        logo: 'gameart.png',
-        mergeMods: true,
-        queryPath: findGame,
-        queryModPath: () => 'Mods',
-        executable: () => ExeName + '.exe',
-        requiredFiles: [ExeName + '.exe'],
-        details: {
-            steamAppId: SteamId,
-        },
-        setup: setup,
-        supportedTools: [
-            {
-                id: 'UnityModManager',
-                name: 'Unity Mod Manager',
-                logo: 'umm.png',
-                queryPath : findUnityModManager,
-                executable: () => 'UnityModManager.exe',
-                requiredFiles: ['UnityModManager.exe'],
-            }],
-    });
+  context.requireExtension('modtype-umm');
+  context.registerGame({
+    id: NexusId,
+    name: Name,
+    logo: 'gameart.png',
+    mergeMods: true,
+    queryPath: findGame,
+    queryModPath: () => 'Mods',
+    executable: () => ExeName + '.exe',
+    requiredFiles: [ExeName + '.exe'],
+    details: {
+      steamAppId: SteamId,
+    },
+    setup: setup,
+  });
 
-    function findGame() {
-        return util.steam.findByAppId(SteamId.toString()).then(game => game.gamePath);
+  function findGame() {
+    return util.steam.findByAppId(SteamId.toString()).then(game => game.gamePath);
+  }
+
+  function readRegistryKey(hive, key, name) {
+    if (!IsWin) {
+      return Promise.reject(new util.UnsupportedOperatingSystem());
     }
 
-    function findUnityModManager() {
-        let result = '';
-        if (IsWin) {
-            try {
-                const path = winapi.RegGetValue('HKEY_CURRENT_USER', 'Software\\UnityModManager', 'Path');
-                if (path) {
-                    result = path.value;
-                }
-            } catch (err) {
-                // UMM not installed, leave result as ''
-            }
-        }
-
-        return Promise.resolve(result);
+    try {
+      const instPath = winapi.RegGetValue(hive, key, name);
+      if (!instPath) {
+        throw new Error('empty registry key');
+      }
+      return Promise.resolve(instPath.value);
+    } catch (err) {
+      return Promise.reject(new util.ProcessCanceled(err));
     }
+  }
 
-    function setup(discovery) {
-        // skip if UnityModManager found
-        if (fs.existsSync(path.join(discovery.path, ExeName + '_Data', 'Managed', 'UnityModManager', 'UnityModManager.dll'))) {
-            return;
-        }
+  function findUnityModManager() {
+    return readRegistryKey('HKEY_CURRENT_USER', 'Software\\UnityModManager', 'Path')
+      .then(value => fs.statAsync(path.join(value, UMM_DLL)));
+  }
 
-        // show dialogue
-        return new Promise((resolve, reject) => {
+  function setup(discovery) {
+    return fs.ensureDirWritableAsync(path.join(discovery.path, 'Mods'), () => Promise.resolve())
+      .then(() => findUnityModManager()
+        .catch(err => {
+          return new Promise((resolve, reject) => {
             context.api.store.dispatch(
-                actions.showDialog(
-                    'question',
-                    'Action required',
-                    {message: 'You must install UnityModManager to use mods with ' + Name},
-                    [
-                        {label: 'Cancel', action: () => reject(new util.UserCanceled())},
-                        {
-                            label: 'Go to UnityModManager page', action: () => {
-                                opn('https://www.nexusmods.com/site/mods/21/').catch(err => undefined);
-                                reject(new util.UserCanceled());
-                            }
-                        }
-                    ]
-                )
+              actions.showDialog(
+                'question',
+                'Action required',
+                { message: 'You must install Unity Mod Manager to use mods with ' + Name + '.' },
+                [
+                  { label: 'Cancel', action: () => reject(new util.UserCanceled()) },
+                  {
+                    label: 'Go to the Unity Mod Manager page', action: () => {
+                      opn('https://www.nexusmods.com/site/mods/21/').catch(err => undefined);
+                      reject(new util.UserCanceled());
+                    }
+                  }
+                ]
+              )
             );
-        });
-    }
+          });
+        }));
+  }
 
-    return true;
+  return true;
 }
 
 module.exports = {
-    default: main
+  default: main
 };
