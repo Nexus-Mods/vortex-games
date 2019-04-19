@@ -36,7 +36,7 @@ function prepareForModding(discovery) {
 
 function getUnofficialModPath() {
   const state = _API.store.getState();
-  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID]);
+  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
   return path.join(discovery.path, 'Unofficial_Patch');
 }
 
