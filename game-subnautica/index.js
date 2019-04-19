@@ -1,9 +1,9 @@
-const fs = require('fs');
-const { promisify } = require('util');
 const Promise = require('bluebird');
 const opn = require('opn');
 const path = require('path');
-const { actions, util } = require('vortex-api');
+const { actions, fs, util } = require('vortex-api');
+
+const MOD_FILE = 'mod.json';
 
 class Subnautica {
   constructor(context) {
@@ -12,8 +12,7 @@ class Subnautica {
     this.name = 'Subnautica';
     this.mergeMods = true;
     this.queryModPath = () => 'QMods';
-	  this.supportedTools = [
-      {
+	  this.supportedTools = [{
       id: 'qmods',
       name: 'QModManager',
       executable: () => 'QModManager.exe',
@@ -21,8 +20,8 @@ class Subnautica {
         'QModManager.exe',
       ],
       relative: true,
-      }
-    ];
+      shell: true,
+    }];
     this.logo = 'gameart.png';
     this.executable = () => 'Subnautica.exe';
     this.requiredFiles = [
@@ -44,28 +43,13 @@ class Subnautica {
     return util.steam.findByAppId('264710')
         .then(game => game.gamePath);
   }
-
-  async getPathExistsAsync(path) {
-      try {
-       await promisify(fs.access)(path, fs.constants.R_OK);
-       return true;
-      }
-      catch(err) {
-        return false;
-      }
-  }
   
   async setup(discovery) {
-    // skip if QModManager found
-    let qmodPath = path.join(discovery.path, 'Subnautica_Data', 'Managed', 'QModManager.exe')
-    let qmodFound = await this.getPathExistsAsync(qmodPath);
-    if (qmodFound) {
-      return;
-    }
+    const qmodPath = path.join(discovery.path, 'Subnautica_Data', 'Managed', 'QModManager.exe')
   
     // show need-QModManager dialogue
     var context = this.context;
-    return new Promise((resolve, reject) => {
+    return fs.statAsync(qmodPath).catch(() => new Promise((resolve, reject) => {
       context.api.store.dispatch(
         actions.showDialog(
           'question',
@@ -77,12 +61,58 @@ class Subnautica {
           ]
         )
       );
-    });
+    }));
   }
+}
+
+function getModName(modFilePath) {
+  return fs.readFileAsync(modFilePath, { encoding: 'utf-8' })
+    .then(data => {
+      const stripBOM = (data.charAt(0) === '\uFEFF')
+        ? data.substr(1)
+        : data;
+
+      try {
+        const modFile = JSON.parse(stripBOM);
+        return Promise.resolve(modFile.Id);
+      } catch (err) {
+        return Promise.reject(new util.DataInvalid('Failed to parse mod.json file.'));
+      }
+    });
+}
+
+function testMod(files, gameId) {
+  return Promise.resolve({
+    supported: ((gameId === 'subnautica')
+      && (files.find(file => file.endsWith(MOD_FILE)) !== undefined)),
+    requiredFiles: []
+  });
+}
+
+function installMod(files, destinationPath) {
+  const modFile = files.find(file => file.endsWith(MOD_FILE));
+  const idx = modFile.indexOf(MOD_FILE);
+  const rootPath = path.dirname(modFile);
+
+  const filtered = files.filter(file => (!file.endsWith(path.sep))
+    && (file.indexOf(rootPath) !== -1));
+
+  return getModName(path.join(destinationPath, modFile))
+    .then(modName => {
+      return Promise.map(filtered, file => {
+        return Promise.resolve({
+          type: 'copy',
+          source: file,
+          destination: path.join(modName, file.substr(idx)),
+        });
+      });
+    })
+    .then(instructions => Promise.resolve({ instructions }));
 }
 
 module.exports = {
   default: function(context) {
     context.registerGame(new Subnautica(context));
+    context.registerInstaller('subnautica-mod', 25, testMod, installMod);
   }
 };
