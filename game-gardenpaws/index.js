@@ -1,14 +1,11 @@
 const Promise = require('bluebird');
-const { app, remote } = require('electron');
 const opn = require('opn');
 const path = require('path');
 const winapi = require('winapi-bindings');
-const { fs, actions, util } = require('vortex-api');
+const { actions, fs, util } = require('vortex-api');
 
-const uniApp = app || remote.app;
+const IsWin = process.platform === 'win32';
 
-// Expected UMM path when installed via Vortex
-const UMM_VORTEX_PATH = path.join(uniApp.getPath('userData'), 'Tools', 'UnityModManager');
 const UMM_DLL = 'UnityModManager.dll';
 
 const NexusId = 'gardenpaws';
@@ -40,6 +37,10 @@ function main(context) {
   }
 
   function readRegistryKey(hive, key, name) {
+    if (!IsWin) {
+      return Promise.reject(new util.UnsupportedOperatingSystem());
+    }
+
     try {
       const instPath = winapi.RegGetValue(hive, key, name);
       if (!instPath) {
@@ -53,8 +54,7 @@ function main(context) {
 
   function findUnityModManager() {
     return readRegistryKey('HKEY_CURRENT_USER', 'Software\\UnityModManager', 'Path')
-      .then(value => fs.statAsync(path.join(value, UMM_DLL))
-        .catch(err => fs.statAsync(path.join(UMM_VORTEX_PATH, UMM_DLL))));
+      .then(value => fs.statAsync(path.join(value, UMM_DLL)));
   }
 
   function setup(discovery) {

@@ -14,10 +14,10 @@ const GOG_ID = 1899257943;
 const UMM_DLL = 'UnityModManager.dll';
 const SCENE_FILE_EXT = '.scn.xml';
 const UMM_MOD_INFO = 'Info.json';
-const SCENE_FOLDER = path.join(uniApp.getPath('documents'), 'DawnOfMan', 'Scenarios');
 
-// Expected UMM path when installed via Vortex
-const UMM_VORTEX_PATH = path.join(uniApp.getPath('userData'), 'Tools', 'UnityModManager');
+function getSceneFolder() {
+  return path.join(uniApp.getPath('documents'), 'DawnOfMan', 'Scenarios');
+}
 
 function readRegistryKey(hive, key, name) {
   try {
@@ -33,8 +33,7 @@ function readRegistryKey(hive, key, name) {
 
 function findUnityModManager() {
   return readRegistryKey('HKEY_CURRENT_USER', 'Software\\UnityModManager', 'Path')
-    .then(value => fs.statAsync(path.join(value, UMM_DLL))
-      .catch(err => fs.statAsync(path.join(UMM_VORTEX_PATH, UMM_DLL))));
+    .then(value => fs.statAsync(path.join(value, UMM_DLL)));
 }
 
 function findGame() {
@@ -76,7 +75,7 @@ function prepareForModding(discovery) {
       ]));
   });
 
-  return fs.ensureDirWritableAsync(SCENE_FOLDER, () => Promise.resolve())
+  return fs.ensureDirWritableAsync(getSceneFolder(), () => Promise.resolve())
     .then(() => fs.ensureDirWritableAsync(path.join(discovery.path, 'Mods'), () => Promise.resolve()))
     .then(() => findUnityModManager()
       .catch(err => showUMMDialog()));
@@ -167,7 +166,7 @@ function main(context) {
   });
 
   context.registerModType('dom-scene-modtype', 25,
-    (gameId) => gameId === GAME_ID, () => SCENE_FOLDER,
+    (gameId) => gameId === GAME_ID, () => getSceneFolder(),
     (instructions) => endsWithPattern(instructions, SCENE_FILE_EXT));
 
   context.registerInstaller('dom-scene-installer', 25, testSceneMod, installSceneMod);
