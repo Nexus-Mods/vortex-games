@@ -8,6 +8,7 @@ const semver = require('semver');
 const { actions, fs, DraggableList, FlexLayout, MainPage, Panel, selectors, util } = require('vortex-api');
 const { parseXmlString } = require('libxmljs');
 
+const STEAM_DLL = 'steamclient64.dll';
 const GAME_ID = '7daystodie';
 const MOD_INFO = 'modinfo.xml';
 const I18N_NAMESPACE = `game-${GAME_ID}`;
@@ -233,6 +234,14 @@ function migrate020(api, oldVersion) {
   });
 }
 
+function requiresLauncher(gamePath) {
+  return fs.readdirAsync(gamePath)
+    .then(files => (files.find(file => file.endsWith(STEAM_DLL)) !== undefined)
+      ? Promise.resolve({ launcher: 'steam' })
+      : Promise.resolve(undefined))
+    .catch(err => Promise.reject(err));
+}
+
 function main(context) {
   context.registerGame({
     id: GAME_ID,
@@ -241,6 +250,7 @@ function main(context) {
     requiresCleanup: true,
     queryPath: findGame,
     queryModPath: () => 'Mods',
+    requiresLauncher,
     logo: 'gameart.png',
     executable: gameExecutable,
     requiredFiles: [
