@@ -11,6 +11,8 @@ const Name = 'Pathfinder: Kingmaker';
 const ExeName = 'Kingmaker';
 const SteamId = 640820;
 
+const UMM_DLL = 'UnityModManager.dll';
+
 function main(context) {
   context.requireExtension('modtype-umm');
   context.registerGame(
