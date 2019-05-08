@@ -46,6 +46,7 @@ let tools = [
       'obse_loader.exe',
     ],
     relative: true,
+    exclusive: true,
   },
 ];
 

@@ -46,6 +46,7 @@ let tools = [
       'nvse_loader.exe',
     ],
     relative: true,
+    exclusive: true,
   }
 ];
 

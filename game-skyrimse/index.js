@@ -56,6 +56,7 @@ const tools = [
       'skse64_loader.exe',
     ],
     relative: true,
+    exclusive: true,
   },
 ];
 

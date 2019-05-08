@@ -47,6 +47,7 @@ const tools = [
       'sksevr_loader.exe',
     ],
     relative: true,
+    exclusive: true,
   },
 ];
 

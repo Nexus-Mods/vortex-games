@@ -46,6 +46,7 @@ let tools = [
       'f4se_loader.exe',
     ],
     relative: true,
+    exclusive: true,
   },
 ];
 

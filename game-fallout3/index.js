@@ -47,6 +47,7 @@ let tools = [
       'fose_loader.exe',
     ],
     relative: true,
+    exclusive: true,
   }
 ];
 

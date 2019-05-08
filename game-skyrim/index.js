@@ -57,6 +57,7 @@ let tools = [
       'skse_loader.exe',
     ],
     relative: true,
+    exclusive: true,
   },
 ];
 
