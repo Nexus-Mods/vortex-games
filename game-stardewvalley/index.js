@@ -2,6 +2,7 @@ const
   fs = require('fs'),
   opn = require('opn'),
   path = require('path'),
+  Promise = require('bluebird'),
   rjson = require('relaxed-json'),
   { promisify } = require('util'),
   { actions, log, util } = require('vortex-api'),
@@ -69,7 +70,9 @@ class StardewValley {
     // check GOG Galaxy
     let path =
       await this.readRegistryKeyAsync('HKEY_LOCAL_MACHINE', 'SOFTWARE\\GOG.com\\Games\\1453375253', 'PATH')
-      || await this.readRegistryKeyAsync('HKEY_LOCAL_MACHINE', 'SOFTWARE\\WOW6432Node\\GOG.com\\Games\\1453375253', 'PATH');
+      || await this.readRegistryKeyAsync('HKEY_LOCAL_MACHINE', 'SOFTWARE\\GOG.com\\Games\\1453375253', 'path')
+      || await this.readRegistryKeyAsync('HKEY_LOCAL_MACHINE', 'SOFTWARE\\WOW6432Node\\GOG.com\\Games\\1453375253', 'PATH')
+      || await this.readRegistryKeyAsync('HKEY_LOCAL_MACHINE', 'SOFTWARE\\WOW6432Node\\GOG.com\\Games\\1453375253', 'path')
     if (path && await this.getPathExistsAsync(path))
       return path;
 
@@ -175,7 +178,8 @@ class StardewValley {
   }
 }
 
-async function getModName(manifestPath) {
+async function getModName(destinationPath, manifestFile) {
+  const manifestPath = path.join(destinationPath, manifestFile);
   try {
     const file = await promisify(fs.readFile)(manifestPath, { encoding: 'utf8' });
     // it seems to be not uncommon that these files are not valid json,
@@ -186,7 +190,7 @@ async function getModName(manifestPath) {
       : Promise.reject(new util.DataInvalid('Invalid manifest.json file'));
   } catch(err) {
     log('error', 'Unable to parse manifest.json file', manifestPath);
-    return path.basename(manifestPath, path.extname(manifestPath));
+    return path.basename(destinationPath, '.installing');
   }
 }
 
@@ -200,28 +204,46 @@ async function install(files,
                 destinationPath,
                 gameId,
                 progressDelegate) {
-  // We're going to assume that the mod's root directory is wherever
-  //  the manifest.json file is located. Everything outside the root
-  //  will be removed.
-  const manifestFile = files.find(file => path.basename(file).toLowerCase() === MANIFEST_FILE).toLowerCase();
-  const rootFolder = path.dirname(manifestFile);
-  const manifestIndex = manifestFile.indexOf(MANIFEST_FILE);
-  let modName = await getModName(path.join(destinationPath, manifestFile));
-  const filtered = files.filter(file =>
-    (file.toLowerCase().indexOf(rootFolder) !== -1)
-    && (path.dirname(file) !== '.')
-    && (path.extname(file) !== ''));
+  // The archive may contain multiple manifest files which would
+  //  imply that we're installing multiple mods.
+  const manifestFiles = files.filter(file =>
+    path.basename(file).toLowerCase() === MANIFEST_FILE);
 
-  const instructions = filtered.map(file => {
-    const destination = path.join(modName, file.substr(manifestIndex));
+  const mods = manifestFiles.map(manifestFile => {
+    const rootFolder = path.dirname(manifestFile);
+    const manifestIndex = manifestFile.indexOf(MANIFEST_FILE);
+    const modFiles = files.filter(file =>
+      (file.indexOf(rootFolder) !== -1)
+      && (path.dirname(file) !== '.')
+      && (path.extname(file) !== ''));
+
     return {
-      type: 'copy',
-      source: file,
-      destination: destination,
+      manifestFile,
+      rootFolder,
+      manifestIndex,
+      modFiles,
     };
   });
 
-  return Promise.resolve({ instructions });
+  return Promise.map(mods, mod => getModName(destinationPath, mod.manifestFile)
+    .then(manifestModName => {
+      const modName = (mod.rootFolder !== '.')
+        ? mod.rootFolder
+        : manifestModName;
+
+      return mod.modFiles.map(file => {
+        const destination = path.join(modName, file.substr(mod.manifestIndex));
+        return {
+          type: 'copy',
+          source: file,
+          destination: destination,
+        };
+      });
+    }))
+    .then(data => {
+      const instructions = [].concat.apply([], data);
+      return Promise.resolve({ instructions });
+    });
 }
 
 module.exports = {
