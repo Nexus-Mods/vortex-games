@@ -69,6 +69,7 @@ function main(context) {
     },
     details: {
       steamAppId: 22380,
+      nexusPageId: 'newvegas',
     }
   });
   return true;

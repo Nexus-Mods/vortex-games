@@ -79,6 +79,7 @@ function main(context) {
     },
     details: {
       steamAppId: 489830,
+      nexusPageId: 'skyrimspecialedition',
     }
   });
 

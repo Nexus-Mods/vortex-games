@@ -42,6 +42,7 @@ function main(context) {
     ],
     details: {
       steamAppId: 306130,
+      nexusPageId: 'elderscrollsonline',
     },
   });
 
