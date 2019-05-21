@@ -51,6 +51,12 @@ function modPath() {
         return path.join(modsFolder, 'Mods');
       }
     } catch(err) {
+      if (err.code !== 'ENOENT') {
+        log('warn', 'Failed to check Sims 4 install directory', {
+          tested: modsPath,
+          err: err.message,
+        });
+      }
       // do nothing
     }
   }
