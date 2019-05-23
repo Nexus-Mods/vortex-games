@@ -11,6 +11,9 @@ const _DIRECTORY_STRUCT = [];
 const GOG_ID = '1450711444';
 const STEAM_ID = '262060';
 
+const GOG_EXE = '_windowsnosteam/Darkest.exe';
+const STEAM_EXE = '_windows/Darkest.exe';
+
 // Nexus Mods id for the game.
 const GAME_ID = 'darkestdungeon';
 
@@ -305,6 +308,33 @@ function installNoProject(files, destinationPath) {
     })
 }
 
+function getExecutable(discoveryPath) {
+  const getDiscoveryPath = () => {
+    const state = _API.store.getState();
+    const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
+    return (discovery !== undefined)
+      ? discovery.path
+      : undefined;
+  }
+
+  if ((discoveryPath === undefined) && (getDiscoveryPath() === undefined)) {
+    return STEAM_EXE;
+  }
+
+  const discPath = (discoveryPath !== undefined)
+    ? discoveryPath
+    : getDiscoveryPath();
+
+  let execFile = GOG_EXE;
+  try {
+    fs.statSync(path.join(discPath, GOG_EXE))
+  } catch (err) {
+    execFile = STEAM_EXE;
+  }
+
+  return execFile;
+}
+
 function main(context) {
   _API = context.api;
   context.registerGame({
@@ -314,9 +344,8 @@ function main(context) {
     queryPath: findGame,
     queryModPath: () => 'mods',
     logo: 'gameart.png',
-    executable: () => '_windows/Darkest.exe',
+    executable: (discoveryPath) => getExecutable(discoveryPath),
     requiredFiles: [
-      '_windows/Darkest.exe',
     ],
     setup: prepareForModding,
     details: {
