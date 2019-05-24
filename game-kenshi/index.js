@@ -1,10 +1,12 @@
 const path = require('path');
-const { fs, log, util } = require('vortex-api');
+const { fs, util } = require('vortex-api');
 
 const STEAM_DLL = 'steam_api.dll';
 
 // Nexus Mods id for the game.
 const KENSHI_ID = 'kenshi';
+const STEAM_EXE = 'kenshi_x64.exe';
+const GOG_EXE = 'kenshi_GOG_x64.exe';
 
 // The mod file is expected to be at the root of the mod
 const MOD_FILE_EXT = '.mod';
@@ -24,7 +26,7 @@ function prepareForModding(discovery) {
 function requiresLauncher(gamePath) {
   return fs.readdirAsync(gamePath)
     .then(files => (files.find(file => file.indexOf(STEAM_DLL) !== -1) !== undefined)
-      ? Promise.resolve({ launcher: 'steam' }) 
+      ? Promise.resolve({ launcher: 'steam' })
       : Promise.resolve(undefined))
     .catch(err => Promise.reject(err));
 }
@@ -65,6 +67,21 @@ function testSupportedContent(files, gameId) {
   });
 }
 
+function getExecutable(discoveryPath) {
+  if (discoveryPath === undefined) {
+    return STEAM_EXE;
+  }
+
+  let execFile = GOG_EXE;
+  try {
+    fs.statSync(path.join(discoveryPath, GOG_EXE))
+  } catch (err) {
+    execFile = STEAM_EXE;
+  }
+
+  return execFile;
+}
+
 function main(context) {
   context.registerGame({
     id: KENSHI_ID,
@@ -73,10 +90,8 @@ function main(context) {
     queryPath: findGame,
     queryModPath: () => 'mods',
     logo: 'gameart.png',
-    executable: () => 'kenshi_x64.exe',
-    requiredFiles: [
-      'kenshi_x64.exe',
-    ],
+    executable: (discoveryPath) => getExecutable(discoveryPath),
+    requiredFiles: [],
     setup: prepareForModding,
     requiresLauncher,
     details: {
