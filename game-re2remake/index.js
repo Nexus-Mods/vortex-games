@@ -2,6 +2,7 @@ const Promise = require('bluebird');
 const path = require('path');
 const { fs, util } = require('vortex-api');
 
+const MODULE_CONFIG = 'moduleconfig.xml';
 const NATIVES_DIR = 'natives' + path.sep;
 const DLC_PAK_FILE = 're_dlc_000.pak';
 const GAME_ID = 'residentevil22019';
@@ -98,8 +99,9 @@ async function installContent(files,
 
 function testSupportedContent(files, gameId) {
   // Make sure we're able to support this mod.
-  const supported = (gameId === GAME_ID) &&
-    (files.find(file => file.indexOf(NATIVES_DIR) !== -1) !== undefined);
+  const supported = (gameId === GAME_ID)
+    && (files.find(file => file.indexOf(NATIVES_DIR) !== -1) !== undefined)
+    && (files.find(file => file.toLowerCase().indexOf(MODULE_CONFIG) !== -1) === undefined);
   return Promise.resolve({
     supported,
     requiredFiles: [],
