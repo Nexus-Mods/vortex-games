@@ -25,7 +25,7 @@ function findGame() {
 
 function testUserContent(instructions) {
   return Promise.resolve(instructions.find(
-    instruction => path.basename(instruction.destination) === 'cook.hash'));
+    instruction => instruction.source.endsWith('cook.hash')) !== undefined);
 }
 
 function prepareForModding(discovery) {
