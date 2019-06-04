@@ -23,7 +23,7 @@ function findGame() {
 
 function testUserContent(instructions) {
   return Promise.resolve(instructions.find(
-    instruction => path.basename(instruction.destination) === 'cook.hash'));
+    instruction => path.basename(instruction.destination) === 'cook.hash') !== undefined);
 }
 
 function prepareForModding(discovery) {
