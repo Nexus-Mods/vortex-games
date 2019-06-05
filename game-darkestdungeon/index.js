@@ -203,7 +203,7 @@ function testSupportedNoProject(files, gameId) {
 
 function installNoProject(files, destinationPath) {
   const matchDirStructure = (file) =>
-    _DIRECTORY_STRUCT.find(dir => path.dirname(file) === dir) !== undefined;
+    _DIRECTORY_STRUCT.find(dir => path.dirname(file).indexOf(dir) !== -1) !== undefined;
 
   const matchParentDirs = (lhs, rhs) => {
     // Checks whether both lhs and rhs have the same
