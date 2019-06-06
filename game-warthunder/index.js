@@ -25,7 +25,6 @@ function modifyConfigFile(gameRootPath) {
       const modifiedData = data.replace(/^sound{[\s\S]*?}$/m, SOUND_CONFIG);
       return fs.writeFileAsync(configFilePath, modifiedData, { encoding: 'utf8' });
     })
-    .catch(err => Promise.reject(new util.DataInvalid('Failed to read/write to config.blk')));
 }
 
 function prepareForModding(discovery) {
