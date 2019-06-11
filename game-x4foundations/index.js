@@ -6,16 +6,36 @@ const { fs, log, util } = require('vortex-api');
 const Big = require('big.js');
 
 const APPUNI = app || remote.app;
+const STEAM_ID = 392160;
+const GOG_ID = '1395669635';
 
 let _STEAM_USER_ID = '';
 let _STEAM_ENTRY;
 
 function findGame() {
-  return util.steam.findByName('X4: Foundations')
+  return util.steam.findByAppId(STEAM_ID.toString())
     .then(game => {
       _STEAM_ENTRY = game;
-      return _STEAM_ENTRY.gamePath;
-    });
+      return Promise.resolve(game.gamePath);
+    })
+    .catch(() => readRegistryKey('HKEY_LOCAL_MACHINE',
+      `SOFTWARE\\WOW6432Node\\GOG.com\\Games\\${GOG_ID}`,
+      'PATH'))
+    .catch(() => readRegistryKey('HKEY_LOCAL_MACHINE',
+      `SOFTWARE\\GOG.com\\Games\\${GOG_ID}`,
+      'PATH'));
+}
+
+function readRegistryKey(hive, key, name) {
+  try {
+    const instPath = winapi.RegGetValue(hive, key, name);
+    if (!instPath) {
+      throw new Error('empty registry key');
+    }
+    return Promise.resolve(instPath.value);
+  } catch (err) {
+    return Promise.resolve(undefined);
+  }
 }
 
 function testSupported(files, gameId) {
@@ -119,7 +139,9 @@ function steamUserId32Bit() {
 }
 
 function queryModPath() {
-  return path.join(APPUNI.getPath('documents'), 'Egosoft', 'X4', steamUserId32Bit(), 'extensions');
+  return (_STEAM_ENTRY !== undefined)
+    ? path.join(APPUNI.getPath('documents'), 'Egosoft', 'X4', steamUserId32Bit(), 'extensions')
+    : 'extensions';
 }
 
 function prepareForModding(discovery) {
@@ -141,7 +163,7 @@ function main(context) {
       'X4.exe',
     ],
     details: {
-      steamAppId: 392160,
+      steamAppId: STEAM_ID,
     },
   });
 
