@@ -39,7 +39,7 @@ function readRegistryKey(hive, key, name) {
   }
 }
 
-function testSupported(files, gameId) {
+function testSupportedContent(files, gameId) {
   if (gameId !== GAME_ID) {
     return Promise.resolve({ supported: false });
   }
@@ -51,7 +51,7 @@ function testSupported(files, gameId) {
   });
 }
 
-function install(files,
+function installContent(files,
                  destinationPath,
                  gameId,
                  progressDelegate) {
@@ -137,14 +137,20 @@ function steamUserId32Bit() {
 }
 
 function getDocumentsModPath() {
-  return (_STEAM_ENTRY !== undefined)
+  return findGame().then(() => (_STEAM_ENTRY !== undefined)
     ? path.join(APPUNI.getPath('documents'), 'Egosoft', 'X4', steamUserId32Bit(), 'extensions')
-    : path.join(APPUNI.getPath('documents'), 'Egosoft', 'X4', 'extensions');
+    : path.join(APPUNI.getPath('documents'), 'Egosoft', 'X4', 'extensions'));
 }
 
-function prepareForModding(discovery) {
-  return fs.ensureDirWritableAsync(path.join(discovery.path, 'extensions'),
-    () => Promise.resolve()).then(() => fs.ensureDirWritableAsync(getDocumentsModPath()));
+async function prepareForModding(discovery) {
+  try {
+    const documentsPath = await getDocumentsModPath();
+    const extensionsPath = path.join(discovery.path, 'extensions');
+    return fs.ensureDirWritableAsync(documentsPath, () => Promise.resolve())
+      .then(() => fs.ensureDirWritableAsync(extensionsPath, () => Promise.resolve()))
+  } catch (err) {
+    Promise.reject(err);
+  }
 }
 
 function main(context) {
@@ -165,7 +171,7 @@ function main(context) {
     },
   });
 
-  context.registerInstaller('x4foundations', 50, testSupported, install);
+  context.registerInstaller('x4foundations', 50, testSupportedContent, installContent);
   context.registerModType('x4-documents-modtype', 15, (gameId) => (gameId === GAME_ID),
     () => getDocumentsModPath(), () => Promise.resolve(false));
 
