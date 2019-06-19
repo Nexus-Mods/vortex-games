@@ -1,5 +1,4 @@
 const Promise = require('bluebird');
-const opn = require('opn');
 const path = require('path');
 const winapi = require('winapi-bindings');
 const { app, remote } = require('electron');
@@ -61,13 +60,13 @@ function prepareForModding(discovery) {
       [
         { label: 'Continue', action: () => resolve() },
         { label: 'More on Vortex Tools', action: () => {
-          opn('https://wiki.nexusmods.com/index.php/Category:Tool_Setup')
+          util.opn('https://wiki.nexusmods.com/index.php/Category:Tool_Setup')
             .then(() => showUMMDialog())
             .catch(err => undefined);
           resolve();
         }},
         { label: 'Go to UMM page', action: () => {
-          opn('https://www.nexusmods.com/site/mods/21/').catch(err => undefined);
+          util.opn('https://www.nexusmods.com/site/mods/21/').catch(err => undefined);
           // We want to go forward even if UMM is not installed as the scenario modType
           //  can be installed without UMM.
           resolve();

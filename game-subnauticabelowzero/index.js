@@ -1,5 +1,4 @@
 const Promise = require('bluebird');
-const opn = require('opn');
 const path = require('path');
 const rjson = require('relaxed-json');
 const { actions, fs, util } = require('vortex-api');
@@ -61,7 +60,7 @@ class SubnauticaBelowZero {
           { message: 'You must install QModManager to use mods with Subnautica: Below Zero.' },
           [
             { label: 'Cancel', action: () => reject(new util.UserCanceled()) },
-            { label: 'Go to QModManager page', action: () => { opn('https://www.nexusmods.com/subnauticabelowzero/mods/1').catch(err => undefined); reject(new util.UserCanceled()); } }
+            { label: 'Go to QModManager page', action: () => { util.opn('https://www.nexusmods.com/subnauticabelowzero/mods/1').catch(err => undefined); reject(new util.UserCanceled()); } }
           ]
         )
       );

@@ -1,6 +1,5 @@
 const
   fs = require('fs'),
-  opn = require('opn'),
   path = require('path'),
   Promise = require('bluebird'),
   rjson = require('relaxed-json'),
@@ -129,10 +128,10 @@ class StardewValley {
         actions.showDialog(
           'question',
           'Action required',
-          { message: 'You must install SMAPI to use mods with Stardew Valley.' },
+          { text: 'You must install SMAPI to use mods with Stardew Valley.' },
           [
             { label: 'Cancel', action: () => reject(new util.UserCanceled()) },
-            { label: 'Go to SMAPI page', action: () => { opn('https://smapi.io').catch(err => undefined); reject(new util.UserCanceled()); } }
+            { label: 'Go to SMAPI page', action: () => { util.opn('https://smapi.io').catch(err => undefined); reject(new util.UserCanceled()); } }
           ]
         )
       );

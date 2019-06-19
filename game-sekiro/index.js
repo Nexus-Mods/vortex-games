@@ -1,5 +1,4 @@
 const Promise = require('bluebird');
-const opn = require('opn');
 const path = require('path');
 const { actions, fs, util } = require('vortex-api');
 
@@ -26,7 +25,7 @@ function prepareForModding(discovery) {
       [
         { label: 'Continue', action: () => resolve() },
         { label: 'Go to Mod Engine Page', action: () => {
-            opn('https://www.nexusmods.com/sekiro/mods/6').catch(err => undefined);
+            util.opn('https://www.nexusmods.com/sekiro/mods/6').catch(err => undefined);
             resolve();
         }},
       ]));
