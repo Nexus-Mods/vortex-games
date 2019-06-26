@@ -1,5 +1,4 @@
 const Promise = require('bluebird');
-const opn = require('opn');
 const path = require('path');
 const winapi = require('winapi-bindings');
 const { actions, fs, util } = require('vortex-api');
@@ -71,7 +70,7 @@ function main(context) {
                   { label: 'Cancel', action: () => reject(new util.UserCanceled()) },
                   {
                     label: 'Go to the Unity Mod Manager page', action: () => {
-                      opn('https://www.nexusmods.com/site/mods/21/').catch(err => undefined);
+                      util.opn('https://www.nexusmods.com/site/mods/21/').catch(err => undefined);
                       reject(new util.UserCanceled());
                     }
                   }
