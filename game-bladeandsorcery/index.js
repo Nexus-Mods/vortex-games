@@ -25,8 +25,6 @@ const OFFICIAL_MOD_MANIFEST = 'manifest.json';
 //  (The global file is located in the game's StreamedAssets/Default path)
 const GLOBAL_FILE = 'Global.json';
 
-const GAME_VERSION_ELEMENT = 'GameVersion';
-
 let tools = [
   {
     id: 'BandSModLoader',
@@ -45,9 +43,11 @@ async function getJSONElement(filePath, element) {
       try {
         const modData = rjson.parse(util.deBOM(data));
         const elementData = util.getSafe(modData, [element], undefined);
-        return Promise.resolve(elementData);
+        return elementData !== undefined
+          ? Promise.resolve(elementData)
+          : Promise.reject(new util.DataInvalid(`"${element}" JSON element is missing`));
       } catch (err) {
-        return Promise.reject(new util.DataInvalid('Failed to parse JSON file. ' + err.message));
+        return Promise.reject(err);
       }
     });
 }
@@ -62,7 +62,7 @@ async function getModName(destination, modFile, element, ext) {
   }
 
   if (modName === undefined) {
-    return Promise.reject(new util.DataInvalid(`${element} does not exist`));
+    return Promise.reject(new util.DataInvalid(`"${element}" JSON element is missing`));
   }
 
   return ext !== undefined
@@ -111,13 +111,13 @@ function testModInstaller(files, gameId, fileName) {
 }
 
 function streamingAssetsPath() {
-  return path.join('Blade & Sorcery_Data', 'StreamingAssets');
+  return path.join('BladeAndSorcery_Data', 'StreamingAssets');
 }
 
 async function checkModGameVersion(destination, discoveryPath, modFile) {
   try {
-    const globalGameVersion = await getJSONElement(path.join(discoveryPath, streamingAssetsPath(), 'Default', GLOBAL_FILE), GAME_VERSION_ELEMENT);
-    const modVersion = await getJSONElement(path.join(destination, modFile), GAME_VERSION_ELEMENT);
+    const globalGameVersion = await getJSONElement(path.join(discoveryPath, streamingAssetsPath(), 'Default', GLOBAL_FILE), 'gameVersion');
+    const modVersion = await getJSONElement(path.join(destination, modFile), 'GameVersion');
     const coercedMod = semver.coerce(modVersion.toString());
     const coercedGlobal = semver.coerce(globalGameVersion.toString());
     if ((coercedMod === null) || (coercedGlobal === null)) {
@@ -130,7 +130,7 @@ async function checkModGameVersion(destination, discoveryPath, modFile) {
       globalVersion: coercedGlobal.version,
     });
   } catch (err) {
-    return Promise.reject(new util.DataInvalid('Unexpected JSON: ' + err.message));
+    return Promise.reject(err);
   }
 }
 
@@ -313,9 +313,20 @@ const getDiscoveryPath = (api) => {
   return discovery.path;
 }
 
+function getExecutable(discoveryPath) {
+  const legacyExec = 'Blade & Sorcery.exe';
+  const newExec = 'BladeAndSorcery.exe';
+  try {
+    fs.statSync(path.join(discoveryPath, legacyExec));
+    return legacyExec;
+  } catch (err) {
+    return newExec;
+  }
+}
+
 function main(context) {
   const getUMADestination = () => {
-    return path.join(getDiscoveryPath(context.api), 'Blade & Sorcery_Data');
+    return path.join(getDiscoveryPath(context.api), 'BladeAndSorcery_Data');
   }
 
   const getOfficialDestination = () => {
@@ -331,10 +342,8 @@ function main(context) {
     // FOMOD installer will act as a replacer by default.
     queryModPath: () => path.join(streamingAssetsPath(), 'Default'),
     logo: 'gameart.jpg',
-    executable: () => 'Blade & Sorcery.exe',
-    requiredFiles: [
-      'Blade & Sorcery.exe',
-    ],
+    executable: (discoveryPath) => getExecutable(discoveryPath),
+    requiredFiles: [],
     setup: (discovery) => prepareForModding(discovery, context.api),
     details: {
       steamAppId: 629730,
