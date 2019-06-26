@@ -1,7 +1,8 @@
 const Promise = require('bluebird');
 const path = require('path');
-const { fs, util } = require('vortex-api');
+const { actions, fs, util } = require('vortex-api');
 const rjson = require('relaxed-json');
+const semver = require('semver');
 
 // Nexus Mods id for the game.
 const BLADEANDSORCERY_ID = 'bladeandsorcery';
@@ -18,6 +19,14 @@ const MULLE_MOD_INFO = 'mod.json';
 // Official mod manifest file.
 const OFFICIAL_MOD_MANIFEST = 'manifest.json';
 
+// The global file holds current gameversion information
+//  we're going to use this to compare against a mod's expected
+//  gameversion and inform users of possible incompatibility.
+//  (The global file is located in the game's StreamedAssets/Default path)
+const GLOBAL_FILE = 'Global.json';
+
+const GAME_VERSION_ELEMENT = 'GameVersion';
+
 let tools = [
   {
     id: 'BandSModLoader',
@@ -30,20 +39,35 @@ let tools = [
   }
 ]
 
-async function getModName(destination, modFile, element, ext) {
-  const modFilePath = path.join(destination, modFile);
-  return fs.readFileAsync(modFilePath, { encoding: 'utf-8' })
+async function getJSONElement(filePath, element) {
+  return fs.readFileAsync(filePath, { encoding: 'utf-8' })
     .then(data => {
       try {
         const modData = rjson.parse(util.deBOM(data));
-        const modName = util.getSafe(modData, [element], undefined);
-        return ext !== undefined
-          ? Promise.resolve(path.basename(modName, ext))
-          : Promise.resolve(modName)
+        const elementData = util.getSafe(modData, [element], undefined);
+        return Promise.resolve(elementData);
       } catch (err) {
-        return Promise.reject(new util.DataInvalid('Failed to parse mod.json file.'));
+        return Promise.reject(new util.DataInvalid('Failed to parse JSON file. ' + err.message));
       }
     });
+}
+
+async function getModName(destination, modFile, element, ext) {
+  const modFilePath = path.join(destination, modFile);
+  let modName;
+  try {
+    modName = await getJSONElement(modFilePath, element);
+  } catch (err) {
+    return Promise.reject(err);
+  }
+
+  if (modName === undefined) {
+    return Promise.reject(new util.DataInvalid(`${element} does not exist`));
+  }
+
+  return ext !== undefined
+    ? Promise.resolve(path.basename(modName, ext))
+    : Promise.resolve(modName);
 }
 
 //GAME IS ALSO FOUND IN THE OCULUS STORE!!
@@ -90,32 +114,80 @@ function streamingAssetsPath() {
   return path.join('Blade & Sorcery_Data', 'StreamingAssets');
 }
 
+async function checkModGameVersion(destination, discoveryPath, modFile) {
+  try {
+    const globalGameVersion = await getJSONElement(path.join(discoveryPath, streamingAssetsPath(), 'Default', GLOBAL_FILE), GAME_VERSION_ELEMENT);
+    const modVersion = await getJSONElement(path.join(destination, modFile), GAME_VERSION_ELEMENT);
+    const coercedMod = semver.coerce(modVersion.toString());
+    const coercedGlobal = semver.coerce(globalGameVersion.toString());
+    if ((coercedMod === null) || (coercedGlobal === null)) {
+      return Promise.reject(new util.DataInvalid('Invalid GameVersion element'));
+    }
+
+    return Promise.resolve({
+      match: semver.satisfies(coercedMod.version, coercedGlobal.version),
+      modVersion: coercedMod.version,
+      globalVersion: coercedGlobal.version,
+    });
+  } catch (err) {
+    return Promise.reject(new util.DataInvalid('Unexpected JSON: ' + err.message));
+  }
+}
+
 async function installOfficialMod(files,
                         destinationPath,
                         gameId,
-                        progressDelegate) {
-  // TODO: re-visit this function once the official mod loader is out.
+                        progressDelegate,
+                        api) {
+  const t = api.translate;
+  const versionMismatchDialog = (gameVersion, modGameVersion) => new Promise((resolve, reject) => {
+    api.store.dispatch(
+      actions.showDialog(
+        'warning',
+        'Game Version Mismatch',
+        { text: t('The mod you\'re attempting to install has been created for game version: "{{modVer}}"; '
+                + 'the currently installed game version is: "{{gameVer}}", version mismatches may '
+                + 'cause unexpected results inside the game, please keep this in mind if you choose to continue.',
+        { replace: { modVer: modGameVersion, gameVer: gameVersion } }) },
+        [
+          { label: 'Cancel', action: () => reject(new util.UserCanceled()) },
+          {
+            label: 'Continue installation', action: () => resolve()
+          }
+        ]
+      )
+    );
+  });
+
   const modFile = files.find(file => path.basename(file) === OFFICIAL_MOD_MANIFEST);
   const idx = modFile.indexOf(path.basename(modFile));
   const rootPath = path.dirname(modFile);
+  const discoveryPath = getDiscoveryPath(api);
 
-  // TODO: double check the JSON element for the mod's name.
-  const modName = await getModName(destinationPath, modFile, 'ModName', undefined);
+  const modName = await getModName(destinationPath, modFile, 'Name', undefined);
+  const createInstructions = () => new Promise((resolve, reject) => {
+    // Remove directories and anything that isn't in the rootPath.
+    const filtered = files.filter(file =>
+      ((file.indexOf(rootPath) !== -1)
+      && (!file.endsWith(path.sep))));
 
-  // Remove directories and anything that isn't in the rootPath.
-  const filtered = files.filter(file => 
-    ((file.indexOf(rootPath) !== -1) 
-    && (!file.endsWith(path.sep))));
+    const instructions = filtered.map(file => {
+      return {
+        type: 'copy',
+        source: file,
+        destination: path.join(modName, file.substr(idx)),
+      };
+    });
 
-  const instructions = filtered.map(file => {
-    return {
-      type: 'copy',
-      source: file,
-      destination: path.join(modName, file.substr(idx)),
-    };
+    return resolve({ instructions });
   });
-
-  return Promise.resolve({ instructions });
+  return checkModGameVersion(destinationPath, discoveryPath, modFile)
+    .then(res => {
+      return (!res.match)
+        ? versionMismatchDialog(res.globalVersion, res.modVersion)
+            .then(() => createInstructions())
+        : createInstructions();
+    })
 }
 
 async function installMulleMod(files,
@@ -228,26 +300,26 @@ function testUMAPresetReplacer(files, gameId) {
   });
 }
 
-function main(context) {
-  const getDiscoveryPath = () => {
-    const store = context.api.store;
-    const state = store.getState();
-    const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', BLADEANDSORCERY_ID], undefined);
-    if ((discovery === undefined) || (discovery.path === undefined)) {
-      // should never happen and if it does it will cause errors elsewhere as well
-      log('error', 'bladeandsorcery was not discovered');
-      return '.';
-    }
-
-    return discovery.path;
+const getDiscoveryPath = (api) => {
+  const store = api.store;
+  const state = store.getState();
+  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', BLADEANDSORCERY_ID], undefined);
+  if ((discovery === undefined) || (discovery.path === undefined)) {
+    // should never happen and if it does it will cause errors elsewhere as well
+    log('error', 'bladeandsorcery was not discovered');
+    return '.';
   }
 
+  return discovery.path;
+}
+
+function main(context) {
   const getUMADestination = () => {
-    return path.join(getDiscoveryPath(), 'Blade & Sorcery_Data');
+    return path.join(getDiscoveryPath(context.api), 'Blade & Sorcery_Data');
   }
 
   const getOfficialDestination = () => {
-    return path.join(getDiscoveryPath(), streamingAssetsPath());
+    return path.join(getDiscoveryPath(context.api), streamingAssetsPath());
   }
 
   context.registerGame({
@@ -276,10 +348,14 @@ function main(context) {
   context.registerInstaller('bas-mulledk19-mod', 25,
     (files, gameId) => testModInstaller(files, gameId, MULLE_MOD_INFO), installMulleMod);
   context.registerModType('bas-mulledk19-modtype', 15, (gameId) => (gameId === BLADEANDSORCERY_ID),
-    getDiscoveryPath, (instructions) => instructionsHaveFile(instructions, MULLE_MOD_INFO));
+    () => getDiscoveryPath(context.api), (instructions) => instructionsHaveFile(instructions, MULLE_MOD_INFO));
 
   context.registerInstaller('bas-official-mod', 25,
-    (files, gameId) => testModInstaller(files, gameId, OFFICIAL_MOD_MANIFEST), installOfficialMod);
+    (files, gameId) =>
+      testModInstaller(files, gameId, OFFICIAL_MOD_MANIFEST),
+    (files, destinationPath, gameId, progressDelegate) =>
+      installOfficialMod(files, destinationPath, gameId, progressDelegate, context.api));
+
   context.registerModType('bas-official-modtype', 15, (gameId) => (gameId === BLADEANDSORCERY_ID),
     getOfficialDestination, (instructions) => instructionsHaveFile(instructions, OFFICIAL_MOD_MANIFEST));
 
