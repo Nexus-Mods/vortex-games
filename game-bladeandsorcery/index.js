@@ -212,8 +212,8 @@ async function installMulleMod(files,
   const modFile = files.find(file => path.basename(file) === MULLE_MOD_INFO);
   const idx = modFile.indexOf(path.basename(modFile));
   const rootPath = path.dirname(modFile);
-  const modName = await getModName(destinationPath, modFile, 'Assembly', '.dll');
-
+  let modName = await getModName(destinationPath, modFile, 'Name', undefined);
+  modName = modName.replace(/[^a-zA-Z0-9]/g, '');
   // Remove directories and anything that isn't in the rootPath.
   const filtered = files.filter(file => 
     ((file.indexOf(rootPath) !== -1) 
