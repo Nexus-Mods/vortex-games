@@ -5,6 +5,7 @@ const { fs, util } = require('vortex-api');
 const MODULE_CONFIG = 'moduleconfig.xml';
 const NATIVES_DIR = 'natives' + path.sep;
 const DLC_PAK_FILE = 're_dlc_000.pak';
+const GAME_PAK_FILE = 're_chunk_000.pak';
 const GAME_ID = 'residentevil22019';
 const STEAM_ID = 883710;
 
@@ -118,7 +119,7 @@ function main(context) {
     queryPath: findGame,
     queryModPath: () => '.',
     executable: () => 're2.exe',
-    requiredFiles: ['re2.exe'],
+    requiredFiles: ['re2.exe', GAME_PAK_FILE],
     details: {
       steamAppId: STEAM_ID,
     },
