@@ -25,17 +25,17 @@ const OFFICIAL_MOD_MANIFEST = 'manifest.json';
 //  (The global file is located in the game's StreamedAssets/Default path)
 const GLOBAL_FILE = 'Global.json';
 
-let tools = [
-  {
-    id: 'BandSModLoader',
-    name: 'MulleDK19 Mod Loader',
-    executable: () => 'BASModLoaderConfig.exe',
-    requiredFiles: [
-      'BASModLoaderConfig.exe',
-    ],
-    relative: true,
-  }
-]
+// let tools = [
+//   {
+//     id: 'BandSModLoader',
+//     name: 'MulleDK19 Mod Loader',
+//     executable: () => 'BASModLoaderConfig.exe',
+//     requiredFiles: [
+//       'BASModLoaderConfig.exe',
+//     ],
+//     relative: true,
+//   }
+// ]
 
 async function getJSONElement(filePath, element) {
   return fs.readFileAsync(filePath, { encoding: 'utf-8' })
@@ -77,27 +77,30 @@ function findGame() {
 }
 
 function prepareForModding(discovery, api) {
-  // TODO: This will have to change once the official mod loader is released
-  return fs.statAsync(path.join(discovery.path, 'BASModLoaderConfig.exe'))
-    .catch(err => api.sendNotification({
-      type: 'info',
-      message: 'MulleDK19 mod loader is missing',
-      actions: [
-        { title: 'More', action: (dismiss) => 
-          api.showDialog('info', 'MulleDK19 Mod Loader', {
-            text: api.translate('Certain B&S mods require MulleDK19\'s mod loader ' 
-                              + 'to function correctly. These mods are easily identifiable ' 
-                              + 'by the mod.json file; any mods that include that file will ' 
-                              + 'require the mod loader to be installed and configured.')
-          }, [ { label: 'Go to Mod Loader Page', action: () => {
-            util.opn('http://treesoft.dk/bas/modloader/download.html');
-            dismiss();
-            }}, {label: 'Close', action: () => dismiss() } ])
-        },
-      ],
-    }))
-    .then(() => fs.ensureDirWritableAsync(path.join(discovery.path, streamingAssetsPath()),
-      () => Promise.resolve()));
+  // MulleDK19's mod loader is no longer being updated (http://treesoft.dk/bas/modloader/);
+  //  leaving this code commented out for now, just in case he changes his mind.
+
+  // return fs.statAsync(path.join(discovery.path, 'BASModLoaderConfig.exe'))
+  //   .catch(err => api.sendNotification({
+  //     type: 'info',
+  //     message: 'MulleDK19 mod loader is missing',
+  //     actions: [
+  //       { title: 'More', action: (dismiss) =>
+  //         api.showDialog('info', 'MulleDK19 Mod Loader', {
+  //           text: api.translate('Certain B&S mods require MulleDK19\'s mod loader '
+  //                             + 'to function correctly. These mods are easily identifiable '
+  //                             + 'by the mod.json file; any mods that include that file will '
+  //                             + 'require the mod loader to be installed and configured.')
+  //         }, [ { label: 'Go to Mod Loader Page', action: () => {
+  //           util.opn('http://treesoft.dk/bas/modloader/download.html');
+  //           dismiss();
+  //           }}, {label: 'Close', action: () => dismiss() } ])
+  //       },
+  //     ],
+  //   }))
+  //   .then(() =>
+    return fs.ensureDirWritableAsync(path.join(discovery.path, streamingAssetsPath()),
+      () => Promise.resolve());//);
 }
 
 function testModInstaller(files, gameId, fileName) {
@@ -193,51 +196,68 @@ async function installOfficialMod(files,
 async function installMulleMod(files,
                         destinationPath,
                         gameId,
-                        progressDelegate) {
+                        progressDelegate,
+                        api) {
+  // MulleDK19's mod loader is no longer being updated and will not function
+  //  with B&S version 6.0 and higher (at least for now).
+  api.sendNotification({
+    type: 'info',
+    message: 'Incompatible Mod',
+    actions: [
+      { title: 'More', action: (dismiss) =>
+        api.showDialog('info', 'Incompatible Mod', {
+          text: api.translate('The mod you\'re attempting to install is not compatible with '
+                            + 'Blade and Sorcery 6.0+ and cannot be installed by Vortex. '
+                            + 'Please check the mod page for an updated version.')
+        }, [ { label: 'Close', action: () => dismiss() } ])
+      },
+    ],
+  });
+  return Promise.reject(new util.ProcessCanceled());
   // The mod.json file is expected to always be positioned in the root directory
   //  of the mod itself; we're going to create the mod folder ourselves and place
   //  the mod files within it.
   // Some mods contain a ConstructCache folder which seems to be used to store/cache
   //  certain textures. We're going to place these as well
-  const isCacheFile = (filePath) => (filePath.endsWith(path.sep)) 
-                                 && (filePath.indexOf(CONSTRUCT_CACHE) !== -1);
-  const cacheFiles = files.filter(file => isCacheFile(file));
-  let cacheIndex = undefined;
-  if (cacheFiles.length > 0) {
-    // We just need to know the cache's index so we don't rely
-    //  on how the mod author packaged his files.
-    cacheIndex = cacheFiles[0].indexOf(CONSTRUCT_CACHE) + CONSTRUCT_CACHE.length;
-  }
+  // const isCacheFile = (filePath) => (filePath.endsWith(path.sep))
+  //                                && (filePath.indexOf(CONSTRUCT_CACHE) !== -1);
+  // const cacheFiles = files.filter(file => isCacheFile(file));
+  // let cacheIndex = undefined;
+  // if (cacheFiles.length > 0) {
+  //   // We just need to know the cache's index so we don't rely
+  //   //  on how the mod author packaged his files.
+  //   cacheIndex = cacheFiles[0].indexOf(CONSTRUCT_CACHE) + CONSTRUCT_CACHE.length;
+  // }
   
-  const modFile = files.find(file => path.basename(file) === MULLE_MOD_INFO);
-  const idx = modFile.indexOf(path.basename(modFile));
-  const rootPath = path.dirname(modFile);
-  let modName = await getModName(destinationPath, modFile, 'Name', undefined);
-  modName = modName.replace(/[^a-zA-Z0-9]/g, '');
-  // Remove directories and anything that isn't in the rootPath.
-  const filtered = files.filter(file => 
-    ((file.indexOf(rootPath) !== -1) 
-    && (!file.endsWith(path.sep))));
+  // const modFile = files.find(file => path.basename(file) === MULLE_MOD_INFO);
+  // const idx = modFile.indexOf(path.basename(modFile));
+  // const rootPath = path.dirname(modFile);
+  // let modName = await getModName(destinationPath, modFile, 'Name', undefined);
+  // modName = modName.replace(/[^a-zA-Z0-9]/g, '');
+  // // Remove directories and anything that isn't in the rootPath.
+  // const filtered = files.filter(file =>
+  //   ((file.indexOf(rootPath) !== -1)
+  //   && (!file.endsWith(path.sep))));
 
-  const instructions = filtered.map(file => {
-    return {
-      type: 'copy',
-      source: file,
-      destination: path.join('Mods', modName, file.substr(idx)),
-    };
-  });
+  // const instructions = filtered.map(file => {
+  //   return {
+  //     type: 'copy',
+  //     source: file,
+  //     destination: path.join('Mods', modName, file.substr(idx)),
+  //   };
+  // });
 
-  if (cacheIndex !== undefined) {
-    cacheFiles.forEach(file => {
-      instructions.push({
-        type: 'copy',
-        source: file,
-        destination: path.join(CONSTRUCT_CACHE, file.substr(cacheIndex)),
-      });
-    });
-  }
+  // if (cacheIndex !== undefined) {
+  //   cacheFiles.forEach(file => {
+  //     instructions.push({
+  //       type: 'copy',
+  //       source: file,
+  //       destination: path.join(CONSTRUCT_CACHE, file.substr(cacheIndex)),
+  //     });
+  //   });
+  // }
 
-  return Promise.resolve({ instructions });
+  // return Promise.resolve({ instructions });
 }
 
 function installUMAPresetReplacer(files,
@@ -313,16 +333,16 @@ const getDiscoveryPath = (api) => {
   return discovery.path;
 }
 
-function getExecutable(discoveryPath) {
-  const legacyExec = 'Blade & Sorcery.exe';
-  const newExec = 'BladeAndSorcery.exe';
-  try {
-    fs.statSync(path.join(discoveryPath, legacyExec));
-    return legacyExec;
-  } catch (err) {
-    return newExec;
-  }
-}
+// function getExecutable(discoveryPath) {
+//   const legacyExec = 'Blade & Sorcery.exe';
+//   const newExec = 'BladeAndSorcery.exe';
+//   try {
+//     fs.statSync(path.join(discoveryPath, legacyExec));
+//     return legacyExec;
+//   } catch (err) {
+//     return newExec;
+//   }
+// }
 
 function main(context) {
   const getUMADestination = () => {
@@ -338,12 +358,12 @@ function main(context) {
     name: 'Blade & Sorcery',
     mergeMods: true,
     queryPath: findGame,
-    supportedTools: tools,
+    //supportedTools: tools,
     // FOMOD installer will act as a replacer by default.
     queryModPath: () => path.join(streamingAssetsPath(), 'Default'),
     logo: 'gameart.jpg',
-    executable: (discoveryPath) => getExecutable(discoveryPath),
-    requiredFiles: [],
+    executable: () => 'BladeAndSorcery.exe',
+    requiredFiles: ['BladeAndSorcery.exe'],
     setup: (discovery) => prepareForModding(discovery, context.api),
     details: {
       steamAppId: 629730,
@@ -355,7 +375,9 @@ function main(context) {
     getUMADestination, testUMAContent);
 
   context.registerInstaller('bas-mulledk19-mod', 25,
-    (files, gameId) => testModInstaller(files, gameId, MULLE_MOD_INFO), installMulleMod);
+    (files, gameId) => testModInstaller(files, gameId, MULLE_MOD_INFO),
+    (files, destinationPath, gameId, progressDelegate) => installMulleMod(files, destinationPath, gameId, progressDelegate, context.api));
+
   context.registerModType('bas-mulledk19-modtype', 15, (gameId) => (gameId === BLADEANDSORCERY_ID),
     () => getDiscoveryPath(context.api), (instructions) => instructionsHaveFile(instructions, MULLE_MOD_INFO));
 
