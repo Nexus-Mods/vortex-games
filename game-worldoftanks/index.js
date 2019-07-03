@@ -19,7 +19,7 @@ function findGame() {
           const value = winapi.RegGetValue(hkey, '', keys[0].key);
           return resolve(value.value);
         } else {
-          return resolve(null);
+          return reject(new util.NotFound('worldoftanks not installed'));
         }
       });
     } catch (err) {
