@@ -37,35 +37,167 @@ function findGame() {
   }
 }
 
-// Given that registerGame does not accept mod paths asynchronously
-//  we're adding a temporary "hack" that loops through each possible localization
-//  mod path and return the first one we find.
-// TODO: Modify registerGame to accept mod paths asynchronously so
-//  we can query the Locale registry key and use that to retrieve the
-//  correct mod path.
-function modPath() {
-  for (let key in LOCALE_MODS_FOLDER) {
-    const modsFolder = path.join(appUni.getPath('documents'), 'Electronic Arts', LOCALE_MODS_FOLDER[key]);
-    try {
-      if (fs.statSync(modsFolder) !== undefined) {
-        return path.join(modsFolder, 'Mods');
-      }
-    } catch(err) {
-      if (err.code !== 'ENOENT') {
-        log('warn', 'Failed to check Sims 4 install directory', {
-          tested: modsPath,
-          err: err.message,
-        });
-      }
-      // do nothing
+let cachedModPath;
+
+function findModPath() {
+  let locale;
+  // check registry for the locale
+  try {
+    const candidate = winapi.RegGetValue(
+      'HKEY_LOCAL_MACHINE',
+      'Software\\Maxis\\The Sims 4',
+      'Locale');
+    if (!!candidate) {
+      locale = candidate.value;
     }
+  } catch (err) { }
+
+  const eaPath = path.join(appUni.getPath('documents'), 'Electronic Arts');
+
+  // if we didn't find the locale in the registry (suspicious) loop through the known
+  // ones and see if the corresponding mod folder exists
+  if (locale === undefined) {
+    locale = Object.keys(LOCALE_MODS_FOLDER).find(candidate => {
+      try {
+        const modsFolder = path.join(eaPath, candidate);
+        fs.statSync(modsFolder);
+        return true;
+      } catch (err) {
+        return false;
+      }
+    });
   }
+
+  if (locale !== undefined) {
+    return path.join(eaPath, locale, 'Mods');
+  }
+
   throw new Error('Couldn\'t find the mods directory for Sims 4. Please make sure you have run it at least once. '
     + 'If you report this as a bug, please let us know where the directory is located on your system.');
+
+}
+
+function modPath() {
+  if (cachedModPath === undefined) {
+    cachedModPath = findModPath();
+  }
+
+  return cachedModPath;
+}
+
+const resourceCfg = `
+Priority 500
+PackedFile *.package
+PackedFile */*.package
+PackedFile */*/*.package
+PackedFile */*/*/*.package
+PackedFile */*/*/*/*.package
+PackedFile */*/*/*/*/*.package
+`;
+
+function writeResourceCfg() {
+  return fs.writeFileAsync(path.join(modPath(), 'Resource.cfg'), resourceCfg);
 }
 
 function prepareForModding() {
-  return fs.ensureDirAsync(modPath());
+  return fs.ensureDirAsync(modPath())
+    .then(() => writeResourceCfg());
+}
+
+const TRAY_EXTENSIONS = new Set([
+  '.bpi', '.blueprint', '.trayitem', '.sfx', '.ion', '.householdbinary',
+  '.sgi', '.hhi', '.room', '.midi', '.rmi',
+]);
+
+const MODS_EXTENSIONS = new Set([
+  '.package', '.ts4script', '.py', '.pyc', '.pyo',
+]);
+
+function testMixed(files, gameId) {
+  if (gameId !== 'thesims4') {
+    return Promise.resolve(false);
+  }
+
+  const trayFile = files.find(
+    file => {
+      const ext = path.extname(file);
+      return TRAY_EXTENSIONS.has(ext.toLowerCase());
+     })
+
+  return Promise.resolve({
+    supported: trayFile !== undefined,
+    requiredFiles: [],
+  });
+}
+
+function hasParent(input, set) {
+  if (input.length === 0) {
+    return false;
+  }
+
+  const dirPath = path.dirname(input).toLowerCase();
+  if (set.has(dirPath)) {
+    return true;
+  } else if (dirPath === '.') {
+    return false;
+  } else {
+    return hasParent(dirPath, set);
+  }
+}
+
+function installMixed(files, destinationPath) {
+  const instructions = [];
+
+  instructions.push({ type: 'setmodtype', value: 'sims4mixed' });
+
+  const ext = input => path.extname(input).toLowerCase();
+
+  // find out which path(s) contain files for tray
+  const traySamples = files.filter(filePath => TRAY_EXTENSIONS.has(ext(filePath)));
+  let trayBases = new Set(traySamples
+    .map(filePath => path.dirname(filePath).toLowerCase()));
+
+  // find out which path(s) contain files for mods
+  const modsSamples = files.filter(filePath => MODS_EXTENSIONS.has(ext(filePath)));
+  let modsBases = new Set(modsSamples
+    .map(filePath => path.dirname(filePath).toLowerCase()));
+
+  // the following tries to account for overlap where the same directory contains files
+  // for tray and mods:
+  //   a) if a directory contains files with an extension for the mods directory,
+  //      all files in that dir get copied to mods except for those that have an extension for
+  //      tray directory
+  //   b) if a directory contains files with an extension for the tray directory,
+  //      all files in that dir get copied to tray, unless they were handled in a)
+  //   c) everything that's left is also copied to mods, just in case
+  //
+  // This way, if a directory contains "tray files" but also a readme.txt, all files including
+  // the readme go to tray.
+  // If a directory contains "tray files", "mods files" and a readme.txt, tray files go to
+  // tray, mods files go to mods and the readme also goes to mods.
+  files.forEach(filePath => {
+    if (filePath.endsWith(path.sep)) {
+      return;
+    }
+    const instruction = {
+      type: 'copy',
+      source: filePath,
+    };
+    if (hasParent(filePath, modsBases) && !TRAY_EXTENSIONS.has(ext(filePath))) {
+      instruction.destination = path.join('Mods', path.basename(filePath));
+    } else if (hasParent(filePath, trayBases)) {
+      instruction.destination = path.join('Tray', path.basename(filePath));
+    } else {
+      instruction.destination = path.join('Mods', path.basename(filePath));
+    }
+    instructions.push(instruction);
+  });
+
+  return Promise.resolve({ instructions });
+}
+
+function getMixedPath() {
+  return path.resolve(modPath(), '..');
 }
 
 function main(context) {
@@ -94,6 +226,10 @@ function main(context) {
       'game/bin/TS4.exe',
     ],
   });
+
+  context.registerModType('sims4mixed', 25, gameId => gameId === 'thesims4', getMixedPath,
+                          () => Promise.resolve(false));
+  context.registerInstaller('sims4mixed', 25, testMixed, installMixed);
 
   return true;
 }
