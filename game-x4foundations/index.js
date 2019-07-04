@@ -137,9 +137,9 @@ function steamUserId32Bit() {
 }
 
 function getDocumentsModPath() {
-  return findGame().then(() => (_STEAM_ENTRY !== undefined)
+  return (_STEAM_ENTRY !== undefined)
     ? path.join(APPUNI.getPath('documents'), 'Egosoft', 'X4', steamUserId32Bit(), 'extensions')
-    : path.join(APPUNI.getPath('documents'), 'Egosoft', 'X4', 'extensions'));
+    : path.join(APPUNI.getPath('documents'), 'Egosoft', 'X4', 'extensions');
 }
 
 async function prepareForModding(discovery) {
