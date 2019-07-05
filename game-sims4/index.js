@@ -3,7 +3,8 @@ const winapi = require('winapi-bindings');
 
 const { remote, app } = require('electron');
 const path = require('path');
-const { fs } = require('vortex-api');
+const semver = require('semver');
+const { actions, fs } = require('vortex-api');
 
 const appUni = app || remote.app;
 
@@ -18,6 +19,11 @@ const LOCALE_MODS_FOLDER = {
   fr_FR: 'Les Sims 4',
   nl_NL: 'De Sims 4',
 }
+
+const MODS_SUB_PATH = 'Vortex Mods';
+// attention: if this is changed, vortex will be unable to correctly filter
+// the resource.cfg of previous versions
+const PRIORITY = 1337;
 
 function findGame() {
   if (process.platform !== 'win32') {
@@ -49,6 +55,12 @@ function findModPath() {
       'Locale');
     if (!!candidate) {
       locale = candidate.value;
+      if (LOCALE_MODS_FOLDER[locale] === undefined) {
+        throw new Error(`Sorry, this locale "${locale}" is not currently supported. `
+                      + 'If you let us know about this and tell us how the localized mods directory '
+                      + 'for your version of the game is ("The Sims 4" in english) we will add it '
+                      + 'asap.');
+      }
     }
   } catch (err) { }
 
@@ -69,7 +81,7 @@ function findModPath() {
   }
 
   if (locale !== undefined) {
-    return path.join(eaPath, locale, 'Mods');
+    return path.join(eaPath, LOCALE_MODS_FOLDER[locale], 'Mods');
   }
 
   throw new Error('Couldn\'t find the mods directory for Sims 4. Please make sure you have run it at least once. '
@@ -77,7 +89,7 @@ function findModPath() {
 
 }
 
-function modPath() {
+function baseModPath() {
   if (cachedModPath === undefined) {
     cachedModPath = findModPath();
   }
@@ -85,23 +97,81 @@ function modPath() {
   return cachedModPath;
 }
 
-const resourceCfg = `
-Priority 500
+function modPath() {
+  return path.join(baseModPath(), MODS_SUB_PATH);
+}
+
+// a bit more generous than the default
+const defaultResources = `Priority 500
 PackedFile *.package
 PackedFile */*.package
 PackedFile */*/*.package
 PackedFile */*/*/*.package
 PackedFile */*/*/*/*.package
-PackedFile */*/*/*/*/*.package
-`;
+PackedFile */*/*/*/*/*.package`;
 
-function writeResourceCfg() {
-  return fs.writeFileAsync(path.join(modPath(), 'Resource.cfg'), resourceCfg);
+const resourceCfg = `Priority ${PRIORITY}
+PackedFile ${MODS_SUB_PATH}/*.package
+PackedFile ${MODS_SUB_PATH}/*/*.package
+PackedFile ${MODS_SUB_PATH}/*/*/*.package
+PackedFile ${MODS_SUB_PATH}/*/*/*/*.package
+PackedFile ${MODS_SUB_PATH}/*/*/*/*/*.package
+PackedFile ${MODS_SUB_PATH}/*/*/*/*/*/*.package`;
+
+
+function filterResourceCfg(filePath) {
+  return fs.readFileAsync(filePath, { encoding: 'utf8' })
+    .then(data => {
+      let res = [];
+      let keep = true;
+      let lastLineEmpty = false;
+      data.split('\n')
+        .forEach(line => {
+          if (line === `Priority ${PRIORITY}`) {
+            keep = false;
+          } else if (line.startsWith('Priority')) {
+            keep = true;
+          }
+          if (keep) {
+            res.push(line);
+          }
+        });
+      return res.filter(line => {
+        if (line === '') {
+          if (lastLineEmpty) {
+            return false;
+          } else {
+            lastLineEmpty = true;
+            return true;
+          }
+        } else {
+          lastLineEmpty = false;
+          return true;
+        }
+      })
+        .join('\n');
+    }).catch({ code: 'ENOENT' }, err => {
+      return defaultResources;
+    });
+}
+
+/**
+ * This updates the resource cfg file to allow vortex to install mods into its own
+ * directory, with directories up to 6 levels deep.
+ * This should keep everything else intact unless the user really went out of their
+ * way to make this difficult
+ */
+function writeResourceCfg(resourceBasePath) {
+  const resourcePath = path.join(resourceBasePath, 'Resource.cfg');
+  return filterResourceCfg(resourcePath)
+    .then(filtered => {
+      return fs.writeFileAsync(resourcePath, filtered + '\n\n' + resourceCfg);
+    });
 }
 
 function prepareForModding() {
   return fs.ensureDirAsync(modPath())
-    .then(() => writeResourceCfg());
+    .then(() => writeResourceCfg(baseModPath()));
 }
 
 const TRAY_EXTENSIONS = new Set([
@@ -184,11 +254,11 @@ function installMixed(files, destinationPath) {
       source: filePath,
     };
     if (hasParent(filePath, modsBases) && !TRAY_EXTENSIONS.has(ext(filePath))) {
-      instruction.destination = path.join('Mods', path.basename(filePath));
+      instruction.destination = path.join('Mods', MODS_SUB_PATH, path.basename(filePath));
     } else if (hasParent(filePath, trayBases)) {
       instruction.destination = path.join('Tray', path.basename(filePath));
     } else {
-      instruction.destination = path.join('Mods', path.basename(filePath));
+      instruction.destination = path.join('Mods', MODS_SUB_PATH, path.basename(filePath));
     }
     instructions.push(instruction);
   });
@@ -197,7 +267,23 @@ function installMixed(files, destinationPath) {
 }
 
 function getMixedPath() {
-  return path.resolve(modPath(), '..');
+  return path.resolve(baseModPath(), '..');
+}
+
+function migrate200(api, oldVersion) {
+  if (semver.gte(oldVersion, '2.0.0')) {
+    return Promise.resolve();
+  }
+
+  // would be good to inform the user beforehand but since this is run in the main process
+  // and we can't currently show a (working) dialog from the main process it has to be
+  // this way.
+  return api.awaitUI()
+    .then(() => new Promise((resolve) => { setTimeout(() => resolve(), 10000); } ))
+    .then(() => api.emitAndAwait('purge-mods-in-path', '', baseModPath()))
+    .then(() => {
+      api.store.dispatch(actions.setDeploymentNecessary('thesims4', true));
+    });
 }
 
 function main(context) {
@@ -230,6 +316,7 @@ function main(context) {
   context.registerModType('sims4mixed', 25, gameId => gameId === 'thesims4', getMixedPath,
                           () => Promise.resolve(false));
   context.registerInstaller('sims4mixed', 25, testMixed, installMixed);
+  context.registerMigration(old => migrate200(context.api, old));
 
   return true;
 }
