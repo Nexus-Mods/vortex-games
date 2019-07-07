@@ -9,6 +9,7 @@ function findGame() {
 }
 
 function main(context) {
+  var arch = process.platform === 'x64';
   context.registerGame({
     id: 'rimworld',
     name: 'RimWorld',
@@ -16,9 +17,13 @@ function main(context) {
     queryPath: findGame,
     queryModPath: () => 'Mods',
     logo: 'gameart.png',
-    executable: () => 'RimWorldWin.exe',
-    requiredFiles: [
-      'RimWorldWin.exe',
+    executable: arch ?
+      () => 'RimWorldWin64.exe' :
+      () => 'RimWorldWin.exe',
+    requiredFiles: arch ? [
+      'RimWorldWin64.exe'
+    ] : [
+      'RimWorldWin.exe'
     ],
     details: {
       steamAppId: 294100,
