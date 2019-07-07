@@ -1,33 +1,30 @@
 const fs = require('fs');
 const { parseXmlString } = require('libxmljs');
 const path = require('path');
-const Registry = require('winreg');
-const { log, util } = require('vortex-api');
+const winapi = require('winapi-bindings');
+const { util } = require('vortex-api');
 
 function findGame() {
-  if (Registry === undefined) {
-    // linux ? macos ?
-    return null;
+  if (process.platform !== 'win32') {
+    return Promise.reject(new Error('Currently only discovered on windows'));
   }
-
-  let regKey = new Registry({
-    hive: Registry.HKCU,
-    key: '\\Software\\Wargaming.net\\Launcher\\Apps\\wot',
-  });
-
   return new Promise((resolve, reject) => {
-    regKey.values((err, result) => {
-      if (err !== null) {
-        return reject(err);
-      }
-      if (result.length === 0) {
-        return resolve(null);
-      }
-      // the keys seem to be a hash or something, but even
-      // on a vanilla installation there are two entries, both
-      // with the same value (though different capitalization)
-      resolve(result[0].value);
-    });
+    try {
+      winapi.WithRegOpen('HKEY_CURRENT_USER', 'Software\\Wargaming.net\\Launcher\\Apps\\wot', hkey => {
+        const keys = winapi.RegEnumValues(hkey);
+        // the keys seem to be a hash or something, but even
+        // on a vanilla installation there are two entries, both
+        // with the same value (though different capitalization)
+        if (keys.length > 0) {
+          const value = winapi.RegGetValue(hkey, '', keys[0].key);
+          return resolve(value.value);
+        } else {
+          return reject(new util.NotFound('worldoftanks not installed'));
+        }
+      });
+    } catch (err) {
+      return reject(err);
+    }
   });
 }
 

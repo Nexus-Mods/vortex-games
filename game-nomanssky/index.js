@@ -12,7 +12,10 @@ function modPath() {
 }
 
 function prepareForModding(discovery) {
-  return fs.ensureDirAsync(path.join(discovery.path, modPath()));
+  const pcbanks = path.join(discovery.path, 'GAMEDATA', 'PCBANKS');
+  return fs.ensureDirAsync(path.join(discovery.path, modPath()))
+    .then(() => fs.renameAsync(path.join(pcbanks, 'DISABLEMODS.TXT'), path.join(pcbanks, 'ENABLEMODS.TXT'))
+      .catch(err => err.code === 'ENOENT' ? Promise.resolve() : Promise.reject(err)));
 }
 
 function main(context) {

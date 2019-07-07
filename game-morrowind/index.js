@@ -1,29 +1,21 @@
 const Promise = require('bluebird');
 const { util } = require('vortex-api');
-const Registry = require('winreg');
+const winapi = require('winapi-bindings');
 
 function findGame() {
-  if (Registry === undefined) {
-    // linux ? macos ?
-    return null;
+  try {
+    const instPath = winapi.RegGetValue(
+      'HKEY_LOCAL_MACHINE',
+      'Software\\Wow6432Node\\Bethesda Softworks\\Morrowind',
+      'Installed Path');
+    if (!instPath) {
+      throw new Error('empty registry key');
+    }
+    return Promise.resolve(instPath.value);
+  } catch (err) {
+    return util.steam.findByName('The Elder Scrolls III: Morrowind')
+      .then(game => game.gamePath);
   }
-
-  let regKey = new Registry({
-    hive: Registry.HKLM,
-    key: '\\Software\\Wow6432Node\\bethesda softworks\\Morrowind',
-  });
-
-  return new Promise((resolve, reject) => {
-    regKey.get('Installed Path', (err, result) => {
-      if (err !== null) {
-        reject(new Error(err.message));
-      } else {
-        resolve(result.value);
-      }
-    });
-  })
-  .catch(err => util.steam.findByName('The Elder Scrolls III: Morrowind')
-        .then(game => game.gamePath));
 }
 
 let tools = [
@@ -42,6 +34,9 @@ function main(context) {
     requiredFiles: [
       'morrowind.exe',
     ],
+    environment: {
+      SteamAPPId: '22320',
+    },
     details: {
       steamAppId: 22320,
     },

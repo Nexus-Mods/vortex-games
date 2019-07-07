@@ -1,62 +1,31 @@
 const Promise = require('bluebird');
 const { util } = require('vortex-api');
-const Registry = require('winreg');
+const winapi = require('winapi-bindings');
 
 function findGame() {
-  if (Registry === undefined) {
-    // linux ? macos ?
-    return null;
+  try {
+    const instPath = winapi.RegGetValue(
+      'HKEY_LOCAL_MACHINE',
+      'Software\\Wow6432Node\\Bethesda Softworks\\Fallout 4 VR',
+      'Installed Path');
+    if (!instPath) {
+      throw new Error('empty registry key');
+    }
+    return Promise.resolve(instPath.value);
+  } catch (err) {
+    return util.steam.findByName('Fallout 4 VR')
+      .then(game => game.gamePath);
   }
-
-  let regKey = new Registry({
-    hive: Registry.HKLM,
-    key: '\\Software\\Wow6432Node\\Bethesda Softworks\\Fallout 4 VR',
-  });
-
-  return new Promise((resolve, reject) => {
-    regKey.get('Installed Path', (err, result) => {
-      if (err !== null) {
-        reject(new Error(err.message));
-      } else {
-        resolve(result.value);
-      }
-    });
-  })
-  .catch(err =>
-    util.steam.findByName('Fallout 4 VR')
-      .then(game => game.gamePath)
-  );
 }
 
 let tools = [
   {
-    id: 'FO4Edit',
-    name: 'FO4Edit',
-    logo: 'tes5edit.png',
-    executable: () => 'xedit.exe',
+    id: 'FO4VREdit',
+    name: 'FO4VREdit',
+    logo: 'fo3edit.png',
+    executable: () => 'FO4VREdit.exe',
     requiredFiles: [
-      'tes5edit.exe',
-    ],
-  },
-  {
-    id: 'loot',
-    name: 'LOOT',
-    logo: 'loot.png',
-    executable: () => 'loot.exe',
-    parameters: [
-      '--game=Fallout4VR',
-    ],
-    requiredFiles: [
-      'loot.exe',
-    ],
-  },
-  {
-    id: 'FNIS',
-    name: 'FNIS',
-    logo: 'fnis.png',
-    executable: () => 'GenerateFNISForUsers.exe',
-    requiredFiles: [
-      'GenerateFNISForUsers.exe',
+      'FO4VREdit.exe',
     ],
   },
 ];
@@ -74,6 +43,9 @@ function main(context) {
     requiredFiles: [
       'Fallout4VR.exe',
     ],
+    environment: {
+      SteamAPPId: '611660',
+    },
     details: {
       steamAppId: 611660,
     }

@@ -1,30 +1,20 @@
-const { types, util } = require('vortex-api');
-const Registry = require('winreg');
+const { util } = require('vortex-api');
+const winapi = require('winapi-bindings');
 
 function findGame() {
-  if (Registry === undefined) {
-    // linux ? macos ?
-    return null;
+  try {
+    const instPath = winapi.RegGetValue(
+      'HKEY_LOCAL_MACHINE',
+      'Software\\Wow6432Node\\Bethesda Softworks\\Skyrim Special Edition',
+      'Installed Path');
+    if (!instPath) {
+      throw new Error('empty registry key');
+    }
+    return Promise.resolve(instPath.value);
+  } catch (err) {
+    return util.steam.findByName('The Elder Scrolls V: Skyrim Special Edition')
+      .then(game => game.gamePath);
   }
-
-  const regKey = new Registry({
-    hive: Registry.HKLM,
-    key: '\\Software\\Wow6432Node\\Bethesda Softworks\\Skyrim Special Edition',
-  });
-
-  return new Promise((resolve, reject) => {
-    regKey.get('Installed Path', (err, result) => {
-      if (err !== null) {
-        reject(new Error(err.message));
-      } else {
-        resolve(result.value);
-      }
-    });
-  })
-  .catch(err =>
-    util.steam.findByName('The Elder Scrolls V: Skyrim Special Edition')
-      .then(game => game.gamePath)
-  );
 }
 
 const tools = [
@@ -32,35 +22,24 @@ const tools = [
     id: 'SSEEdit',
     name: 'SSEEdit',
     logo: 'tes5edit.png',
-    executable: () => 'sseedit.exe',
+    executable: () => 'SSEEdit.exe',
     requiredFiles: [
-      'tes5edit.exe',
+      'SSEEdit.exe',
     ],
   },
   {
     id: 'WryeBash',
-    name: 'WryeBash',
+    name: 'Wrye Bash',
     logo: 'wrye.png',
-    executable: () => 'wryebash.exe',
+    executable: () => 'Wrye Bash.exe',
     requiredFiles: [
-      'wryebash.exe',
-    ],
-  },
-  {
-    id: 'loot',
-    name: 'LOOT',
-    logo: 'loot.png',
-    executable: () => 'loot.exe',
-    parameters: [
-      '--game="Skyrim Special Edition"',
-    ],
-    requiredFiles: [
-      'loot.exe',
+      'Wrye Bash.exe',
     ],
   },
   {
     id: 'FNIS',
-    name: 'FNIS',
+    name: 'Fores New Idles in Skyrim',
+    shortName: 'FNIS',
     logo: 'fnis.png',
     executable: () => 'GenerateFNISForUsers.exe',
     requiredFiles: [
@@ -70,12 +49,14 @@ const tools = [
   },
   {
     id: 'skse64',
-    name: 'SKSE64',
+    name: 'Skyrim Script Extender 64',
+    shortName: 'SKSE64',
     executable: () => 'skse64_loader.exe',
     requiredFiles: [
       'skse64_loader.exe',
     ],
     relative: true,
+    exclusive: true,
   },
 ];
 
@@ -98,6 +79,7 @@ function main(context) {
     },
     details: {
       steamAppId: 489830,
+      nexusPageId: 'skyrimspecialedition',
     }
   });
 

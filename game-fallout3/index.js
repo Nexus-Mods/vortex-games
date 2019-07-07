@@ -1,54 +1,53 @@
 const Promise = require('bluebird');
-const { util } = require('vortex-api');
-const Registry = require('winreg');
+const path = require('path');
+const { fs, util } = require('vortex-api');
+const winapi = require('winapi-bindings');
 
 function findGame() {
-  if (Registry === undefined) {
-    // linux ? macos ?
-    return null;
+  try {
+    const instPath = winapi.RegGetValue(
+      'HKEY_LOCAL_MACHINE',
+      'Software\\Wow6432Node\\Bethesda Softworks\\Fallout3',
+      'Installed Path');
+    if (!instPath) {
+      throw new Error('empty registry key');
+    }
+    return Promise.resolve(instPath.value);
+  } catch (err) {
+    return util.steam.findByName('Fallout 3')
+      .then(game => game.gamePath);
   }
-
-  let regKey = new Registry({
-    hive: Registry.HKLM,
-    key: '\\Software\\Wow6432Node\\Bethesda Softworks\\Fallout3',
-  });
-
-  return new Promise((resolve, reject) => {
-    regKey.get('Installed Path', (err, result) => {
-      if (err !== null) {
-        reject(new Error(err.message));
-      } else {
-        resolve(result.value);
-      }
-    });
-  })
-  .catch(err =>
-    util.steam.findByName('Fallout 3')
-      .then(game => game.gamePath)
-  );
 }
 
 let tools = [
   {
-    id: 'loot',
-    name: 'LOOT',
-    logo: 'loot.png',
-    executable: () => 'loot.exe',
-    parameters: [
-      '--game=Fallout3',
-    ],
+    id: 'FO3Edit',
+    name: 'FO3Edit',
+    logo: 'fo3edit.png',
+    executable: () => 'FO3Edit.exe',
     requiredFiles: [
-      'loot.exe',
+      'FO3Edit.exe',
+    ],
+  },
+  {
+    id: 'WryeBash',
+    name: 'Wrye Bash',
+    logo: 'wrye.png',
+    executable: () => 'Wrye Bash.exe',
+    requiredFiles: [
+      'Wrye Bash.exe',
     ],
   },
   {
     id: 'fose',
-    name: 'FOSE',
+    name: 'Fallout Script Extender',
+    shortName: 'FOSE',
     executable: () => 'fose_loader.exe',
     requiredFiles: [
       'fose_loader.exe',
     ],
     relative: true,
+    exclusive: true,
   }
 ];
 
@@ -61,10 +60,25 @@ function main(context) {
     supportedTools: tools,
     queryModPath: () => 'data',
     logo: 'gameart.png',
-    executable: () => 'fallout3.exe',
+    executable: (discoveryPath) => {
+      if (discoveryPath === undefined) {
+        return 'fallout3.exe';
+      } else {
+        try {
+          fs.statSync(path.join(discoveryPath, 'fallout3ng.exe'));
+          return 'fallout3ng.exe';
+        } catch (err) {
+          return 'fallout3.exe';
+        }
+      }
+    },
     requiredFiles: [
-      'fallout3.exe',
+      'falloutlauncher.exe',
+      'data/fallout3.esm'
     ],
+    environment: {
+      SteamAPPId: '22300',
+    },
     details: {
       steamAppId: 22300,
     }

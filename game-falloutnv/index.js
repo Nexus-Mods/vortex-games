@@ -1,54 +1,52 @@
 const Promise = require('bluebird');
-const Registry = require('winreg');
 const { util } = require('vortex-api');
+const winapi = require('winapi-bindings');
 
 function findGame() {
-  if (Registry === undefined) {
-    // linux ? macos ?
-    return null;
+  try {
+    const instPath = winapi.RegGetValue(
+      'HKEY_LOCAL_MACHINE',
+      'Software\\Wow6432Node\\Bethesda Softworks\\falloutnv',
+      'Installed Path');
+    if (!instPath) {
+      throw new Error('empty registry key');
+    }
+    return Promise.resolve(instPath.value);
+  } catch (err) {
+    return util.steam.findByName('Fallout: New Vegas')
+      .then(game => game.gamePath);
   }
-
-  let regKey = new Registry({
-    hive: Registry.HKLM,
-    key: '\\Software\\Wow6432Node\\Bethesda Softworks\\falloutnv',
-  });
-
-  return new Promise((resolve, reject) => {
-    regKey.get('Installed Path', (err, result) => {
-      if (err !== null) {
-        reject(new Error(err.message));
-      } else {
-        resolve(result.value);
-      }
-    });
-  })
-  .catch(err =>
-    util.steam.findByName('Fallout: New Vegas')
-      .then(game => game.gamePath)
-  );
 }
 
 let tools = [
   {
-    id: 'loot',
-    name: 'LOOT',
-    logo: 'loot.png',
-    executable: () => 'loot.exe',
-    parameters: [
-      '--game=FalloutNV',
-    ],
+    id: 'FNVEdit',
+    name: 'FNVEdit',
+    logo: 'fo3edit.png',
+    executable: () => 'FNVEdit.exe',
     requiredFiles: [
-      'loot.exe',
+      'FNVEdit.exe',
+    ],
+  },
+  {
+    id: 'WryeBash',
+    name: 'Wrye Bash',
+    logo: 'wrye.png',
+    executable: () => 'Wrye Bash.exe',
+    requiredFiles: [
+      'Wrye Bash.exe',
     ],
   },
   {
     id: 'nvse',
-    name: 'NVSE',
+    name: 'New Vegas Script Extender',
+    shortName: 'NVSE',
     executable: () => 'nvse_loader.exe',
     requiredFiles: [
       'nvse_loader.exe',
     ],
     relative: true,
+    exclusive: true,
   }
 ];
 
@@ -66,8 +64,12 @@ function main(context) {
     requiredFiles: [
       'FalloutNV.exe',
     ],
+    environment: {
+      SteamAPPId: '22380',
+    },
     details: {
       steamAppId: 22380,
+      nexusPageId: 'newvegas',
     }
   });
   return true;

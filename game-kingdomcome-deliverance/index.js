@@ -1,7 +1,6 @@
 const Promise = require('bluebird');
-const { remote } = require('electron');
 const path = require('path');
-const { fs, log, selectors, util } = require('vortex-api');
+const { fs, log, util } = require('vortex-api');
 
 function findGame() {
   return util.steam.findByAppId('379430')
@@ -9,7 +8,8 @@ function findGame() {
 }
 
 function prepareForModding(discovery) {
-  return fs.ensureDirAsync(path.join(discovery.path, 'Mods'));
+  return fs.ensureDirWritableAsync(path.join(discovery.path, 'Mods'),
+    () => Promise.resolve());
 }
 
 function transformId(input) {
@@ -42,15 +42,51 @@ function main(context) {
         const store = context.api.store;
         const state = store.getState();
         const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', gameId], undefined);
-        console.log('discovery', discovery, gameId, mods);
-        if (discovery === undefined) {
+        if ((discovery === undefined) || (discovery.path === undefined)) {
           // should never happen and if it does it will cause errors elsewhere as well
           log('error', 'kingdomcomedeliverance was not discovered');
           return;
         }
-        fs.ensureDirAsync(path.join(discovery.path, 'Mods'))
-        .then(() => fs.writeFileAsync(path.join(discovery.path, 'Mods', 'mod_order.txt'),
-                                      mods.map(mod => transformId(mod.id)).join('\n')));
+
+        const modOrderFile = path.join(discovery.path, 'Mods', 'mod_order.txt');
+        const transformedMods = mods.map(mod => transformId(mod.id));
+        prepareForModding(discovery)
+        .then(() => fs.readFileAsync(modOrderFile, { encoding: 'utf-8' }))
+          .catch(err => (err.code === 'ENOENT')
+            ? Promise.resolve(null) // No mod order file? no problem.
+            : Promise.reject(err))
+        .then(data => {
+          if (data === null) {
+            return Promise.resolve();
+          } else {
+            // We need to lookup pre-existing mods and ensure we don't remove them.
+            //  We rely on the mods being separated by newLine (but so does the game afaik)
+            const currentMods = data.split(/\r?\n/g); // Pattern should work for both Windows and *nix
+            const diff = currentMods.filter(current =>
+              transformedMods.find(newMod => newMod === current) === undefined);
+            return Promise.each(diff, mod => {
+              // Ensure that the mod manifest exists as that's a clear indication that
+              //  the mod is still installed.
+              return fs.statAsync(path.join(discovery.path, 'Mods', mod, 'mod.manifest'))
+              .tap(() => transformedMods.push(mod))
+              .catch(err => {
+                if (['ENOENT', 'UNKNOWN'].indexOf(err.code) === -1) {
+                  transformedMods.push(mod);
+                }
+
+                return Promise.resolve();
+              })
+            })
+          }
+        })
+        .then(() => fs.writeFileAsync(modOrderFile, transformedMods.join('\n')))
+        .catch(err => {
+          const errorMessage = ['EPERM', 'ENOENT'].indexOf(err.code) !== -1
+            ? 'Please ensure that the file exists, and that you have full write permissions to it.'
+            : err;
+          context.api.showErrorNotification('Unable to manipulate mod_order.txt',
+          errorMessage, { allowReport: ['EPERM', 'ENOENT'].indexOf(err.code) === -1 })
+        });
       }
     });
   })

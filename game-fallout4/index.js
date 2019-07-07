@@ -1,73 +1,52 @@
 const Promise = require('bluebird');
 const { util } = require('vortex-api');
-const Registry = require('winreg');
+const winapi = require('winapi-bindings');
 
 function findGame() {
-  if (Registry === undefined) {
-    // linux ? macos ?
-    return null;
+  try {
+    const instPath = winapi.RegGetValue(
+      'HKEY_LOCAL_MACHINE',
+      'Software\\Wow6432Node\\Bethesda Softworks\\Fallout4',
+      'Installed Path');
+    if (!instPath) {
+      throw new Error('empty registry key');
+    }
+    return Promise.resolve(instPath.value);
+  } catch (err) {
+    return util.steam.findByName('Fallout 4')
+      .then(game => game.gamePath);
   }
-
-  let regKey = new Registry({
-    hive: Registry.HKLM,
-    key: '\\Software\\Wow6432Node\\Bethesda Softworks\\Fallout4',
-  });
-
-  return new Promise((resolve, reject) => {
-    regKey.get('Installed Path', (err, result) => {
-      if (err !== null) {
-        reject(new Error(err.message));
-      } else {
-        resolve(result.value);
-      }
-    });
-  })
-  .catch(err =>
-    util.steam.findByName('Fallout 4')
-      .then(game => game.gamePath)
-  );
 }
 
 let tools = [
   {
     id: 'FO4Edit',
     name: 'FO4Edit',
-    logo: 'tes5edit.png',
-    executable: () => 'xedit.exe',
+    logo: 'fo3edit.png',
+    executable: () => 'FO4Edit.exe',
     requiredFiles: [
-      'tes5edit.exe',
+      'FO4Edit.exe',
     ],
   },
   {
-    id: 'loot',
-    name: 'LOOT',
-    logo: 'loot.png',
-    executable: () => 'loot.exe',
-    parameters: [
-      '--game=Fallout4',
-    ],
+    id: 'WryeBash',
+    name: 'Wrye Bash',
+    logo: 'wrye.png',
+    executable: () => 'Wrye Bash.exe',
     requiredFiles: [
-      'loot.exe',
+      'Wrye Bash.exe',
     ],
-  },
-  {
-    id: 'FNIS',
-    name: 'FNIS',
-    logo: 'fnis.png',
-    executable: () => 'GenerateFNISForUsers.exe',
-    requiredFiles: [
-      'GenerateFNISForUsers.exe',
-    ],
-    relative: true,
   },
   {
     id: 'f4se',
-    name: 'F4SE',
+    name: 'Fallout 4 Script Extender',
+    shortName: 'F4SE',
     executable: () => 'f4se_loader.exe',
     requiredFiles: [
       'f4se_loader.exe',
     ],
     relative: true,
+    exclusive: true,
   },
 ];
 
@@ -84,6 +63,9 @@ function main(context) {
     requiredFiles: [
       'Fallout4.exe',
     ],
+    environment: {
+      SteamAPPId: '377160',
+    },
     details: {
       steamAppId: 377160,
     }

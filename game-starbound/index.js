@@ -8,9 +8,6 @@ function findGame() {
 }
 
 function gameExecutable() {
-  if (process.platform === 'win32') {
-    return 'win32/starbound.exe';
-  }
   return 'win64/starbound.exe';
 }
 

@@ -1,31 +1,21 @@
 const Promise = require('bluebird');
 const { util } = require('vortex-api');
-const Registry = require('winreg');
+const winapi = require('winapi-bindings');
 
 function findGame() {
-  if (Registry === undefined) {
-    // linux ? macos ?
-    return null;
+  try {
+    const instPath = winapi.RegGetValue(
+      'HKEY_LOCAL_MACHINE',
+      'Software\\Wow6432Node\\Bethesda Softworks\\skyrim',
+      'Installed Path');
+    if (!instPath) {
+      throw new Error('empty registry key');
+    }
+    return Promise.resolve(instPath.value);
+  } catch (err) {
+    return util.steam.findByName('The Elder Scrolls V: Skyrim')
+      .then(game => game.gamePath);
   }
-
-  let regKey = new Registry({
-    hive: Registry.HKLM,
-    key: '\\Software\\Wow6432Node\\Bethesda Softworks\\skyrim',
-  });
-
-  return new Promise((resolve, reject) => {
-    regKey.get('Installed Path', (err, result) => {
-      if (err !== null) {
-        reject(new Error(err.message));
-      } else {
-        resolve(result.value);
-      }
-    });
-  })
-  .catch(err =>
-    util.steam.findByName('The Elder Scrolls V: Skyrim')
-      .then(game => game.gamePath)
-  );
 }
 
 let tools = [
@@ -33,35 +23,24 @@ let tools = [
     id: 'TES5Edit',
     name: 'TES5Edit',
     logo: 'tes5edit.png',
-    executable: () => 'tes5edit.exe',
+    executable: () => 'TES5Edit.exe',
     requiredFiles: [
-      'tes5edit.exe',
-    ],
-  },
-   {
-    id: 'WryeBash',
-    name: 'WryeBash',
-    logo: 'wrye.png',
-    executable: () => 'wryebash.exe',
-    requiredFiles: [
-      'wryebash.exe',
+      'TES5Edit.exe',
     ],
   },
   {
-    id: 'loot',
-    name: 'LOOT',
-    logo: 'loot.png',
-    executable: () => 'loot.exe',
-    parameters: [
-      '--game=Skyrim',
-    ],
+    id: 'WryeBash',
+    name: 'Wrye Bash',
+    logo: 'wrye.png',
+    executable: () => 'Wrye Bash.exe',
     requiredFiles: [
-      'loot.exe',
+      'Wrye Bash.exe',
     ],
   },
   {
     id: 'FNIS',
-    name: 'FNIS',
+    name: 'Fores New Idles in Skyrim',
+    shortName: 'FNIS',
     logo: 'fnis.png',
     executable: () => 'GenerateFNISForUsers.exe',
     requiredFiles: [
@@ -71,12 +50,14 @@ let tools = [
   },
   {
     id: 'skse',
-    name: 'SKSE',
+    name: 'Skyrim Script Extender',
+    shortName: 'SKSE',
     executable: () => 'skse_loader.exe',
     requiredFiles: [
       'skse_loader.exe',
     ],
     relative: true,
+    exclusive: true,
   },
 ];
 

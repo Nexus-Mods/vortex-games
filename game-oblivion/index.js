@@ -1,45 +1,52 @@
 const Promise = require('bluebird');
 const { util } = require('vortex-api');
-const Registry = require('winreg');
+const winapi = require('winapi-bindings');
 
 function findGame() {
-  if (Registry === undefined) {
-    // linux ? macos ?
-    return null;
+  try {
+    const instPath = winapi.RegGetValue(
+      'HKEY_LOCAL_MACHINE',
+      'Software\\Wow6432Node\\Bethesda Softworks\\oblivion',
+      'Installed Path');
+    if (!instPath) {
+      throw new Error('empty registry key');
+    }
+    return Promise.resolve(instPath.value);
+  } catch (err) {
+    return util.steam.findByName('The Elder Scrolls IV: Oblivion')
+      .then(game => game.gamePath);
   }
-
-  let regKey = new Registry({
-    hive: Registry.HKLM,
-    key: '\\Software\\Wow6432Node\\Bethesda Softworks\\oblivion',
-  });
-
-  return new Promise((resolve, reject) => {
-    regKey.get('Installed Path', (err, result) => {
-      if (err !== null) {
-        reject(new Error(err.message));
-      } else {
-        resolve(result.value);
-      }
-    });
-  })
-  .catch(err =>
-    util.steam.findByName('The Elder Scrolls IV: Oblivion')
-      .then(game => game.gamePath)
-  );
 }
 
 let tools = [
   {
-    id: 'loot',
-    name: 'LOOT',
-    logo: 'loot.png',
-    executable: () => 'loot.exe',
-    parameters: [
-      '--game=Oblivion',
-    ],
+    id: 'TES4Edit',
+    name: 'TES4Edit',
+    logo: 'tes5edit.png',
+    executable: () => 'TES4Edit.exe',
     requiredFiles: [
-      'loot.exe',
+      'TES4Edit.exe',
     ],
+  },
+  {
+    id: 'WryeBash',
+    name: 'Wrye Bash',
+    logo: 'wrye.png',
+    executable: () => 'Wrye Bash.exe',
+    requiredFiles: [
+      'Wrye Bash.exe',
+    ],
+  },
+  {
+    id: 'obse',
+    name: 'Oblivion Script Extender',
+    shortName: 'OBSE',
+    executable: () => 'obse_loader.exe',
+    requiredFiles: [
+      'obse_loader.exe',
+    ],
+    relative: true,
+    exclusive: true,
   },
 ];
 
@@ -56,6 +63,9 @@ function main(context) {
     requiredFiles: [
       'oblivion.exe',
     ],
+    environment: {
+      SteamAPPId: '22330',
+    },
     details: {
       steamAppId: 22330,
     },

@@ -1,34 +1,41 @@
 const { app, remote } = require('electron');
 const path = require('path');
-const { fs, log, util } = require('vortex-api');
-const Registry = require('winreg');
+const { fs, util } = require('vortex-api');
 const { parseXmlString } = require('libxmljs');
+const winapi = require('winapi-bindings');
 
 const appUni = app || remote.app;
 
+const ADDINS_FILE = 'AddIns.xml';
+
+// Static variables to store paths we resolve using appUni.
+let _ADDINS_PATH = undefined;
+let _MODS_PATH = undefined;
+
 function findGame() {
-  if (Registry === undefined) {
-    return null;
+  if (process.platform !== 'win32') {
+    return Promise.reject(new Error('Currently only discovered on windows'));
   }
-
-  let regKey = new Registry({
-    hive: Registry.HKLM,
-    key: '\\Software\\Wow6432Node\\BioWare\\Dragon Age',
-  });
-
-  return new Promise((resolve, reject) => {
-    regKey.get('Path', (err, result) => {
-      if (err !== null) {
-        reject(new Error(err.message));
-      } else {
-        resolve(result.value);
-      }
-    });
-  });
+  try {
+    const instPath = winapi.RegGetValue(
+      'HKEY_LOCAL_MACHINE',
+      'Software\\Wow6432Node\\BioWare\\Dragon Age',
+      'Path');
+    if (!instPath) {
+      throw new Error('empty registry key');
+    }
+    return Promise.resolve(instPath.value);
+  } catch (err) {
+    return Promise.reject(err);
+  }
 }
 
 function queryModPath() {
-  return path.join(appUni.getPath('documents'), 'BioWare', 'Dragon Age', 'packages', 'core', 'override');
+  if (_MODS_PATH === undefined) {
+    _MODS_PATH = path.join(appUni.getPath('documents'), 'BioWare', 'Dragon Age', 'packages', 'core', 'override');
+  }
+  
+  return _MODS_PATH;
 }
 
 function prepareForModding() {
@@ -38,8 +45,12 @@ function prepareForModding() {
 }
 
 function addinsPath() {
-  return path.join(appUni.getPath('documents'), 'Bioware', 'Dragon Age',
-                   'Settings', 'AddIns.xml');
+  if (_ADDINS_PATH === undefined) {
+    _ADDINS_PATH = path.join(appUni.getPath('documents'), 'Bioware', 'Dragon Age',
+      'Settings', ADDINS_FILE);
+  }
+
+  return _ADDINS_PATH;
 }
 
 const emptyAddins = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -54,10 +65,10 @@ function test(game) {
     baseFiles: () => [
       {
         in: addinsPath(),
-        out: 'Addins.xml',
+        out: path.join('Settings', ADDINS_FILE),
       },
     ],
-    filter: filePath => path.basename(filePath) === 'Manifest.xml',
+    filter: filePath => path.basename(filePath).toLowerCase() === 'manifest.xml',
   };
 }
 
@@ -65,13 +76,14 @@ function merge(filePath, mergeDir) {
   let manifest;
   return fs.readFileAsync(filePath)
       .then(xmlData => {
-        manifest = parseXmlString(xmlData);
+        try {
+          manifest = parseXmlString(xmlData);
+        } catch (err) {
+          return Promise.reject(new util.ProcessCanceled(`File invalid "${filePath}"`));
+        }
         return Promise.resolve();
       })
-      .then(() => fs.readFileAsync(path.join(mergeDir, 'AddIns.xml')))
-      .catch(err => (err.code === 'ENOENT')
-          ? fs.readFileAsync(addinsPath()).catch(err => emptyAddins)
-          : Promise.reject(err))
+      .then(() => readAddinsData(mergeDir))
       .then(addinsData => new Promise((resolve, reject) => {
         try  {
           resolve(parseXmlString(addinsData));
@@ -81,12 +93,26 @@ function merge(filePath, mergeDir) {
       }))
       .then(addins => {
         const list = addins.get('//AddInsList');
+        if (list === undefined) {
+          return Promise.reject(new util.ProcessCanceled(`Addins file is invalid - "${path.join(mergeDir, 'Settings', ADDINS_FILE)}"`));
+        }
+
         manifest.find('//Manifest/AddInsList/AddInItem').forEach(item => {
           list.addChild(item);
         });
-        return fs.writeFileAsync(path.join(mergeDir, 'AddIns.xml'),
-                                 addins.toString(), { encoding: 'utf-8' });
+        const destPath = path.join(mergeDir, 'Settings');
+        return fs.ensureDirAsync(destPath)
+          .then(() => fs.writeFileAsync(path.join(destPath, ADDINS_FILE),
+            addins.toString(), { encoding: 'utf-8' }))
       });
+}
+
+function readAddinsData(mergeDir) {
+  return fs.readFileAsync(path.join(mergeDir, 'Settings', ADDINS_FILE))
+    .catch(err => (err.code === 'ENOENT')
+      ? fs.readFileAsync(addinsPath()).catch(err => emptyAddins)
+      : Promise.reject(err)
+    );
 }
 
 function main(context) {
@@ -98,16 +124,16 @@ function main(context) {
     queryPath: findGame,
     queryModPath,
     logo: 'gameart.png',
-    executable: () => 'daorigins.exe',
+    executable: () => 'bin_ship/daorigins.exe',
     setup: prepareForModding,
     requiredFiles: [
-      'daorigins.exe',
+      'bin_ship/daorigins.exe',
     ],
     details: {
       steamAppId: 17450,
     },
   });
-  context.registerMerge(test, merge, 'dragonage-settings');
+  context.registerMerge(test, merge, 'dazip');
 
   return true;
 }

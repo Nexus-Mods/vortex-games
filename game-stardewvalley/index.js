@@ -1,10 +1,13 @@
 const
   fs = require('fs'),
-  opn = require('opn'),
   path = require('path'),
+  Promise = require('bluebird'),
+  rjson = require('relaxed-json'),
   { promisify } = require('util'),
-  { actions, util } = require('vortex-api'),
-  Registry = require('winreg');
+  { actions, log, util } = require('vortex-api'),
+  winapi = require('winapi-bindings');
+
+const MANIFEST_FILE = 'manifest.json';
 
 class StardewValley {
   /*********
@@ -27,6 +30,8 @@ class StardewValley {
       steamAppId: 413150
     };
     this.mergeMods = true;
+    this.requiresCleanup = true;
+    this.shell = process.platform == 'win32';
 
     // custom properties
     this.defaultPaths = [
@@ -63,8 +68,10 @@ class StardewValley {
 
     // check GOG Galaxy
     let path =
-      await this.readRegistryKeyAsync(Registry.HKLM, '\\SOFTWARE\\GOG.com\\Games\\1453375253', 'PATH')
-      || await this.readRegistryKeyAsync(Registry.HKLM, '\\SOFTWARE\\WOW6432Node\\GOG.com\\Games\\1453375253', 'PATH');
+      await this.readRegistryKeyAsync('HKEY_LOCAL_MACHINE', 'SOFTWARE\\GOG.com\\Games\\1453375253', 'PATH')
+      || await this.readRegistryKeyAsync('HKEY_LOCAL_MACHINE', 'SOFTWARE\\GOG.com\\Games\\1453375253', 'path')
+      || await this.readRegistryKeyAsync('HKEY_LOCAL_MACHINE', 'SOFTWARE\\WOW6432Node\\GOG.com\\Games\\1453375253', 'PATH')
+      || await this.readRegistryKeyAsync('HKEY_LOCAL_MACHINE', 'SOFTWARE\\WOW6432Node\\GOG.com\\Games\\1453375253', 'path')
     if (path && await this.getPathExistsAsync(path))
       return path;
 
@@ -121,10 +128,10 @@ class StardewValley {
         actions.showDialog(
           'question',
           'Action required',
-          { message: 'You must install SMAPI to use mods with Stardew Valley.' },
+          { text: 'You must install SMAPI to use mods with Stardew Valley.' },
           [
             { label: 'Cancel', action: () => reject(new util.UserCanceled()) },
-            { label: 'Go to SMAPI page', action: () => { opn('https://smapi.io').catch(err => undefined); reject(new util.UserCanceled()); } }
+            { label: 'Go to SMAPI page', action: () => { util.opn('https://smapi.io').catch(err => undefined); reject(new util.UserCanceled()); } }
           ]
         )
       );
@@ -158,18 +165,89 @@ class StardewValley {
    */
   async readRegistryKeyAsync(hive, key, name)
   {
-    if (!Registry)
-      return Promise.resolve(undefined); // not Windows
-
-    let regKey = new Registry({ hive: hive, key: key });
-    return new Promise((resolve, reject) => {
-      regKey.get(name, (err, result) => resolve(err ? undefined : result.value));
-    });
+    try {
+      const instPath = winapi.RegGetValue(hive, key, name);
+      if (!instPath) {
+        throw new Error('empty registry key');
+      }
+      return Promise.resolve(instPath.value);
+    } catch (err) {
+      return Promise.resolve(undefined);
+    }
   }
+}
+
+async function getModName(destinationPath, manifestFile) {
+  const manifestPath = path.join(destinationPath, manifestFile);
+  try {
+    const file = await promisify(fs.readFile)(manifestPath, { encoding: 'utf8' });
+    // it seems to be not uncommon that these files are not valid json,
+    // so we use relaxed-json to improve our chances of parsing successfully
+    const data = rjson.parse(util.deBOM(file));
+    return (data.Name !== undefined)
+      ? Promise.resolve(data.Name.replace(/[^a-zA-Z0-9]/g, ''))
+      : Promise.reject(new util.DataInvalid('Invalid manifest.json file'));
+  } catch(err) {
+    log('error', 'Unable to parse manifest.json file', manifestPath);
+    return path.basename(destinationPath, '.installing');
+  }
+}
+
+async function testSupported(files, gameId) {
+  const supported = (gameId === 'stardewvalley') && 
+    (files.find(file => path.basename(file).toLowerCase() === MANIFEST_FILE) !== undefined)
+  return { supported }
+}
+
+async function install(files,
+                destinationPath,
+                gameId,
+                progressDelegate) {
+  // The archive may contain multiple manifest files which would
+  //  imply that we're installing multiple mods.
+  const manifestFiles = files.filter(file =>
+    path.basename(file).toLowerCase() === MANIFEST_FILE);
+
+  const mods = manifestFiles.map(manifestFile => {
+    const rootFolder = path.dirname(manifestFile);
+    const manifestIndex = manifestFile.indexOf(MANIFEST_FILE);
+    const modFiles = files.filter(file =>
+      (file.indexOf(rootFolder) !== -1)
+      && (path.dirname(file) !== '.')
+      && (path.extname(file) !== ''));
+
+    return {
+      manifestFile,
+      rootFolder,
+      manifestIndex,
+      modFiles,
+    };
+  });
+
+  return Promise.map(mods, mod => getModName(destinationPath, mod.manifestFile)
+    .then(manifestModName => {
+      const modName = (mod.rootFolder !== '.')
+        ? mod.rootFolder
+        : manifestModName;
+
+      return mod.modFiles.map(file => {
+        const destination = path.join(modName, file.substr(mod.manifestIndex));
+        return {
+          type: 'copy',
+          source: file,
+          destination: destination,
+        };
+      });
+    }))
+    .then(data => {
+      const instructions = [].concat.apply([], data);
+      return Promise.resolve({ instructions });
+    });
 }
 
 module.exports = {
   default: function(context) {
     context.registerGame(new StardewValley(context));
+    context.registerInstaller('stardew-valley-installer', 50, testSupported, install);
   }
 }

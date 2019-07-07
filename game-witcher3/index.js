@@ -1,27 +1,23 @@
 const Promise = require('bluebird');
 const path = require('path');
-const Registry = require('winreg');
+const winapi = require('winapi-bindings');
+const { fs, util } = require('vortex-api');
 
 function findGame() {
-  if (Registry === undefined) {
-    // linux ? macos ?
-    return null;
+  try {
+    const instPath = winapi.RegGetValue(
+      'HKEY_LOCAL_MACHINE',
+      'Software\\CD Project Red\\The Witcher 3',
+      'InstallFolder');
+    if (!instPath) {
+      throw new Error('empty registry key');
+    }
+    return Promise.resolve(instPath.value);
+  } catch (err) {
+    return util.steam.findByName('The Witcher 3: Wild Hunt')
+      .catch(() => util.steam.findByAppId('499450'))
+      .then(game => game.gamePath);
   }
-
-  let regKey = new Registry({
-    hive: Registry.HKLM,
-    key: '\\Software\\CD Project Red\\The Witcher 3',
-  });
-
-  return new Promise((resolve, reject) => {
-    regKey.get('InstallFolder', (err, result) => {
-      if (err !== null) {
-        reject(new Error(err.message));
-      } else {
-        resolve(result.value);
-      }
-    });
-  });
 }
 
 function testSupportedTL(files, gameId) {
@@ -101,6 +97,10 @@ function testDLC(instructions) {
     instruction => !!instruction.destination && instruction.destination.toLowerCase().startsWith('dlc' + path.sep)) !== undefined);
 }
 
+function prepareForModding(discovery) {
+  return fs.ensureDirAsync(path.join(discovery.path, 'Mods'));
+}
+
 function main(context) {
   context.registerGame({
     id: 'witcher3',
@@ -111,6 +111,7 @@ function main(context) {
     queryModPath: () => 'Mods',
     logo: 'gameart.png',
     executable: () => 'bin/x64/witcher3.exe',
+    setup: prepareForModding,
     requiredFiles: [
       'bin/x64/witcher3.exe',
     ],
