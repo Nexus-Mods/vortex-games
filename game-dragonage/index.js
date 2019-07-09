@@ -7,27 +7,29 @@ const winapi = require('winapi-bindings');
 const appUni = app || remote.app;
 
 const ADDINS_FILE = 'AddIns.xml';
+const STEAM_ID = 17450;
 
 // Static variables to store paths we resolve using appUni.
 let _ADDINS_PATH = undefined;
 let _MODS_PATH = undefined;
 
 function findGame() {
-  if (process.platform !== 'win32') {
-    return Promise.reject(new Error('Currently only discovered on windows'));
-  }
-  try {
-    const instPath = winapi.RegGetValue(
-      'HKEY_LOCAL_MACHINE',
-      'Software\\Wow6432Node\\BioWare\\Dragon Age',
-      'Path');
-    if (!instPath) {
-      throw new Error('empty registry key');
-    }
-    return Promise.resolve(instPath.value);
-  } catch (err) {
-    return Promise.reject(err);
-  }
+  return util.steam.findByAppId(STEAM_ID.toString())
+    .then(discovered => discovered.path)
+    .catch(err => {
+      try {
+        const instPath = winapi.RegGetValue(
+          'HKEY_LOCAL_MACHINE',
+          'Software\\Wow6432Node\\BioWare\\Dragon Age',
+          'Path');
+        if (!instPath) {
+          throw new Error('empty registry key');
+        }
+        return Promise.resolve(instPath.value);
+      } catch (err) {
+        return Promise.reject(err);
+      }
+    })
 }
 
 function queryModPath() {
@@ -70,6 +72,15 @@ function test(game) {
     ],
     filter: filePath => path.basename(filePath).toLowerCase() === 'manifest.xml',
   };
+}
+
+function requiresLauncher(gamePath) {
+  // Steam installation would include DAOU_UpdateAddinsXML_Steam.exe so it's
+  //  safe to assume that if we find this file - we need the launcher.
+  const gameRoot = gamePath.substring(0, gamePath.lastIndexOf(path.sep));
+  return fs.statAsync(path.join(gameRoot, 'redist', 'DAOU_UpdateAddinsXML_Steam.exe'))
+    .then(() => Promise.resolve({ launcher: 'steam' }))
+    .catch(err => Promise.resolve(undefined));
 }
 
 function merge(filePath, mergeDir) {
@@ -121,6 +132,7 @@ function main(context) {
     id: 'dragonage',
     name: 'Dragon Age',
     mergeMods: true,
+    requiresLauncher,
     queryPath: findGame,
     queryModPath,
     logo: 'gameart.png',
@@ -130,7 +142,7 @@ function main(context) {
       'bin_ship/daorigins.exe',
     ],
     details: {
-      steamAppId: 17450,
+      steamAppId: STEAM_ID,
     },
   });
   context.registerMerge(test, merge, 'dazip');
