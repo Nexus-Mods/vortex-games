@@ -275,12 +275,20 @@ function migrate200(api, oldVersion) {
     return Promise.resolve();
   }
 
+  let bmp;
+  try {
+    bmp = baseModPath();
+  } catch (err) {
+    // if there is no mod path, there is nothing to migrate anyway. Hopefully
+    return Promise.resolve();
+  }
+
   // would be good to inform the user beforehand but since this is run in the main process
   // and we can't currently show a (working) dialog from the main process it has to be
   // this way.
   return api.awaitUI()
     .then(() => new Promise((resolve) => { setTimeout(() => resolve(), 10000); } ))
-    .then(() => api.emitAndAwait('purge-mods-in-path', '', baseModPath()))
+    .then(() => api.emitAndAwait('purge-mods-in-path', '', bmp))
     .then(() => {
       api.store.dispatch(actions.setDeploymentNecessary('thesims4', true));
     });
