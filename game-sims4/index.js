@@ -55,14 +55,15 @@ function findModPath() {
       'Locale');
     if (!!candidate) {
       locale = candidate.value;
-      if (LOCALE_MODS_FOLDER[locale] === undefined) {
-        throw new Error(`Sorry, this locale "${locale}" is not currently supported. `
-                      + 'If you let us know about this and tell us how the localized mods directory '
-                      + 'for your version of the game is ("The Sims 4" in english) we will add it '
-                      + 'asap.');
-      }
     }
   } catch (err) { }
+
+  if (LOCALE_MODS_FOLDER[locale] === undefined) {
+    throw new Error(`Sorry, this locale "${locale}" is not currently supported. `
+      + 'If you let us know about this and tell us how the localized mods directory '
+      + 'for your version of the game is ("The Sims 4" in english) we will add it '
+      + 'asap.');
+  }
 
   const eaPath = path.join(appUni.getPath('documents'), 'Electronic Arts');
 
@@ -71,7 +72,7 @@ function findModPath() {
   if (locale === undefined) {
     locale = Object.keys(LOCALE_MODS_FOLDER).find(candidate => {
       try {
-        const modsFolder = path.join(eaPath, candidate);
+        const modsFolder = path.join(eaPath, LOCALE_MODS_FOLDER[candidate]);
         fs.statSync(modsFolder);
         return true;
       } catch (err) {
@@ -271,7 +272,7 @@ function getMixedPath() {
 }
 
 function migrate200(api, oldVersion) {
-  if (semver.gte(oldVersion, '2.0.0')) {
+  if (semver.gte(oldVersion || '0.0.1', '2.0.0')) {
     return Promise.resolve();
   }
 
@@ -288,7 +289,7 @@ function migrate200(api, oldVersion) {
   // this way.
   return api.awaitUI()
     .then(() => new Promise((resolve) => { setTimeout(() => resolve(), 10000); } ))
-    .then(() => api.emitAndAwait('purge-mods-in-path', '', bmp))
+    .then(() => api.emitAndAwait('purge-mods-in-path', 'thesims4', '', bmp))
     .then(() => {
       api.store.dispatch(actions.setDeploymentNecessary('thesims4', true));
     });
