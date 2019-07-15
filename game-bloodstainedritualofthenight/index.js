@@ -54,8 +54,15 @@ function installContent(files) {
 
 function testSupportedContent(files, gameId) {
   // Make sure we're able to support this mod.
-  const supported = (gameId === BLOODSTAINED_ID) &&
+  let supported = (gameId === BLOODSTAINED_ID) &&
     (files.find(file => path.extname(file).toLowerCase() === MOD_FILE_EXT) !== undefined);
+
+  if (supported && files.find(file =>
+      (path.basename(file).toLowerCase() === 'moduleconfig.xml')
+      && (path.basename(path.dirname(file)).toLowerCase() === 'fomod'))) {
+    supported = false;
+  }
+
   return Promise.resolve({
     supported,
     requiredFiles: [],
