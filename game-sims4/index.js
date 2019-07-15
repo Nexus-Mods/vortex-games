@@ -4,14 +4,11 @@ const winapi = require('winapi-bindings');
 const { remote, app } = require('electron');
 const path = require('path');
 const semver = require('semver');
-const { actions, fs } = require('vortex-api');
+const { actions, fs, log } = require('vortex-api');
 
 const appUni = app || remote.app;
 
 // The Sims 4 mods folder may be affected by localization.
-//  Judging by Origin's install manifest the game will generally
-//  use the en_US localization form for most locales except for
-//  de_DE, es_ES, fr_FR and nl_NL.
 const LOCALE_MODS_FOLDER = {
   en_US: 'The Sims 4',
   de_DE: 'Die Sims 4',
@@ -58,11 +55,8 @@ function findModPath() {
     }
   } catch (err) { }
 
-  if (LOCALE_MODS_FOLDER[locale] === undefined) {
-    throw new Error(`Sorry, this locale "${locale}" is not currently supported. `
-      + 'If you let us know about this and tell us how the localized mods directory '
-      + 'for your version of the game is ("The Sims 4" in english) we will add it '
-      + 'asap.');
+  if ((locale !== undefined) && (LOCALE_MODS_FOLDER[locale] === undefined)) {
+    locale = undefined;
   }
 
   const eaPath = path.join(appUni.getPath('documents'), 'Electronic Arts');
@@ -81,13 +75,14 @@ function findModPath() {
     });
   }
 
-  if (locale !== undefined) {
-    return path.join(eaPath, LOCALE_MODS_FOLDER[locale], 'Mods');
+  if (locale === undefined) {
+    // fall back to english directory name ("The Sims 4") because that's what
+    // practically all variants use.
+    log('warn', '[The Sims 4] Falling back to default mod directory because locale is unknown');
+    locale = 'en_US';
   }
 
-  throw new Error('Couldn\'t find the mods directory for Sims 4. Please make sure you have run it at least once. '
-    + 'If you report this as a bug, please let us know where the directory is located on your system.');
-
+  return path.join(eaPath, LOCALE_MODS_FOLDER[locale], 'Mods');
 }
 
 function baseModPath() {
