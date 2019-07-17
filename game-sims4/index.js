@@ -284,6 +284,7 @@ function migrate200(api, oldVersion) {
   // this way.
   return api.awaitUI()
     .then(() => new Promise((resolve) => { setTimeout(() => resolve(), 10000); } ))
+    .then(() => api.emitAndAwait('purge-mods-in-path', 'thesims4', '', path.join(bmp, MODS_SUB_PATH)))
     .then(() => api.emitAndAwait('purge-mods-in-path', 'thesims4', '', bmp))
     .then(() => {
       api.store.dispatch(actions.setDeploymentNecessary('thesims4', true));
