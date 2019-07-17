@@ -4,7 +4,7 @@ const winapi = require('winapi-bindings');
 const { remote, app } = require('electron');
 const path = require('path');
 const semver = require('semver');
-const { actions, fs, log } = require('vortex-api');
+const { actions, fs, log, util } = require('vortex-api');
 
 const appUni = app || remote.app;
 
@@ -268,6 +268,19 @@ function getMixedPath() {
 
 function migrate200(api, oldVersion) {
   if (semver.gte(oldVersion || '0.0.1', '2.0.1')) {
+    return Promise.resolve();
+  }
+
+  const state = api.store.getState();
+  const activatorId = util.getSafe(state, ['settings', 'mods', 'activator', 'thesims4'], undefined);
+  const gameDiscovery =
+    util.getSafe(state, ['settings', 'gameMode', 'discovered', 'thesims4'], undefined);
+
+  if ((gameDiscovery === undefined)
+      || (gameDiscovery.path === undefined)
+      || (activatorId === undefined)) {
+    // if this game is not discovered or deployed there is no need to migrate
+    log('debug', 'skipping sims 4 migration because no deployment set up for it');
     return Promise.resolve();
   }
 
