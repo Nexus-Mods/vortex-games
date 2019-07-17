@@ -267,7 +267,7 @@ function getMixedPath() {
 }
 
 function migrate200(api, oldVersion) {
-  if (semver.gte(oldVersion || '0.0.1', '2.0.0')) {
+  if (semver.gte(oldVersion || '0.0.1', '2.0.1')) {
     return Promise.resolve();
   }
 
