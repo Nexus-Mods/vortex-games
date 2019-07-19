@@ -1,6 +1,6 @@
 const Promise = require('bluebird');
 const path = require('path');
-const { actions, fs, util } = require('vortex-api');
+const { actions, fs, log, util } = require('vortex-api');
 const rjson = require('relaxed-json');
 const semver = require('semver');
 
