@@ -9,7 +9,6 @@ const
 
 const MANIFEST_FILE = 'manifest.json';
 const GAME_ID = 'stardewvalley';
-const PTRN_MODS = path.sep + 'Mods' + path.sep;
 const PTRN_CONTENT = path.sep + 'Content' + path.sep;
 
 class StardewValley {
@@ -197,22 +196,23 @@ async function getModName(destinationPath, manifestFile) {
 }
 
 async function testRootFolder(files, gameId) {
-  // If we find a "Content" folder in the same relative path
-  //  to "Mods", we can safely assume that this mod is supposed
-  //  to go in the game's root directory.
+  // We assume that any mod containing "/Content/" in its directory
+  //  structure is meant to be deployed to the root folder.
   const filtered = files.filter(file => file.endsWith(path.sep))
     .map(file => path.join('fakeDir', file));
-  const modsFile = filtered.find(file => file.endsWith(PTRN_MODS));
-  const contentFile = filtered.find(file => file.endsWith(PTRN_CONTENT));
+  const contentDir = filtered.find(file => file.endsWith(PTRN_CONTENT));
   const supported = ((gameId === GAME_ID)
-    && (contentFile !== undefined)
-    && (modsFile !== undefined)
-    && (path.relative(contentFile, modsFile) === '..' + path.sep + 'Mods'));
+    && (contentDir !== undefined));
 
   return { supported };
 }
 
 async function installRootFolder(files, destinationPath) {
+  // We're going to deploy "/Content/" and whatever folders come alongside it.
+  //  i.e. SomeMod.7z
+  //  Will be deployed     => ../SomeMod/Content/
+  //  Will be deployed     => ../SomeMod/Mods/
+  //  Will NOT be deployed => ../Readme.doc
   const contentFile = files.find(file => file.endsWith(PTRN_CONTENT));
   const idx = contentFile.indexOf(PTRN_CONTENT) + 1;
   const rootDir = path.basename(contentFile.substring(0, idx));
@@ -306,11 +306,7 @@ module.exports = {
     context.registerInstaller('stardew-valley-installer', 50, testSupported, install);
     context.registerInstaller('sdvrootfolder', 50, testRootFolder, installRootFolder);
     context.registerModType('sdvrootfolder', 25, (gameId) => (gameId === GAME_ID),
-      () => getDiscoveryPath(), (instructions) => {
-        const contentRoot = instructions.find(instr => instr.destination.startsWith('Content' + path.sep));
-        const modsRoot = instructions.find(instr => instr.destination.startsWith('Mods' + path.sep));
-        return ((modsRoot === undefined) || (contentRoot === undefined))
-          ? Promise.resolve(false) : Promise.resolve(true);
-      });
+      () => getDiscoveryPath(), (instructions) => Promise.resolve(instructions.find(instr =>
+        instr.destination.startsWith('Content' + path.sep)) !== undefined));
   }
 }
