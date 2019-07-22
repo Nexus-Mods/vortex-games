@@ -213,7 +213,7 @@ async function installRootFolder(files, destinationPath) {
   //  Will be deployed     => ../SomeMod/Content/
   //  Will be deployed     => ../SomeMod/Mods/
   //  Will NOT be deployed => ../Readme.doc
-  const contentFile = files.find(file => file.endsWith(PTRN_CONTENT));
+  const contentFile = files.find(file => path.join('fakeDir', file).endsWith(PTRN_CONTENT));
   const idx = contentFile.indexOf(PTRN_CONTENT) + 1;
   const rootDir = path.basename(contentFile.substring(0, idx));
   const filtered = files.filter(file => (path.extname(file) !== '')
