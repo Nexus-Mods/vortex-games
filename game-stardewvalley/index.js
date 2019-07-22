@@ -8,6 +8,9 @@ const
   winapi = require('winapi-bindings');
 
 const MANIFEST_FILE = 'manifest.json';
+const GAME_ID = 'stardewvalley';
+const PTRN_MODS = path.sep + 'Mods' + path.sep;
+const PTRN_CONTENT = path.sep + 'Content' + path.sep;
 
 class StardewValley {
   /*********
@@ -20,7 +23,7 @@ class StardewValley {
   constructor(context) {
     // properties used by Vortex
     this.context = context;
-    this.id = 'stardewvalley';
+    this.id = GAME_ID;
     this.name = 'Stardew Valley';
     this.logo = 'gameart.png';
     this.requiredFiles = process.platform == 'win32'
@@ -193,9 +196,50 @@ async function getModName(destinationPath, manifestFile) {
   }
 }
 
+async function testRootFolder(files, gameId) {
+  // If we find a "Content" folder in the same relative path
+  //  to "Mods", we can safely assume that this mod is supposed
+  //  to go in the game's root directory.
+  const filtered = files.filter(file => file.endsWith(path.sep))
+    .map(file => path.join('fakeDir', file));
+  const modsFile = filtered.find(file => file.endsWith(PTRN_MODS));
+  const contentFile = filtered.find(file => file.endsWith(PTRN_CONTENT));
+  const supported = ((gameId === GAME_ID)
+    && (contentFile !== undefined)
+    && (modsFile !== undefined)
+    && (path.relative(contentFile, modsFile) === '..' + path.sep + 'Mods'));
+
+  return { supported };
+}
+
+async function installRootFolder(files, destinationPath) {
+  const contentFile = files.find(file => file.endsWith(PTRN_CONTENT));
+  const idx = contentFile.indexOf(PTRN_CONTENT) + 1;
+  const rootDir = path.basename(contentFile.substring(0, idx));
+  const filtered = files.filter(file => (path.extname(file) !== '')
+    && (file.indexOf(rootDir) !== -1)
+    && (path.extname(file) !== '.txt'));
+  const instructions = filtered.map(file => {
+    return {
+      type: 'copy',
+      source: file,
+      destination: file.substr(idx),
+    };
+  });
+
+  return { instructions };
+}
+
 async function testSupported(files, gameId) {
-  const supported = (gameId === 'stardewvalley') && 
-    (files.find(file => path.basename(file).toLowerCase() === MANIFEST_FILE) !== undefined)
+  const supported = (gameId === GAME_ID)
+    && (files.find(file => path.basename(file).toLowerCase() === MANIFEST_FILE) !== undefined)
+    && (files.find(file => {
+      // We create a prefix fake directory just in case the content
+      //  folder is in the archive's root folder. This is to ensure we
+      //  find a match for "/Content/"
+      const testFile = path.join('fakeDir', file);
+      return (testFile.endsWith(PTRN_CONTENT));
+    }) === undefined);
   return { supported }
 }
 
@@ -247,7 +291,26 @@ async function install(files,
 
 module.exports = {
   default: function(context) {
+    const getDiscoveryPath = () => {
+      const state = context.api.store.getState();
+      const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
+      if ((discovery === undefined) || (discovery.path === undefined)) {
+        // should never happen and if it does it will cause errors elsewhere as well
+        log('error', 'stardewvalley was not discovered');
+        return undefined;
+      }
+
+      return discovery.path;
+    }
     context.registerGame(new StardewValley(context));
     context.registerInstaller('stardew-valley-installer', 50, testSupported, install);
+    context.registerInstaller('sdvrootfolder', 50, testRootFolder, installRootFolder);
+    context.registerModType('sdvrootfolder', 25, (gameId) => (gameId === GAME_ID),
+      () => getDiscoveryPath(), (instructions) => {
+        const contentRoot = instructions.find(instr => instr.destination.startsWith('Content' + path.sep));
+        const modsRoot = instructions.find(instr => instr.destination.startsWith('Mods' + path.sep));
+        return ((modsRoot === undefined) || (contentRoot === undefined))
+          ? Promise.resolve(false) : Promise.resolve(true);
+      });
   }
 }
