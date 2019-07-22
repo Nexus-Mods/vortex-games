@@ -1,6 +1,6 @@
 const Promise = require('bluebird');
 const path = require('path');
-const { actions, fs, util } = require('vortex-api');
+const { actions, fs, log, util } = require('vortex-api');
 const rjson = require('relaxed-json');
 const semver = require('semver');
 
@@ -162,7 +162,7 @@ async function installOfficialMod(files,
     );
   });
 
-  const modFile = files.find(file => path.basename(file) === OFFICIAL_MOD_MANIFEST);
+  const modFile = files.find(file => path.basename(file).toLowerCase() === OFFICIAL_MOD_MANIFEST);
   const idx = modFile.indexOf(path.basename(modFile));
   const rootPath = path.dirname(modFile);
   const discoveryPath = getDiscoveryPath(api);
