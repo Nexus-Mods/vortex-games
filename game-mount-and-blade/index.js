@@ -48,7 +48,7 @@ const MAB_GAMES = {
   },
   mbwarband: {
     id: 'mbwarband',
-    name: 'Mount & Blade: Warband',
+    name: 'Mount & Blade:\tWarband',
     steamId: '48700',
     regPath: steamReg + '48700',
     logo: 'gameartwarband.png',
@@ -57,7 +57,7 @@ const MAB_GAMES = {
   },
   mbwithfireandsword: {
     id: 'mbwithfireandsword',
-    name: 'Mount & Blade: With Fire and Sword',
+    name: 'Mount & Blade:\tWith Fire and Sword',
     steamId: '48720',
     regPath: steamReg + '48720',
     logo: 'gameartfire.png',

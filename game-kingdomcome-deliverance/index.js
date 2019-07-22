@@ -20,7 +20,7 @@ function transformId(input) {
 function main(context) {
   context.registerGame({
     id: 'kingdomcomedeliverance',
-    name: 'Kingdom Come: Deliverance',
+    name: 'Kingdom Come:\tDeliverance',
     mergeMods: mod => transformId(mod.id),
     queryPath: findGame,
     queryModPath: () => 'Mods',

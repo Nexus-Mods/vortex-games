@@ -50,7 +50,7 @@ function main(context) {
   _API = context.api;
   context.registerGame({
     id: GAME_ID,
-    name: 'Vampire the Masquerade - Bloodlines',
+    name: 'Vampire the Masquerade\tBloodlines',
     logo: 'gameart.png',
     mergeMods: true,
     queryPath: findGame,

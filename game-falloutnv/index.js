@@ -53,7 +53,7 @@ let tools = [
 function main(context) {
   context.registerGame({
     id: 'falloutnv',
-    name: 'Fallout: New Vegas',
+    name: 'Fallout:\tNew Vegas',
     shortName: 'New Vegas',
     mergeMods: true,
     queryPath: findGame,

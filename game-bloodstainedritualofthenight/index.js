@@ -13,7 +13,7 @@ function findGame() {
 }
 
 function prepareForModding(discovery) {
-  return fs.ensureDirWritableAsync(path.join(discovery.path, 'BloodstainedRotN/Content/Paks/~mod'),
+  return fs.ensureDirWritableAsync(path.join(discovery.path, 'BloodstainedRotN', 'Content', 'Paks', '~mod'),
     () => Promise.resolve());
 }
 
@@ -59,7 +59,7 @@ function testSupportedContent(files, gameId) {
 function main(context) {
   context.registerGame({
     id: BLOODSTAINED_ID,
-    name: 'Bloodstained: Ritual of the Night',
+    name: 'Bloodstained:\tRitual of the Night',
     mergeMods: true,
     queryPath: findGame,
     supportedTools: [],

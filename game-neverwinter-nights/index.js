@@ -98,7 +98,7 @@ function main(context) {
 
   context.registerGame({
     id: NWNEE_GAME_ID,
-    name: 'Neverwinter Nights: Enhanced Edition',
+    name: 'Neverwinter Nights:\tEnhanced Edition',
     mergeMods: true,
     queryPath: findGameEE,
     queryModPath: modPathEE,

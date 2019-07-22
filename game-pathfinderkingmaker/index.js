@@ -6,7 +6,7 @@ const {actions, fs, util} = require('vortex-api');
 const IsWin = process.platform === 'win32';
 
 const NexusId = 'pathfinderkingmaker';
-const Name = 'Pathfinder: Kingmaker';
+const Name = 'Pathfinder:\tKingmaker';
 const ExeName = 'Kingmaker';
 const SteamId = 640820;
 
