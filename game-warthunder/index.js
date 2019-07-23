@@ -35,8 +35,9 @@ function prepareForModding(discovery) {
 }
 
 function isAudioModType(instructions) {
-  return Promise.resolve(instructions.find(inst =>
-    inst.source.endsWith(AUDIO_EXT)) !== undefined);
+  const audioFile = instructions.find(inst =>
+    (inst.type === 'copy') && inst.source.endsWith(AUDIO_EXT));
+  return Promise.resolve(audioFile !== undefined);
 }
 
 function main(context) {
