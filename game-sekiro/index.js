@@ -32,7 +32,7 @@ function prepareForModding(discovery) {
   });
 
   // Check whether mod engine is installed.
-  return fs.ensureDirWritableAsync(path.join(discovery.path, 'mods', 'parts'))
+  return fs.ensureDirWritableAsync(path.join(discovery.path, 'mods', 'parts'), () => Promise.resolve())
     .then(() => fs.statAsync(modEngineDInput)
       .catch(err => (err.code === 'ENOENT')
         ? showModEngineDialog()
