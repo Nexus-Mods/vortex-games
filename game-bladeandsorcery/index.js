@@ -292,16 +292,18 @@ function installUMAPresetReplacer(files,
 }
 
 function instructionsHaveFile(instructions, fileName) {
+  const copies = instructions.filter(instruction => instruction.type === 'copy');
   return new Promise((resolve, reject) => {
-    const fileExists = instructions.find(inst => path.basename(inst.destination).toLowerCase() === fileName) !== undefined;
+    const fileExists = copies.find(inst => path.basename(inst.destination).toLowerCase() === fileName) !== undefined;
     return resolve(fileExists);
   })
 }
 
 function testUMAContent(instructions) {
+  const copies = instructions.filter(instruction => instruction.type === 'copy');
   return new Promise((resolve, reject) => {
-    const isUMAMod = (instructions.find(file => path.basename(file.destination) === RESOURCES_FILE) !== undefined)
-                  && (instructions.find(file => path.dirname(file.destination).indexOf(UMA_PRESETS_FOLDER) !== -1) !== undefined);
+    const isUMAMod = (copies.find(file => path.basename(file.destination) === RESOURCES_FILE) !== undefined)
+                  && (copies.find(file => path.dirname(file.destination).indexOf(UMA_PRESETS_FOLDER) !== -1) !== undefined);
     return resolve(isUMAMod);
   })
 }
