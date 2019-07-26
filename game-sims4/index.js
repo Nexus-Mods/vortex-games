@@ -296,7 +296,6 @@ function migrate200(api, oldVersion) {
   // and we can't currently show a (working) dialog from the main process it has to be
   // this way.
   return api.awaitUI()
-    .then(() => new Promise((resolve) => { setTimeout(() => resolve(), 10000); } ))
     .then(() => api.emitAndAwait('purge-mods-in-path', 'thesims4', '', path.join(bmp, MODS_SUB_PATH)))
     .then(() => api.emitAndAwait('purge-mods-in-path', 'thesims4', '', bmp))
     .then(() => {
