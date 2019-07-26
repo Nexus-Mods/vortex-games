@@ -307,6 +307,6 @@ module.exports = {
     context.registerInstaller('sdvrootfolder', 50, testRootFolder, installRootFolder);
     context.registerModType('sdvrootfolder', 25, (gameId) => (gameId === GAME_ID),
       () => getDiscoveryPath(), (instructions) => Promise.resolve(instructions.find(instr =>
-        instr.destination.startsWith('Content' + path.sep)) !== undefined));
+        (instr.type === 'copy') && (instr.destination.startsWith('Content' + path.sep))) !== undefined));
   }
 }
