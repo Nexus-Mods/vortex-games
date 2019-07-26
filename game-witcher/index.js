@@ -24,8 +24,9 @@ function findGame() {
 }
 
 function testUserContent(instructions) {
-  return Promise.resolve(instructions.find(
-    instruction => path.basename(instruction.destination) === 'cook.hash') !== undefined);
+  return Promise.resolve(instructions.find(instruction =>
+    (instruction.type === 'copy')
+      && (path.basename(instruction.destination) === 'cook.hash')) !== undefined);
 }
 
 function prepareForModding(discovery) {
