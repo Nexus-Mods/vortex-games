@@ -1,21 +1,12 @@
-const Promise = require('bluebird');
 const { util } = require('vortex-api');
-const winapi = require('winapi-bindings');
+const path = require('path');
+
+const STEAM_ID = 440;
+const GAME_ID = 'teamfortress2';
 
 function findGame() {
-  try {
-    const instPath = winapi.RegGetValue(
-      'HKEY_LOCAL_MACHINE',
-      'Software\\Wow6432Node\\Steam\\steamapps\\common\\Team Fortress 2',
-      'Installed Path');
-    if (!instPath) {
-      throw new Error('empty registry key');
-    }
-    return Promise.resolve(instPath.value);
-  } catch (err) {
-    return util.steam.findByName('Team Fortress 2')
-      .then(game => game.gamePath);
-  }
+  return util.steam.findByAppId(STEAM_ID.toString())
+    .then(game => game.gamePath);
 }
 
 let tools = [
@@ -32,24 +23,25 @@ let tools = [
 
 function main(context) {
   context.registerGame({
-    id: 'teamfortress2',
+    id: GAME_ID,
     name: 'Team Fortress 2',
     shortName: 'TF2',
     mergeMods: true,
     queryPath: findGame,
     supportedTools: tools,
-    queryModPath: () => 'tf\\custom',
+    queryModPath: () => path.join('tf', 'custom'),
     logo: 'gameart.png',
     executable: () => 'hl2.exe',
     requiredFiles: [
       'hl2.exe',
+      path.join('tf', 'gameinfo.txt'),
     ],
     environment: {
-      SteamAPPId: '440',
+      SteamAPPId: STEAM_ID.toString(),
     },
     details: {
-      steamAppId: 440,
-      nexusPageId: 'teamfortress2',
+      steamAppId: STEAM_ID,
+      nexusPageId: GAME_ID,
     }
   });
   return true;
