@@ -13,9 +13,11 @@ const LOCALE_MODS_FOLDER = {
   en_US: 'The Sims 4',
   de_DE: 'Die Sims 4',
   es_ES: 'Los Sims 4',
-  fr_FR: 'Les Sims 4',
+  // Yeah, the french even have more fancy directory names than everyone else...
+  // \u00a0 is a unicode "no-break space"
+  fr_FR: 'Les\u00a0Sims\u00a04',
   nl_NL: 'De Sims 4',
-}
+};
 
 const MODS_SUB_PATH = 'Vortex Mods';
 // attention: if this is changed, vortex will be unable to correctly filter
