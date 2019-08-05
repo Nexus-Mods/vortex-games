@@ -82,6 +82,7 @@ function migrate100(api, oldVersion) {
   // and we can't currently show a (working) dialog from the main process it has to be
   // this way.
   return api.awaitUI()
+    .then(() => fs.ensureDirWritableAsync(path.join(discovery.path, relModPath)))
     .then(() => api.emitAndAwait('purge-mods-in-path', BLOODSTAINED_ID, '', path.join(discovery.path, oldModPath)))
     .then(() => {
       api.store.dispatch(actions.setDeploymentNecessary(BLOODSTAINED_ID, true));

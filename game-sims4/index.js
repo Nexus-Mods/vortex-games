@@ -298,6 +298,7 @@ function migrate200(api, oldVersion) {
   // and we can't currently show a (working) dialog from the main process it has to be
   // this way.
   return api.awaitUI()
+    .then(() => fs.ensureDirWritableAsync(path.join(bmp, MODS_SUB_PATH)))
     .then(() => api.emitAndAwait('purge-mods-in-path', 'thesims4', '', path.join(bmp, MODS_SUB_PATH)))
     .then(() => api.emitAndAwait('purge-mods-in-path', 'thesims4', '', bmp))
     .then(() => {
