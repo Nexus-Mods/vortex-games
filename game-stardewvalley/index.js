@@ -306,7 +306,38 @@ module.exports = {
     context.registerInstaller('stardew-valley-installer', 50, testSupported, install);
     context.registerInstaller('sdvrootfolder', 50, testRootFolder, installRootFolder);
     context.registerModType('sdvrootfolder', 25, (gameId) => (gameId === GAME_ID),
-      () => getDiscoveryPath(), (instructions) => Promise.resolve(instructions.find(instr =>
-        (instr.type === 'copy') && (instr.destination.startsWith('Content' + path.sep))) !== undefined));
+      () => getDiscoveryPath(), (instructions) => {
+        // Only interested in copy instructions.
+        const copyInstructions = instructions.filter(instr => instr.type === 'copy');
+        // This is a tricky pattern so we're going to 1st present the different packaging
+        //  patterns we need to cater for:
+        //  1. Replacement mod with "Content" folder. Does not require SMAPI so no
+        //    manifest files are included.
+        //  2. Replacement mod with "Content" folder + one or more SMAPI mods included
+        //    alongside the Content folder inside a "Mods" folder.
+        //  3. A regular SMAPI mod with a "Content" folder inside the mod's root dir.
+        //
+        // pattern 1:
+        //  - Ensure we don't have manifest files
+        //  - Ensure we have a "Content" folder
+        //
+        // To solve patterns 2 and 3 we're going to:
+        //  Check whether we have any manifest files, if we do, we expect the following
+        //    archive structure in order for the modType to function correctly:
+        //    archive.zip =>
+        //      ../Content/
+        //      ../Mods/
+        //      ../Mods/A_SMAPI_MOD\manifest.json
+        const hasManifest = copyInstructions.find(instr =>
+          instr.destination.endsWith(MANIFEST_FILE))
+        const hasModsFolder = copyInstructions.find(instr =>
+          instr.destination.startsWith('Mods' + path.sep)) !== undefined;
+        const hasContentFolder = copyInstructions.find(instr =>
+          instr.destination.startsWith('Content' + path.sep)) !== undefined
+
+        return (hasManifest)
+          ? Promise.resolve(hasContentFolder && hasModsFolder)
+          : Promise.resolve(hasContentFolder);
+      });
   }
 }
