@@ -1,7 +1,7 @@
 const path = require('path');
 const { app, remote } = require('electron');
 const winapi = require('winapi-bindings');
-const { fs, log, util } = require('vortex-api');
+const { fs, util } = require('vortex-api');
 
 const appUni = app || remote.app;
 
@@ -10,8 +10,6 @@ const GAME_ID = 'torchlight2';
 
 const STEAM_ID = '200710';
 
-// All AHiT mods are expected to have this file in the mod's
-//  root folder.
 const MOD_EXT = '.mod';
 
 function modPath() {
