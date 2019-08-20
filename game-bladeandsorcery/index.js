@@ -3,6 +3,7 @@ const path = require('path');
 const { actions, fs, log, util } = require('vortex-api');
 const rjson = require('relaxed-json');
 const semver = require('semver');
+const shortId = require('shortid');
 
 // Nexus Mods id for the game.
 const BLADEANDSORCERY_ID = 'bladeandsorcery';
@@ -79,14 +80,12 @@ function streamingAssetsPath() {
   return path.join('BladeAndSorcery_Data', 'StreamingAssets');
 }
 
-async function checkModGameVersion(destination, discoveryPath, modFile) {
+async function checkModGameVersion(destination, coercedGlobal, modFile) {
   try {
-    const globalGameVersion = await getJSONElement(path.join(discoveryPath, streamingAssetsPath(), 'Default', GLOBAL_FILE), 'gameVersion');
     const modVersion = await getJSONElement(path.join(destination, modFile), 'GameVersion');
     const coercedMod = semver.coerce(modVersion.toString());
-    const coercedGlobal = semver.coerce(globalGameVersion.toString());
-    if ((coercedMod === null) || (coercedGlobal === null)) {
-      return Promise.reject(new util.DataInvalid('Invalid GameVersion element'));
+    if (coercedMod === null) {
+      return Promise.reject(new util.DataInvalid('Mod manifest has an invalid GameVersion element'));
     }
 
     return Promise.resolve({
@@ -124,35 +123,61 @@ async function installOfficialMod(files,
     );
   });
 
-  const modFile = files.find(file => path.basename(file).toLowerCase() === OFFICIAL_MOD_MANIFEST);
-  const idx = modFile.indexOf(path.basename(modFile));
-  const rootPath = path.dirname(modFile);
   const discoveryPath = getDiscoveryPath(api);
+  const globalGameVersion = await getJSONElement(path.join(discoveryPath, streamingAssetsPath(), 'Default', GLOBAL_FILE), 'gameVersion');
+  const coercedGlobal = semver.coerce(globalGameVersion.toString());
+  if (coercedGlobal === null) {
+    return Promise.reject(new util.DataInvalid('Failed to identify game version'));
+  }
 
-  const modName = await getModName(destinationPath, modFile, 'Name', undefined);
-  const createInstructions = () => new Promise((resolve, reject) => {
-    // Remove directories and anything that isn't in the rootPath.
-    const filtered = files.filter(file =>
-      ((file.indexOf(rootPath) !== -1)
-      && (!file.endsWith(path.sep))));
+  const usedModNames = [];
 
-    const instructions = filtered.map(file => {
-      return {
-        type: 'copy',
-        source: file,
-        destination: path.join(modName, file.substr(idx)),
-      };
-    });
+  const manifestFiles = files.filter(file =>
+    path.basename(file).toLowerCase() === OFFICIAL_MOD_MANIFEST);
 
-    return resolve({ instructions });
+  const createInstructions = (manifestFile) =>
+    getModName(destinationPath, manifestFile, 'Name', undefined)
+      .then(manifestModName => {
+        const isUsedModName = usedModNames.find(modName => modName === manifestModName) !== undefined;
+        const modName = (isUsedModName)
+          ? manifestModName + '_' + shortId.generate()
+          : manifestModName;
+
+        usedModNames.push(modName);
+
+        const idx = manifestFile.indexOf(path.basename(manifestFile));
+        const rootPath = path.dirname(manifestFile);
+
+        // Remove directories and anything that isn't in the rootPath.
+        const filtered = files.filter(file =>
+          ((file.indexOf(rootPath) !== -1)
+          && (!file.endsWith(path.sep))));
+
+        const instructions = filtered.map(file => {
+          return {
+            type: 'copy',
+            source: file,
+            destination: path.join(modName, file.substr(idx)),
+          };
+        });
+
+        return Promise.resolve(instructions);
+      });
+
+  return Promise.map(manifestFiles, manFile =>
+    checkModGameVersion(destinationPath, coercedGlobal, manFile)
+    .then(res => (!res.match)
+      ? versionMismatchDialog(coercedGlobal.version, res.modVersion)
+          .then(() => createInstructions(manFile))
+      : createInstructions(manFile))
+  ).then(manifestMods => {
+    const instructions = manifestMods.reduce((prev, instructions) => {
+      prev = prev.concat(instructions);
+      return prev;
+    }, []);
+
+    return Promise.resolve({ instructions });
   });
-  return checkModGameVersion(destinationPath, discoveryPath, modFile)
-    .then(res => {
-      return (!res.match)
-        ? versionMismatchDialog(res.globalVersion, res.modVersion)
-            .then(() => createInstructions())
-        : createInstructions();
-    })
 }
 
 async function installMulleMod(files,
