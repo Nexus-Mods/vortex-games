@@ -9,10 +9,6 @@ const BLADEANDSORCERY_ID = 'bladeandsorcery';
 const RESOURCES_FILE = 'resources.assets';
 const UMA_PRESETS_FOLDER = 'UMAPresets';
 
-// MulleDK19's seems to be using the ConstructCache folder to store
-//  mod textures separately ? great...
-const CONSTRUCT_CACHE = 'ConstructCache';
-
 // MulleDK19 B&S mods are expected to have this json file at its root directory.
 const MULLE_MOD_INFO = 'mod.json';
 
@@ -24,18 +20,6 @@ const OFFICIAL_MOD_MANIFEST = 'manifest.json';
 //  gameversion and inform users of possible incompatibility.
 //  (The global file is located in the game's StreamedAssets/Default path)
 const GLOBAL_FILE = 'Global.json';
-
-// let tools = [
-//   {
-//     id: 'BandSModLoader',
-//     name: 'MulleDK19 Mod Loader',
-//     executable: () => 'BASModLoaderConfig.exe',
-//     requiredFiles: [
-//       'BASModLoaderConfig.exe',
-//     ],
-//     relative: true,
-//   }
-// ]
 
 async function getJSONElement(filePath, element) {
   return fs.readFileAsync(filePath, { encoding: 'utf-8' })
@@ -77,30 +61,8 @@ function findGame() {
 }
 
 function prepareForModding(discovery, api) {
-  // MulleDK19's mod loader is no longer being updated (http://treesoft.dk/bas/modloader/);
-  //  leaving this code commented out for now, just in case he changes his mind.
-
-  // return fs.statAsync(path.join(discovery.path, 'BASModLoaderConfig.exe'))
-  //   .catch(err => api.sendNotification({
-  //     type: 'info',
-  //     message: 'MulleDK19 mod loader is missing',
-  //     actions: [
-  //       { title: 'More', action: (dismiss) =>
-  //         api.showDialog('info', 'MulleDK19 Mod Loader', {
-  //           text: api.translate('Certain B&S mods require MulleDK19\'s mod loader '
-  //                             + 'to function correctly. These mods are easily identifiable '
-  //                             + 'by the mod.json file; any mods that include that file will '
-  //                             + 'require the mod loader to be installed and configured.')
-  //         }, [ { label: 'Go to Mod Loader Page', action: () => {
-  //           util.opn('http://treesoft.dk/bas/modloader/download.html');
-  //           dismiss();
-  //           }}, {label: 'Close', action: () => dismiss() } ])
-  //       },
-  //     ],
-  //   }))
-  //   .then(() =>
-    return fs.ensureDirWritableAsync(path.join(discovery.path, streamingAssetsPath()),
-      () => Promise.resolve());//);
+  return fs.ensureDirWritableAsync(path.join(discovery.path, streamingAssetsPath()),
+    () => Promise.resolve());
 }
 
 function testModInstaller(files, gameId, fileName) {
@@ -199,7 +161,8 @@ async function installMulleMod(files,
                         progressDelegate,
                         api) {
   // MulleDK19's mod loader is no longer being updated and will not function
-  //  with B&S version 6.0 and higher (at least for now).
+  //  with B&S version 6.0 and higher. We're going to keep this modType installer
+  //  for the sake of stopping users from installing out of date mods.
   api.sendNotification({
     type: 'info',
     message: 'Incompatible Mod',
@@ -214,50 +177,6 @@ async function installMulleMod(files,
     ],
   });
   return Promise.reject(new util.ProcessCanceled());
-  // The mod.json file is expected to always be positioned in the root directory
-  //  of the mod itself; we're going to create the mod folder ourselves and place
-  //  the mod files within it.
-  // Some mods contain a ConstructCache folder which seems to be used to store/cache
-  //  certain textures. We're going to place these as well
-  // const isCacheFile = (filePath) => (filePath.endsWith(path.sep))
-  //                                && (filePath.indexOf(CONSTRUCT_CACHE) !== -1);
-  // const cacheFiles = files.filter(file => isCacheFile(file));
-  // let cacheIndex = undefined;
-  // if (cacheFiles.length > 0) {
-  //   // We just need to know the cache's index so we don't rely
-  //   //  on how the mod author packaged his files.
-  //   cacheIndex = cacheFiles[0].indexOf(CONSTRUCT_CACHE) + CONSTRUCT_CACHE.length;
-  // }
-  
-  // const modFile = files.find(file => path.basename(file) === MULLE_MOD_INFO);
-  // const idx = modFile.indexOf(path.basename(modFile));
-  // const rootPath = path.dirname(modFile);
-  // let modName = await getModName(destinationPath, modFile, 'Name', undefined);
-  // modName = modName.replace(/[^a-zA-Z0-9]/g, '');
-  // // Remove directories and anything that isn't in the rootPath.
-  // const filtered = files.filter(file =>
-  //   ((file.indexOf(rootPath) !== -1)
-  //   && (!file.endsWith(path.sep))));
-
-  // const instructions = filtered.map(file => {
-  //   return {
-  //     type: 'copy',
-  //     source: file,
-  //     destination: path.join('Mods', modName, file.substr(idx)),
-  //   };
-  // });
-
-  // if (cacheIndex !== undefined) {
-  //   cacheFiles.forEach(file => {
-  //     instructions.push({
-  //       type: 'copy',
-  //       source: file,
-  //       destination: path.join(CONSTRUCT_CACHE, file.substr(cacheIndex)),
-  //     });
-  //   });
-  // }
-
-  // return Promise.resolve({ instructions });
 }
 
 function installUMAPresetReplacer(files,
