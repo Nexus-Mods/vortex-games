@@ -254,17 +254,6 @@ const getDiscoveryPath = (api) => {
   return discovery.path;
 }
 
-// function getExecutable(discoveryPath) {
-//   const legacyExec = 'Blade & Sorcery.exe';
-//   const newExec = 'BladeAndSorcery.exe';
-//   try {
-//     fs.statSync(path.join(discoveryPath, legacyExec));
-//     return legacyExec;
-//   } catch (err) {
-//     return newExec;
-//   }
-// }
-
 function main(context) {
   const getUMADestination = () => {
     return path.join(getDiscoveryPath(context.api), 'BladeAndSorcery_Data');
