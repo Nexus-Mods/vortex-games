@@ -48,7 +48,7 @@ function prepareForModding(api) {
       title: 'Missing mods path',
       message: 'Please run the game at least once',
     })
-    return Promise.reject(new util.UserCancelled());
+    return Promise.reject(new util.ProcessCanceled('Mods directory doesn\'t exist'));
   };
   const defaultModFolder = path.join(modPath(), 'Factions');
   const crusadeModFolder = path.join(crusadeModPath(), 'Factions');
