@@ -276,6 +276,19 @@ function main(context) {
     requiredFiles: ['BladeAndSorcery.exe'],
     setup: (discovery) => prepareForModding(discovery, context.api),
     details: {
+      // The default queryModPath result is used for replacement mods,
+      //  this works in combination with the fomod stop patterns functionality
+      //  to correctly identify the folder structure which works quite well and
+      //  therefore should not be modified as that would require us to write duplicate code
+      //  for the same functionality which could possibly be less reliable than the battle
+      //  tested stop patterns.
+      //
+      // The BaS developers have requested that we do not open the StreamingAssets/Default
+      //  folder when users click the "Open Game Mods Folder" button on the mods page.
+      //  Instead of changing the path directly and write a migration function for such
+      //  a minor use case - we're going to provide a custom "Open Mods Path" value to be
+      //  used by the open-directory extension.
+      customOpenModsPath: streamingAssetsPath(),
       steamAppId: 629730,
     },
   });
