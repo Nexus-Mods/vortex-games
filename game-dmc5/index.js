@@ -1,6 +1,6 @@
 const Promise = require('bluebird');
 const path = require('path');
-const { actions, fs, selectors, util } = require('vortex-api');
+const { actions, fs, log, selectors, util } = require('vortex-api');
 
 // Expected file name for the qbms script.
 const BMS_SCRIPT = path.join(__dirname, 'dmc5_pak_unpack.bms');
@@ -74,7 +74,15 @@ function prepareForModding(discovery, api) {
 }
 
 function testArchive(files, discoveryPath, archivePath, api) {
-  const checkLooseFiles = () => 
+  const reportIncompleteList = (found) => {
+    const foundFiles = found.map(f => f.filePath);
+    const difference = files.filter(x => !foundFiles.includes(x));
+    log('error', 'Incomplete file list/missing files', difference.join('\n'));
+    const error = new Error('Incomplete file list and/or missing files from game archive');
+    return Promise.reject(error);
+  };
+
+  const checkLooseFiles = () =>
     // Check whether we can find the files we're trying to extract
     //  inside the game's discoveryPath.
     Promise.each(files, file => fs.statAsync(path.join(discoveryPath, file)))
@@ -92,10 +100,10 @@ function testArchive(files, discoveryPath, archivePath, api) {
               // If we found any entries, this is clearly the right archive, but
               //  the file list may be missing entries - we cancel the process
               //  in this case.
-              ? Promise.reject(new util.NotFound('Incomplete file list'))
+              ? reportIncompleteList(data)
               : checkLooseFiles().then(res => (res)
                 ? Promise.resolve() // Found loose files - the files must've been invalidated, that's fine.
-                : Promise.reject(new util.DataInvalid('Files not found')))
+                : Promise.reject(new util.NotFound('Files not found')))
   }).finally(() => errorPromise);
 }
 
@@ -105,14 +113,14 @@ async function findArchiveFile(files, discoveryPath, api) {
   return new Promise((resolve, reject) => {
     return testArchive(files, discoveryPath, archivePath, api)
       .then(() => resolve(GAME_PAK_FILE))
-      .catch(util.DataInvalid, () => fs.readdirAsync(discoveryPath)
+      .catch(util.NotFound, () => fs.readdirAsync(discoveryPath)
         .then(entries => {
           const installedDLC = entries.filter(entry => entry.match(DLC_FOLDER_RGX));
           return Promise.each(installedDLC, dlc => {
             archivePath = path.join(discoveryPath, dlc, DLC_PAK_FILE);
             return testArchive(files, discoveryPath, archivePath, api)
               .then(() => resolve(path.join(dlc, DLC_PAK_FILE)))
-              .catch(util.DataInvalid, () => Promise.resolve());
+              .catch(util.NotFound, () => Promise.resolve());
           })
           .then(() => resolve(undefined))
         }))
@@ -311,7 +319,7 @@ function main(context) {
                 .then(() => (error === undefined)
                   ? Promise.resolve()
                   : Promise.reject(error))
-                .catch(util.DataInvalid, () => Promise.resolve())
+                .catch(util.NotFound, () => Promise.resolve())
                 .catch(err => context.api.showErrorNotification('Failed to invalidate file paths', err));
             })
         })
