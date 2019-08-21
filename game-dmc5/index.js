@@ -83,19 +83,20 @@ function testArchive(files, discoveryPath, archivePath, api) {
 
   let errorPromise = Promise.resolve();
   return api.emitAndAwait('quickbms-operation', GAME_ID, BMS_SCRIPT,
-    archivePath, discoveryPath, 'list', { wildCards: files }, found => {
-      errorPromise = (found.length === files.length)
-      ? Promise.resolve()
-      : (found.length > 0)
-        // If we found any entries, this is clearly the right archive, but 
-        //  the file list may be missing entries - we cancel the process
-        //  in this case.
-        ? Promise.reject(new util.NotFound('Incomplete file list'))
-        : checkLooseFiles().then(res => (res)
-          ? Promise.resolve() // Found loose files - the files must've been invalidated, that's fine.
-          : Promise.reject(new util.DataInvalid('Files not found')))
-      return Promise.resolve();
-    }).then(() => errorPromise);
+    archivePath, discoveryPath, 'list', { wildCards: files }, data => {
+      errorPromise = (data instanceof Error)
+        ? Promise.reject(data)
+        : (data.length === files.length)
+            ? Promise.resolve()
+            : (data.length > 0)
+              // If we found any entries, this is clearly the right archive, but
+              //  the file list may be missing entries - we cancel the process
+              //  in this case.
+              ? Promise.reject(new util.NotFound('Incomplete file list'))
+              : checkLooseFiles().then(res => (res)
+                ? Promise.resolve() // Found loose files - the files must've been invalidated, that's fine.
+                : Promise.reject(new util.DataInvalid('Files not found')))
+  }).finally(() => errorPromise);
 }
 
 async function findArchiveFile(files, discoveryPath, api) {
@@ -163,14 +164,19 @@ async function installQBMS(files, destinationPath, gameId, progressDelegate, api
         wildCards,
         overwrite: true,
       }
+      let error;
       const archivePath = path.join(discoveryPath, archivefile);
       return api.emitAndAwait('quickbms-operation', GAME_ID, BMS_SCRIPT,
-        archivePath, discoveryPath, 'extract', quickbmsOpts)
-        .then(() => generateFilteredList(filtered.map(file => file.destination)))
-        .then(() => api.emitAndAwait('quickbms-operation', GAME_ID, INVAL_SCRIPT,
-          archivePath, discoveryPath, 'write', {}))
-        .then(() => Promise.resolve({ instructions }))
-    });
+        archivePath, discoveryPath, 'extract', quickbmsOpts, err => { error = err; })
+          .then(() => (error === undefined)
+            ? generateFilteredList(filtered.map(file => file.destination))
+            : Promise.reject(error))
+          .then(() => api.emitAndAwait('quickbms-operation', GAME_ID, INVAL_SCRIPT,
+            archivePath, discoveryPath, 'write', {}, err => Promise.reject(err)))
+          .then(() => (error === undefined)
+            ? Promise.resolve({ instructions })
+            : Promise.reject(error));
+    })
 }
 
 function testSupportedContent(files, gameId) {
@@ -293,14 +299,21 @@ function main(context) {
                 wildCards,
                 overwrite: true,
               }
+              let error;
               const archivePath = path.join(discoveryPath, archivefile);
               return context.api.emitAndAwait('quickbms-operation', GAME_ID, BMS_SCRIPT,
-                archivePath, discoveryPath, 'extract', quickbmsOpts)
-                .then(() => generateFilteredList(relFilePaths))
+                archivePath, discoveryPath, 'extract', quickbmsOpts, err => { error = err; })
+                .then(() => (error === undefined)
+                  ? generateFilteredList(relFilePaths)
+                  : Promise.reject(error))
                 .then(() => context.api.emitAndAwait('quickbms-operation', GAME_ID, INVAL_SCRIPT,
-                  archivePath, discoveryPath, 'write', {}))
-                .catch(util.DataInvalid, () => Promise.resolve());
-            });
+                  archivePath, discoveryPath, 'write', {}, err => { error = err; }))
+                .then(() => (error === undefined)
+                  ? Promise.resolve()
+                  : Promise.reject(error))
+                .catch(util.DataInvalid, () => Promise.resolve())
+                .catch(err => context.api.showErrorNotification('Failed to invalidate file paths', err));
+            })
         })
     })
     .finally(() => { store.dispatch(actions.stopActivity('mods', 'invalidations')); })
