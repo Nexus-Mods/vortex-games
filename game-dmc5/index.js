@@ -49,7 +49,8 @@ function prepareForModding(discovery, api) {
                 + '2. DO NOT use any other modding tools alongside Vortex to mod the game as that can lead to your game ' 
                 + 'archives becoming corrupted - making a reinstallation necessary.<br/>'
                 + '3. It is necessary for you to click the "Invalidate Paths" button in the mods section after every time ' 
-                + 'the game is updated to ensure that your mods will work correctly.<br/>'
+                + 'the game is updated to ensure that your mods will work correctly.<br/><br/>'
+                + '[url=https://wiki.nexusmods.com/index.php/Modding_Devil_May_Cry_5_with_Vortex]Modding Devil May Cry 5 with Vortex[/url]'
         }, [ { label: 'Close', action: () => dismiss() } ])
       },
     ],
@@ -78,7 +79,18 @@ function testArchive(files, discoveryPath, archivePath, api) {
     const foundFiles = found.map(f => f.filePath);
     const difference = files.filter(x => !foundFiles.includes(x));
     log('error', 'Incomplete file list/missing files', difference.join('\n'));
-    const error = new Error('Incomplete file list and/or missing files from game archive');
+    api.showErrorNotification('Incomplete file list and/or missing files from game archive',
+      'Unfortunately Vortex cannot install this mod correctly as it seems to include one or more '
+      + 'unrecognized files.<br/><br/>'
+      + 'This can happen when:<br/>'
+      + '1. The game extension\'s hashlist is out of date and needs to be updated with the latest game files<br/>'
+      + '2. Your game archives do not include the files required for this mod to work (Probably missing DLC)<br/>'
+      + '3. The mod author has packed his mod incorrectly and has included files inside the "natives" folder '
+      + 'which were never supposed to be there.<br/><br/>'
+      + 'To report this issue, please use the feedback system and make sure you attach Vortex\'s latest log file '
+      + 'so we can review the missing files',
+      { isBBCode: true, allowReport: false })
+    const error = new util.ProcessCanceled('Incomplete file list and/or missing files from game archive');
     return Promise.reject(error);
   };
 
