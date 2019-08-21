@@ -1,0 +1,36 @@
+idstring "KPKA"
+get VERSION long
+get FILES long
+get DUMMY0 long
+
+set FILESTART longlong 0
+
+for i = 0 < FILES
+  savepos FILESTART
+  get NAME_CRC_L long
+  get NAME_CRC_U long
+  get OFFSET longlong
+  get ZSIZE longlong
+  get SIZE longlong
+  get FLAG longlong
+  get DUMMY2 long
+  get DUMMY3 long
+  namecrc NAME NAME_CRC_L "filtered.list" 32
+
+  strlen NAMEL NAME
+  getVarChr T NAME 0
+  if T == 48
+    continue
+  else
+    goto FILESTART
+    put 0 long
+    put 0 long
+    put 0 longlong
+    put 0 longlong
+    put 0 longlong
+    put 0 longlong
+    put 0 long
+    put 0 long
+    print "done"
+  endif
+next i
