@@ -73,7 +73,7 @@ function testSupportedContent(files, gameId) {
 }
 
 function main(context) {
-  const launcherPath = path.join('launcher', 'launcher.exe')
+  const launcherPath = path.join('launcher', 'launcher.exe');
   context.registerGame({
     id: TW3KINDOMS_ID,
     name: 'Total War: Three Kingdoms',
