@@ -16,13 +16,13 @@ const INVAL_SCRIPT = path.join(__dirname, 're2_pak_invalidate.bms');
 //  file to be generated and placed next to the input archive.
 const REVAL_SCRIPT = path.join(__dirname, 're2_pak_revalidate.bms');
 
-// DMC5 filenames are encrypted. The list file contains
+// RE2 filenames are encrypted. The list file contains
 //  the actual filenames mapped against their murmur3 hash.
 const FILE_LIST = path.join(__dirname, 're2_pak_names_release.list');
 
 let FILE_CACHE = [];
 
-// DMC5 requires us to invalidate/zero-out file entries within
+// RE2 requires us to invalidate/zero-out file entries within
 //  the game's pak file; the filtered.list file is generated
 //  using the full file list.
 const FILTERED_LIST = path.join(__dirname, 'filtered.list');
@@ -82,7 +82,7 @@ function prepareForModding(discovery, api) {
         api.showDialog('info', 'Important Information regarding RE2 Remake Modding', {
           bbcode: 'Before you start modding Resident Evil 2 (2019) please note that Vortex will need to '
                 + 'modify your game archives directly.<br/><br/>'
-                + 'Vortex will be invalidating and revalidating files paths during mod deployment or any time '
+                + 'Vortex will be invalidating and revalidating files paths during mod deployment/purge or any time '
                 + 'you click the "Invalidate Paths" button in the "Mods" section.<br/><br/>'
                 + 'For the best modding experience - and to avoid conflicts - please ensure the following:<br/><br/>'
                 + '1. Only use Vortex to install mods on a fresh, legitimate, vanilla (i.e. unmodified) copy of the game.<br/>'
