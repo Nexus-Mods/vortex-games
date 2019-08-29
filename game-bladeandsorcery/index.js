@@ -52,6 +52,9 @@ async function getModName(destination, modFile, element, ext) {
     return Promise.reject(new util.DataInvalid(`"${element}" JSON element is missing`));
   }
 
+  // remove all characters except for characters and numbers.
+  modName = modName.replace(/[^a-zA-Z0-9]+/g, "")
+
   return ext !== undefined
     ? Promise.resolve(path.basename(modName, ext))
     : Promise.resolve(modName);
