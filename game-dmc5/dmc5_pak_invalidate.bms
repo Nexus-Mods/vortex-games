@@ -4,17 +4,21 @@ get FILES long
 get DUMMY0 long
 
 set FILESTART longlong 0
+set TOTAL_INVALID long 0
+
+log TEMPORARY_FILE 0 0
+open "." TEMPORARY_FILE 1
 
 for i = 0 < FILES
-  savepos FILESTART
-  get NAME_CRC_L long
-  get NAME_CRC_U long
-  get OFFSET longlong
-  get ZSIZE longlong
-  get SIZE longlong
-  get FLAG longlong
-  get DUMMY2 long
-  get DUMMY3 long
+  savepos FILESTART 0
+  get NAME_CRC_L long 0
+  get NAME_CRC_U long 0
+  get OFFSET longlong 0
+  get ZSIZE longlong 0
+  get SIZE longlong 0
+  get FLAG longlong 0
+  get DUMMY2 long 0
+  get DUMMY3 long 0
   namecrc NAME NAME_CRC_L "filtered.list" 32
 
   strlen NAMEL NAME
@@ -22,15 +26,21 @@ for i = 0 < FILES
   if T == 48
     continue
   else
-    goto FILESTART
-    put 0 long
-    put 0 long
-    put 0 longlong
-    put 0 longlong
-    put 0 longlong
-    put 0 longlong
-    put 0 long
-    put 0 long
-    print "done"
+    put FILESTART longlong 1
+    put NAME_CRC_L long 1
+    put NAME_CRC_U long 1
+
+    goto FILESTART 0
+    put 0 long 0
+    put 0 long 0
+    math TOTAL_INVALID + 1
+    get OFFSET longlong 0
+    get ZSIZE longlong 0
+    get SIZE longlong 0
+    get FLAG longlong 0
+    get DUMMY2 long 0
+    get DUMMY3 long 0
   endif
 next i
+
+put TOTAL_INVALID long 1

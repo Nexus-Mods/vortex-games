@@ -1,5 +1,7 @@
 const Promise = require('bluebird');
 const path = require('path');
+const murmur3 = require('./murmur3');
+const cache = require('./cache');
 const { actions, fs, log, selectors, util } = require('vortex-api');
 
 // Expected file name for the qbms script.
@@ -9,9 +11,15 @@ const BMS_SCRIPT = path.join(__dirname, 'dmc5_pak_unpack.bms');
 //  file to be generated.
 const INVAL_SCRIPT = path.join(__dirname, 'dmc5_pak_invalidate.bms');
 
+// Revalidation qbms script - this script relies on a invalcache.file
+//  file to be generated and placed next to the input archive.
+const REVAL_SCRIPT = path.join(__dirname, 'dmc5_pak_revalidate.bms');
+
 // DMC5 filenames are encrypted. The list file contains
 //  the actual filenames mapped against their murmur3 hash.
 const FILE_LIST = path.join(__dirname, 'dmc5_pak_names_release.list');
+
+let FILE_CACHE = [];
 
 // DMC5 requires us to invalidate/zero-out file entries within
 //  the game's pak file; the filtered.list file is generated
@@ -26,6 +34,36 @@ const GAME_PAK_FILE = 're_chunk_000.pak';
 const DLC_PAK_FILE = 're_dlc_000.pak';
 const GAME_ID = 'devilmaycry5';
 const STEAM_ID = 601150;
+
+function getFileListCache() {
+  return (FILE_CACHE.length > 0)
+    ? Promise.resolve(FILE_CACHE)
+    : fs.readFileAsync(FILE_LIST, { encoding: 'utf-8' })
+      .then(data => {
+        FILE_CACHE = data.split('\n');
+        return Promise.resolve(FILE_CACHE);
+      });
+}
+
+function addToFileList(files) {
+  return getFileListCache().then(cache => {
+    const fileList = files.filter(file =>
+      cache.find(cached => cached.indexOf(file) !== -1) === undefined);
+
+    const lines = fileList.reduce((accumulator, file) => {
+      const hashVal = murmur3.getMurmur3Hash(file);
+      accumulator.push(hashVal + ' ' + file);
+      return accumulator;
+    }, []);
+
+    const data = (!!FILE_CACHE[FILE_CACHE.length - 1])
+      ? '\n' + lines.join('\n')
+      : lines.join('\n');
+
+    return fs.writeFileAsync(FILE_LIST, data, { encoding: 'utf-8', flag: 'a' })
+      .then(() => { FILE_CACHE = FILE_CACHE.concat(lines); })
+    })
+}
 
 function findGame() {
   return util.steam.findByAppId(STEAM_ID.toString())
@@ -42,7 +80,7 @@ function prepareForModding(discovery, api) {
         api.showDialog('info', 'Important Information regarding DMC 5 Modding', {
           bbcode: 'Before you start modding Devil May Cry 5 please note that Vortex will need to '
                 + 'modify your game archives directly.<br/><br/>'
-                + 'Vortex will be extracting and invalidating files during mod installation or any time '
+                + 'Vortex will be invalidating and revalidating file paths during mod deployment/purge or any time '
                 + 'you click the "Invalidate Paths" button in the "Mods" section.<br/><br/>'
                 + 'For the best modding experience - and to avoid conflicts - please ensure the following:<br/><br/>'
                 + '1. Only use Vortex to install mods on a fresh, legitimate, vanilla (i.e. unmodified) copy of the game.<br/>'
@@ -75,92 +113,63 @@ function prepareForModding(discovery, api) {
 }
 
 function testArchive(files, discoveryPath, archivePath, api) {
-  const reportIncompleteList = (found) => {
-    const foundFiles = found.map(f => f.filePath);
-    const difference = files.filter(x => !foundFiles.includes(x));
-    log('error', 'Incomplete file list/missing files', difference.join('\n'));
-    api.showErrorNotification('Incomplete file list and/or missing files from game archive',
-      'Unfortunately Vortex cannot install this mod correctly as it seems to include one or more '
-      + 'unrecognized files.<br/><br/>'
-      + 'This can happen when:<br/>'
-      + '1. The game extension\'s hashlist is out of date and needs to be updated with the latest game files<br/>'
-      + '2. Your game archives do not include the files required for this mod to work (Probably missing DLC)<br/>'
-      + '3. The mod author has packed his mod incorrectly and has included files inside the "natives" folder '
-      + 'which were never supposed to be there.<br/><br/>'
-      + 'To report this issue, please use the feedback system and make sure you attach Vortex\'s latest log file '
-      + 'so we can review the missing files',
-      { isBBCode: true, allowReport: false })
-    const error = new util.ProcessCanceled('Incomplete file list and/or missing files from game archive');
-    return Promise.reject(error);
-  };
-
-  const checkLooseFiles = () =>
-    // Check whether we can find the files we're trying to extract
-    //  inside the game's discoveryPath.
-    Promise.each(files, file => fs.statAsync(path.join(discoveryPath, file)))
-      .then(() => Promise.resolve(true))
-      .catch(err => Promise.resolve(false));
-
-  let errorPromise = Promise.resolve();
-  return api.emitAndAwait('quickbms-operation', GAME_ID, BMS_SCRIPT,
+  return new Promise((resolve, reject) => {
+    return api.emitAndAwait('quickbms-operation', GAME_ID, BMS_SCRIPT,
     archivePath, discoveryPath, 'list', { wildCards: files }, data => {
-      errorPromise = (data instanceof Error)
-        ? Promise.reject(data)
-        : (data.length === files.length)
-            ? Promise.resolve()
-            : (data.length > 0)
-              // If we found any entries, this is clearly the right archive, but
-              //  the file list may be missing entries - we cancel the process
-              //  in this case.
-              ? reportIncompleteList(data)
-              : checkLooseFiles().then(res => (res)
-                ? Promise.resolve() // Found loose files - the files must've been invalidated, that's fine.
-                : Promise.reject(new util.NotFound('Files not found')))
-  }).finally(() => errorPromise);
+      const theFiles = data.map(file => file.filePath);
+      return (data instanceof Error)
+        ? reject(data)
+        : (theFiles.length > 0)
+            ? resolve(theFiles)
+            : reject(new util.NotFound('Files not found'))
+    })
+  })
 }
 
 async function findArchiveFile(files, discoveryPath, api) {
   let archivePath = path.join(discoveryPath, GAME_PAK_FILE);
   // We're going to check the main game file first.
-  return new Promise((resolve, reject) => {
-    return testArchive(files, discoveryPath, archivePath, api)
-      .then(() => resolve(GAME_PAK_FILE))
-      .catch(util.NotFound, () => fs.readdirAsync(discoveryPath)
-        .then(entries => {
-          const installedDLC = entries.filter(entry => entry.match(DLC_FOLDER_RGX));
-          return Promise.each(installedDLC, dlc => {
-            archivePath = path.join(discoveryPath, dlc, DLC_PAK_FILE);
-            return testArchive(files, discoveryPath, archivePath, api)
-              .then(() => resolve(path.join(dlc, DLC_PAK_FILE)))
-              .catch(util.NotFound, () => Promise.resolve());
-          })
-          .then(() => resolve(undefined))
-        }))
-      .catch(err => reject(err));
-  });
+  return testArchive(files, discoveryPath, archivePath, api)
+    .then(data => Promise.resolve({
+      arcPath: GAME_PAK_FILE,
+      data
+    }))
+    .catch(util.NotFound, () => fs.readdirAsync(discoveryPath)
+      .then(entries => {
+        let found;
+        const installedDLC = entries.filter(entry => entry.match(DLC_FOLDER_RGX));
+        return Promise.each(installedDLC, dlc => {
+          archivePath = path.join(discoveryPath, dlc, DLC_PAK_FILE);
+          return (found !== undefined)
+          ? Promise.resolve()
+          : testArchive(files, discoveryPath, archivePath, api)
+            .then(data => {
+              found = {
+                arcPath: path.join(dlc, DLC_PAK_FILE),
+                data
+              }
+              return Promise.resolve();
+            })
+            .catch(util.NotFound, () => Promise.resolve());
+        })
+        .then(() => found)
+      }));
 }
 
-async function installQBMS(files, destinationPath, gameId, progressDelegate, api) {
+async function installQBMS(files, destinationPath, gameId, progressDelegate) {
   const rootPath = files.find(file => file.endsWith(NATIVES_DIR));
   const idx = rootPath.length - NATIVES_DIR.length;
-
   // Remove directories and anything that isn't in the rootPath.
   let filtered = files.filter(file =>
     ((file.indexOf(rootPath) !== -1)
       && (!file.endsWith(path.sep))));
 
-  filtered = filtered.map(file => { 
+  filtered = filtered.map(file => {
     return {
-      source: file, 
-      destination: file.substr(idx), 
+      source: file,
+      destination: file.substr(idx),
     };
   });
-
-  const discoveryPath = getDiscoveryPath(api);
-  if (!(!!discoveryPath)) {
-    // Invalid discovery path. How is the game not discovered at this point?!
-    return Promise.reject(new util.NotFound('devilmaycry5 was not discovered'));
-  }
 
   const instructions = filtered.map(file => {
     return {
@@ -174,29 +183,8 @@ async function installQBMS(files, destinationPath, gameId, progressDelegate, api
   //  list matches.
   const wildCards = filtered.map(fileEntry =>
     fileEntry.destination.replace(/\\/g, '/'));
-
-  return findArchiveFile(wildCards, discoveryPath, api)
-    .then(archivefile => {
-      if (archivefile === undefined) {
-        return Promise.reject(new util.NotFound('Failed to match mod files to game archives'));
-      }
-      const quickbmsOpts = {
-        wildCards,
-        overwrite: true,
-      }
-      let error;
-      const archivePath = path.join(discoveryPath, archivefile);
-      return api.emitAndAwait('quickbms-operation', GAME_ID, BMS_SCRIPT,
-        archivePath, discoveryPath, 'extract', quickbmsOpts, err => { error = err; })
-          .then(() => (error === undefined)
-            ? generateFilteredList(filtered.map(file => file.destination))
-            : Promise.reject(error))
-          .then(() => api.emitAndAwait('quickbms-operation', GAME_ID, INVAL_SCRIPT,
-            archivePath, discoveryPath, 'write', {}, err => Promise.reject(err)))
-          .then(() => (error === undefined)
-            ? Promise.resolve({ instructions })
-            : Promise.reject(error));
-    })
+  return addToFileList(wildCards)
+    .then(() => Promise.resolve({ instructions }));
 }
 
 function testSupportedContent(files, gameId) {
@@ -222,21 +210,17 @@ function getDiscoveryPath(api) {
 }
 
 function generateFilteredList(files) {
-  const fileList = (process.platform === 'win32')
-    ? files.map(file => file.replace(/\\/g, '/'))
-    : files;
-  return fs.readFileAsync(FILE_LIST, { encoding: 'utf-8' })
-    .then(data => {
+  return getFileListCache()
+    .then(cache => {
       const filtered = [];
-      const fileEntries = data.split('\n');
-      fileList.forEach(file => {
-        const found = fileEntries.find(entry => entry.indexOf(file) !== -1);
+      files.forEach(file => {
+        const found = cache.find(entry => entry.indexOf(file) !== -1);
         if (found !== undefined) {
           filtered.push(found);
         }
       });
 
-      return removeFilteredList().then(() => 
+      return removeFilteredList().then(() =>
         fs.writeFileAsync(FILTERED_LIST, filtered.join('\n')));
     });
 }
@@ -270,6 +254,128 @@ function removeFilteredList() {
       : Promise.reject(err));
 }
 
+function filterOutInvalidated(wildCards, stagingFolder) {
+  // We expect all wildCards to be invalidated within the same archive.
+  const entries = wildCards.map(entry => { return { hash: murmur3.getMurmur3Hash(entry), filePath: entry } });
+  return cache.findArcKeys(stagingFolder, entries.map(entry => entry.hash))
+    .then(arcMap => {
+      if (arcMap === undefined) {
+        // None of the entries have been invalidated.
+        return Promise.resolve(wildCards);
+      }
+
+      // We found matching invalidations, filter them out.
+      const arcKey = Object.keys(arcMap).find(key => arcMap[key].length > 0);
+      if (arcKey === undefined) {
+        return Promise.resolve(wildCards);
+      }
+
+      const filtered = entries.reduce((accumulator, entry) => {
+        if (arcMap[arcKey].find(mapEntry => mapEntry === entry.hash) === undefined){
+          accumulator.push(entry.filePath);
+        }
+        return accumulator;
+      }, []);
+
+      return filtered.length > 0
+        ? Promise.resolve(filtered)
+        : Promise.reject(new Error('All entries invalidated'));
+    })
+}
+
+function revalidateFilePaths(hashes, api) {
+  const discoveryPath = getDiscoveryPath(api);
+  const state = api.store.getState();
+  const stagingFolder = selectors.installPathForGame(state, GAME_ID);
+  return cache.findArcKeys(stagingFolder, hashes)
+    .then(arcMap => {
+      if (arcMap === undefined) {
+        return Promise.reject(new Error('Failed to map hashes to their corresponding archive keys'));
+      }
+
+      let error;
+      const keys = Object.keys(arcMap);
+      return Promise.each(keys, key => {
+        if (arcMap[key].length === 0) {
+          return Promise.resolve();
+        }
+
+        const arcRelPath = (key === '_native')
+          ? GAME_PAK_FILE
+          : path.join(key.substr(1), DLC_PAK_FILE);
+        const archivePath = path.join(discoveryPath, arcRelPath);
+        return cache.getInvalEntries(stagingFolder, arcMap[key], key)
+          .then(entries => cache.writeInvalEntries(discoveryPath, entries))
+          .then(() => api.emitAndAwait('quickbms-operation', GAME_ID, REVAL_SCRIPT,
+            archivePath, discoveryPath, 'write', {}, err => { error = err; }))
+          .then(() => (error === undefined)
+            ? Promise.resolve()
+            : Promise.reject(new Error('Failed to re-validate filepaths')))
+          .then(() => cache.removeOffsets(stagingFolder, arcMap[key], key));
+      });
+    });
+}
+
+function invalidateFilePaths(wildCards, api, force = false) {
+  const reportIncompleteList = () => {
+    api.showErrorNotification('Missing filepaths in game archives',
+      'Unfortunately Vortex cannot install this mod correctly as it seems to include one or more '
+      + 'unrecognized files.<br/><br/>'
+      + 'This can happen when:<br/>'
+      + '1. Your game archives do not include the files required for this mod to work (Possibly missing DLC)<br/>'
+      + '2. The mod author has packed his mod incorrectly and has included files inside the "natives" folder '
+      + 'which were never supposed to be there.<br/><br/>'
+      + 'To report this issue, please use the feedback system and make sure you attach Vortex\'s latest log file '
+      + 'so we can review the missing files',
+      { isBBCode: true, allowReport: false })
+  };
+
+  // For the invalidation logic to work correctly all
+  //  wildCards MUST belong to the same game archive/mod.
+  const discoveryPath = getDiscoveryPath(api);
+  const state = api.store.getState();
+  const stagingFolder = selectors.installPathForGame(state, GAME_ID);
+  const filterPromise = (force)
+    ? Promise.resolve(wildCards)
+    : filterOutInvalidated(wildCards, stagingFolder);
+
+  return filterPromise.then(filtered => addToFileList(filtered).then(() => findArchiveFile(filtered, discoveryPath, api))
+    .then(res => {
+      if (res === undefined || res.arcPath === undefined) {
+        const invalidationsExist = filtered.length !== wildCards.length;
+        // A difference between the filtered and wildcards suggests
+        //  that there is a high chance we're installing the same mod
+        //  and the mod author may have included a .txt file or some other
+        //  unnecessary file inside the mod's natives folder, in which case this is
+        //  not a problem - log the missing files and keep going.
+        log(invalidationsExist ? 'warn' : 'error', 'Missing filepaths in game archive', filtered.join('\n'));
+        return (invalidationsExist)
+          ? Promise.resolve()
+          : Promise.reject(new util.NotFound('Failed to match mod files to game archives'));
+      }
+      const arcKey = (res.arcPath === GAME_PAK_FILE)
+        ? '_native'
+        : '_' + path.dirname(res.arcPath);
+      const data = res.data;
+      const quickbmsOpts = {
+        keepTemporaryFiles: true,
+      }
+      let error;
+      const archivePath = path.join(discoveryPath, res.arcPath);
+      return generateFilteredList(data)
+        .then(() => api.emitAndAwait('quickbms-operation', GAME_ID, INVAL_SCRIPT,
+          archivePath, discoveryPath, 'write', quickbmsOpts, err => { error = err; }))
+        .then(() => (error === undefined)
+          ? cache.readNewInvalEntries(path.join(discoveryPath, 'TEMPORARY_FILE'))
+              .then(entries => cache.insertOffsets(stagingFolder, entries, arcKey))
+          : Promise.reject(error));
+    }))
+    .catch(util.NotFound, () => reportIncompleteList())
+    .catch(err => err.message.indexOf('All entries invalidated') !== -1
+      ? Promise.resolve()
+      : api.showErrorNotification('Invalidation failed', err));
+}
+
 function main(context) {
   context.requireExtension('quickbms-support');
   context.registerGame({
@@ -287,9 +393,7 @@ function main(context) {
     setup: (discovery) => prepareForModding(discovery, context.api),
   });
 
-  context.registerInstaller('dmc5-qbms-mod', 25, testSupportedContent,
-    (files, destinationPath, gameId, progressDelegate) => 
-      installQBMS(files, destinationPath, gameId, progressDelegate, context.api));
+  context.registerInstaller('dmc5qbmsmod', 25, testSupportedContent, installQBMS);
 
   context.registerAction('mod-icons', 500, 'savegame', {}, 'Invalidate Paths', () => {
     const store = context.api.store;
@@ -303,37 +407,13 @@ function main(context) {
     store.dispatch(actions.startActivity('mods', 'invalidations'));
     const installedMods = util.getSafe(state, ['persistent', 'mods', GAME_ID]);
     const mods = Object.keys(installedMods);
-    const discoveryPath = getDiscoveryPath(context.api);
     return Promise.each(mods, mod => {
       const modFolder = path.join(stagingFolder, mod);
       return walkAsync(modFolder)
         .then(entries => {
           const relFilePaths = entries.map(entry => entry.replace(modFolder + path.sep, ''));
           const wildCards = relFilePaths.map(fileEntry => fileEntry.replace(/\\/g, '/'))
-          return findArchiveFile(wildCards, discoveryPath, context.api)
-            .then(archivefile => {
-              if (archivefile === undefined) {
-                return Promise.reject(new util.NotFound('Failed to match mod files to game archives'));
-              }
-              const quickbmsOpts = {
-                wildCards,
-                overwrite: true,
-              }
-              let error;
-              const archivePath = path.join(discoveryPath, archivefile);
-              return context.api.emitAndAwait('quickbms-operation', GAME_ID, BMS_SCRIPT,
-                archivePath, discoveryPath, 'extract', quickbmsOpts, err => { error = err; })
-                .then(() => (error === undefined)
-                  ? generateFilteredList(relFilePaths)
-                  : Promise.reject(error))
-                .then(() => context.api.emitAndAwait('quickbms-operation', GAME_ID, INVAL_SCRIPT,
-                  archivePath, discoveryPath, 'write', {}, err => { error = err; }))
-                .then(() => (error === undefined)
-                  ? Promise.resolve()
-                  : Promise.reject(error))
-                .catch(util.NotFound, () => Promise.resolve())
-                .catch(err => context.api.showErrorNotification('Failed to invalidate file paths', err));
-            })
+          return invalidateFilePaths(wildCards, context.api, true);
         })
     })
     .finally(() => { store.dispatch(actions.stopActivity('mods', 'invalidations')); })
@@ -341,6 +421,91 @@ function main(context) {
     const state = context.api.store.getState();
     const gameMode = selectors.activeGameId(state);
     return (gameMode === GAME_ID)
+  });
+
+  context.once(() => {
+    let previousDeployment;
+    context.api.onAsync('will-deploy', (profileId, deployment) => {
+      const state = context.api.store.getState();
+      const profile = selectors.profileById(state, profileId);
+      if (GAME_ID !== profile.gameId) {
+        return Promise.resolve();
+      }
+      previousDeployment = deployment[''].map(iter => iter.relPath);
+      return Promise.resolve();
+    });
+
+    context.api.onAsync('did-deploy', (profileId, deployment) => {
+      const api = context.api;
+      const state = context.api.store.getState();
+      const profile = selectors.profileById(state, profileId);
+
+      if (GAME_ID !== profile.gameId) {
+        return Promise.resolve();
+      }
+      const newDeployment = new Set(deployment[''].map(iter => iter.relPath));
+      const removed = previousDeployment.filter(iter => !newDeployment.has(iter));
+      if (removed.length > 0) {
+        store.dispatch(actions.startActivity('mods', 'revalidations'));
+        const wildCards = removed.map(fileEntry =>
+          fileEntry.replace(/\\/g, '/'));
+
+        const hashes = wildCards.map(entry => murmur3.getMurmur3Hash(entry));
+        return revalidateFilePaths(hashes, api)
+          .finally(() => { store.dispatch(actions.stopActivity('mods', 'invalidations')); });
+      }
+      return Promise.resolve();
+    })
+
+    context.api.onAsync('bake-settings', (gameId, mods) => {
+      if (gameId === GAME_ID) {
+        const store = context.api.store;
+        const state = store.getState();
+        const stagingFolder = selectors.installPathForGame(state, GAME_ID);
+        store.dispatch(actions.startActivity('mods', 'invalidations'));
+        return Promise.each(mods, mod => {
+          const modFolder = path.join(stagingFolder, mod.installationPath);
+          return walkAsync(modFolder)
+            .then(entries => {
+              const relFilePaths = entries.map(entry => entry.replace(modFolder + path.sep, ''));
+              const wildCards = relFilePaths.map(fileEntry => fileEntry.replace(/\\/g, '/'))
+              return invalidateFilePaths(wildCards, context.api);
+            })
+        })
+        .finally(() => {
+          store.dispatch(actions.stopActivity('mods', 'invalidations'));
+          return Promise.resolve();
+        })
+      }
+    });
+
+    context.api.events.on('purge-mods', () => {
+      const store = context.api.store;
+      const state = store.getState();
+      const activeGameId = selectors.activeGameId(state);
+      if (activeGameId !== GAME_ID){
+        return Promise.resolve();
+      }
+
+      const stagingFolder = selectors.installPathForGame(state, GAME_ID);
+      store.dispatch(actions.startActivity('mods', 'revalidations'));
+      const installedMods = util.getSafe(state, ['persistent', 'mods', GAME_ID]);
+      const mods = Object.keys(installedMods);
+      return Promise.each(mods, mod => {
+        const modFolder = path.join(stagingFolder, mod);
+        return walkAsync(modFolder)
+          .then(entries => {
+            const relFilePaths = entries.map(entry => entry.replace(modFolder + path.sep, ''));
+            const wildCards = relFilePaths.map(fileEntry => fileEntry.replace(/\\/g, '/'))
+            return revalidateFilePaths(wildCards.map(entry => murmur3.getMurmur3Hash(entry)), context.api);
+          })
+          .catch(err => null);
+      })
+      .finally(() => {
+        store.dispatch(actions.stopActivity('mods', 'revalidations'));
+        return Promise.resolve();
+      })
+    });
   });
 }
 

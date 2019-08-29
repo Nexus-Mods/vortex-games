@@ -2,7 +2,6 @@ idstring "KPKA"
 get VERSION long
 get FILES long
 get DUMMY0 long
-set MAX_OFFSET longlong 33451416448
 
 for i = 0 < FILES
   get NAME_CRC_L long
@@ -20,14 +19,7 @@ for i = 0 < FILES
   if T == 48
     continue
   else
-    if OFFSET > MAX_OFFSET
-      print %OFFSET%
-      break
-    endif
-
-    if FLAG == 0 
-      log NAME OFFSET SIZE
-    else if FLAG == 1
+    if FLAG == 1
       comtype deflate
       clog NAME OFFSET ZSIZE SIZE
     else if FLAG == 2
