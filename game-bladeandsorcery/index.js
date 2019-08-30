@@ -85,22 +85,36 @@ function streamingAssetsPath() {
   return path.join('BladeAndSorcery_Data', 'StreamingAssets');
 }
 
-async function checkModGameVersion(destination, coercedGlobal, modFile) {
+async function checkModGameVersion(destination, minModVersion, modFile) {
+  const coercedMin = semver.coerce(minModVersion.version);
+  const minVersion = minModVersion.majorOnly
+    ? coercedMin.major + '.x'
+    : `>=${coercedMin.version}`;
   try {
-    const modVersion = await getJSONElement(path.join(destination, modFile), 'GameVersion');
+    let modVersion = await getJSONElement(path.join(destination, modFile), 'GameVersion');
+    modVersion = modVersion.toString().replace(',', '.');
     const coercedMod = semver.coerce(modVersion.toString());
     if (coercedMod === null) {
       return Promise.reject(new util.DataInvalid('Mod manifest has an invalid GameVersion element'));
     }
 
     return Promise.resolve({
-      match: semver.satisfies(coercedMod.version, coercedGlobal.version),
+      match: semver.satisfies(coercedMod.version, minVersion),
       modVersion: coercedMod.version,
-      globalVersion: coercedGlobal.version,
+      globalVersion: coercedMin.version,
     });
   } catch (err) {
     return Promise.reject(err);
   }
+}
+
+async function getMinModVersion(discoveryPath) {
+  return getJSONElement(path.join(discoveryPath, streamingAssetsPath(), 'Default', GLOBAL_FILE), 'minModVersion')
+    .then(version => { return { version, majorOnly: false } })
+    .catch(err => (err.message.indexOf('JSON element is missing') !== -1)
+      ? getJSONElement(path.join(discoveryPath, streamingAssetsPath(), 'Default', GLOBAL_FILE), 'gameVersion')
+          .then(version => { return { version, majorOnly: true } })
+      : Promise.reject(err));
 }
 
 async function installOfficialMod(files,
@@ -128,10 +142,17 @@ async function installOfficialMod(files,
     );
   });
 
+  let minModVersion;
   const discoveryPath = getDiscoveryPath(api);
-  const globalGameVersion = await getJSONElement(path.join(discoveryPath, streamingAssetsPath(), 'Default', GLOBAL_FILE), 'gameVersion');
-  const coercedGlobal = semver.coerce(globalGameVersion.toString());
-  if (coercedGlobal === null) {
+  try {
+    minModVersion = await getMinModVersion(discoveryPath);
+    minModVersion.version = minModVersion.version.toString().replace(',', '.');
+  }
+  catch (err) {
+    Promise.reject(err);
+  }
+
+  if (minModVersion === undefined) {
     return Promise.reject(new util.DataInvalid('Failed to identify game version'));
   }
 
@@ -170,9 +191,9 @@ async function installOfficialMod(files,
       });
 
   return Promise.map(manifestFiles, manFile =>
-    checkModGameVersion(destinationPath, coercedGlobal, manFile)
+    checkModGameVersion(destinationPath, minModVersion, manFile)
     .then(res => (!res.match)
-      ? versionMismatchDialog(coercedGlobal.version, res.modVersion)
+      ? versionMismatchDialog(res.globalVersion, res.modVersion)
           .then(() => createInstructions(manFile))
       : createInstructions(manFile))
   ).then(manifestMods => {
