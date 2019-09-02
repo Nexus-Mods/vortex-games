@@ -32,7 +32,8 @@ async function getJSONElement(filePath, element) {
           ? Promise.resolve(elementData)
           : Promise.reject(new util.DataInvalid(`"${element}" JSON element is missing`));
       } catch (err) {
-        return (err.message.indexOf('Unexpected end of JSON input') !== -1)
+        return ((err.message.indexOf('Unexpected end of JSON input') !== -1)
+             || (err.name.indexOf('SyntaxError') !== -1))
           ? Promise.reject(new util.DataInvalid('Invalid manifest.json file'))
           : Promise.reject(err);
       }
