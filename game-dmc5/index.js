@@ -114,11 +114,13 @@ function prepareForModding(discovery, api) {
 
 function testArchive(files, discoveryPath, archivePath, api) {
   return new Promise((resolve, reject) => {
-    return api.emitAndAwait('quickbms-operation', GAME_ID, BMS_SCRIPT,
-    archivePath, discoveryPath, 'list', { wildCards: files }, data => {
-      const theFiles = data.map(file => file.filePath);
-      return (data instanceof Error)
-        ? reject(data)
+    return api.events.emit('quickbms-operation', GAME_ID, BMS_SCRIPT,
+    archivePath, discoveryPath, 'list', { wildCards: files }, (err, data) => {
+      const theFiles = (data !== undefined)
+        ? data.map(file => file.filePath)
+        : [];
+      return (err !== undefined)
+        ? reject(err)
         : (theFiles.length > 0)
             ? resolve(theFiles)
             : reject(new util.NotFound('Files not found'))
@@ -306,8 +308,13 @@ function revalidateFilePaths(hashes, api) {
         const archivePath = path.join(discoveryPath, arcRelPath);
         return cache.getInvalEntries(stagingFolder, arcMap[key], key)
           .then(entries => cache.writeInvalEntries(discoveryPath, entries))
-          .then(() => api.emitAndAwait('quickbms-operation', GAME_ID, REVAL_SCRIPT,
-            archivePath, discoveryPath, 'write', {}, err => { error = err; }))
+          .then(() => new Promise((resolve) => {
+            api.events.emit('quickbms-operation', GAME_ID, REVAL_SCRIPT,
+              archivePath, discoveryPath, 'write', {}, (err) => {
+                error = err;
+                return resolve();
+              });
+          }))
           .then(() => (error === undefined)
             ? Promise.resolve()
             : Promise.reject(new Error('Failed to re-validate filepaths')))
@@ -363,8 +370,13 @@ function invalidateFilePaths(wildCards, api, force = false) {
       let error;
       const archivePath = path.join(discoveryPath, res.arcPath);
       return generateFilteredList(data)
-        .then(() => api.emitAndAwait('quickbms-operation', GAME_ID, INVAL_SCRIPT,
-          archivePath, discoveryPath, 'write', quickbmsOpts, err => { error = err; }))
+        .then(() => new Promise((resolve) => {
+          api.events.emit('quickbms-operation', GAME_ID, INVAL_SCRIPT,
+            archivePath, discoveryPath, 'write', quickbmsOpts, err => {
+              error = err;
+              return resolve();
+            })
+        }))
         .then(() => (error === undefined)
           ? cache.readNewInvalEntries(path.join(discoveryPath, 'TEMPORARY_FILE'))
               .then(entries => cache.insertOffsets(stagingFolder, entries, arcKey))
