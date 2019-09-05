@@ -51,7 +51,7 @@ function requiresLauncher(gamePath) {
 }
 
 function findGame(kotorGame) {
-  const { name, regPath } = kotorGame;
+  const { steamId, regPath } = kotorGame;
   try {
     const instPath = winapi.RegGetValue(
       'HKEY_LOCAL_MACHINE',
@@ -62,7 +62,7 @@ function findGame(kotorGame) {
     }
     return Promise.resolve(instPath.value);
   } catch (err) {
-    return util.steam.findByName(name)
+    return util.steam.findByAppId(steamId)
       .then(game => game.gamePath);
   }
 }
@@ -78,7 +78,7 @@ function main(context) {
       id: game.id,
       name: game.shortName,
       mergeMods: true,
-      queryPath: () => findGame(game.regPath),
+      queryPath: () => findGame(game),
       queryModPath: () => OVERRIDE_FOLDER,
       requiresLauncher: game.id === 'kotor2' 
         ? requiresLauncher 
