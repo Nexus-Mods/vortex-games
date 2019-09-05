@@ -27,6 +27,7 @@ const KOTOR_GAMES = {
     shortName: 'Star Wars: KOTOR',
     name: 'STAR WARS™ - Knights of the Old Republic™',
     steamId: '32370',
+    gogId: '1207666283',
     regPath: steamReg + '32370',
     logo: 'gameartkotor.png',
     exec: 'swkotor.exe',
@@ -36,6 +37,7 @@ const KOTOR_GAMES = {
     shortName: 'Star Wars: KOTOR II',
     name: 'STAR WARS™ Knights of the Old Republic™ II - The Sith Lords™',
     steamId: '208580',
+    gogId: '1421404581',
     regPath: steamReg + '208580',
     logo: 'gameartkotor2.png',
     exec: 'swkotor2.exe',
@@ -50,21 +52,28 @@ function requiresLauncher(gamePath) {
     .catch(err => Promise.reject(err));
 }
 
-function findGame(kotorGame) {
-  const { steamId, regPath } = kotorGame;
+function readRegistryKey(hive, key, name) {
   try {
-    const instPath = winapi.RegGetValue(
-      'HKEY_LOCAL_MACHINE',
-      regPath,
-      'InstallLocation');
+    const instPath = winapi.RegGetValue(hive, key, name);
     if (!instPath) {
       throw new Error('empty registry key');
     }
     return Promise.resolve(instPath.value);
   } catch (err) {
-    return util.steam.findByAppId(steamId)
-      .then(game => game.gamePath);
+    return Promise.reject(new util.ProcessCanceled(err));
   }
+}
+
+function findGame(kotorGame) {
+  const { gogId, steamId } = kotorGame;
+  return util.steam.findByAppId(steamId)
+    .then(game => game.gamePath)
+    .catch(() => readRegistryKey('HKEY_LOCAL_MACHINE',
+      `SOFTWARE\\WOW6432Node\\GOG.com\\Games\\${gogId}`,
+      'PATH'))
+    .catch(() => readRegistryKey('HKEY_LOCAL_MACHINE',
+      `SOFTWARE\\GOG.com\\Games\\${gogId}`,
+      'PATH'));
 }
 
 function prepareForModding(discovery) {
