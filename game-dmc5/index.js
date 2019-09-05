@@ -114,7 +114,7 @@ function prepareForModding(discovery, api) {
 
 function testArchive(files, discoveryPath, archivePath, api) {
   return new Promise((resolve, reject) => {
-    return api.events.emit('quickbms-operation', GAME_ID, BMS_SCRIPT,
+    return api.events.emit('quickbms-operation', BMS_SCRIPT,
     archivePath, discoveryPath, 'list', { wildCards: files }, (err, data) => {
       const theFiles = (data !== undefined)
         ? data.map(file => file.filePath)
@@ -309,7 +309,7 @@ function revalidateFilePaths(hashes, api) {
         return cache.getInvalEntries(stagingFolder, arcMap[key], key)
           .then(entries => cache.writeInvalEntries(discoveryPath, entries))
           .then(() => new Promise((resolve) => {
-            api.events.emit('quickbms-operation', GAME_ID, REVAL_SCRIPT,
+            api.events.emit('quickbms-operation', REVAL_SCRIPT,
               archivePath, discoveryPath, 'write', {}, (err) => {
                 error = err;
                 return resolve();
@@ -371,7 +371,7 @@ function invalidateFilePaths(wildCards, api, force = false) {
       const archivePath = path.join(discoveryPath, res.arcPath);
       return generateFilteredList(data)
         .then(() => new Promise((resolve) => {
-          api.events.emit('quickbms-operation', GAME_ID, INVAL_SCRIPT,
+          api.events.emit('quickbms-operation', INVAL_SCRIPT,
             archivePath, discoveryPath, 'write', quickbmsOpts, err => {
               error = err;
               return resolve();
