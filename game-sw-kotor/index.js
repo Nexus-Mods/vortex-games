@@ -12,11 +12,6 @@ const path = require('path');
 const winapi = require('winapi-bindings');
 const { fs, util } = require('vortex-api');
 
-// SW: KOTOR games do not store their installation location in
-//  registry ( at least the Steam versions don't )
-//  Unforunately this means we can only rely on Steam for
-//  registry discovery.
-const steamReg = 'SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Steam App ';
 const STEAM_DLL = 'steam_api.dll';
 
 const OVERRIDE_FOLDER = 'override';
@@ -28,7 +23,6 @@ const KOTOR_GAMES = {
     name: 'STAR WARS™ - Knights of the Old Republic™',
     steamId: '32370',
     gogId: '1207666283',
-    regPath: steamReg + '32370',
     logo: 'gameartkotor.png',
     exec: 'swkotor.exe',
   },
@@ -38,7 +32,6 @@ const KOTOR_GAMES = {
     name: 'STAR WARS™ Knights of the Old Republic™ II - The Sith Lords™',
     steamId: '208580',
     gogId: '1421404581',
-    regPath: steamReg + '208580',
     logo: 'gameartkotor2.png',
     exec: 'swkotor2.exe',
   },
