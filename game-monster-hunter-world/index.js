@@ -7,7 +7,7 @@ const { fs, util } = require('vortex-api');
 //  the 'nativePC' folder. We're going to depend on this folder
 //  existing within the archive when trying to decide whether the
 //  mod is supported or not.
-const NATIVE_PC_FOLDER = 'nativepc';
+const NATIVE_PC_FOLDER = 'nativePC';
 
 // We can rely on the steam uninstall registry key when
 //  figuring out the install location for MH:W; but this is
@@ -65,17 +65,25 @@ function installContent(files,
                         destinationPath,
                         gameId,
                         progressDelegate) {
-  const filtered = files
-  .map(file => file.toLowerCase())
-  .filter(file => path.extname(file) !== '' && path.dirname(file).indexOf(NATIVE_PC_FOLDER) !== -1);
+  // Grab any modfile that is nested withing 'nativePC'.
+  const modFile = files.find(file =>
+    file.toLowerCase().indexOf(NATIVE_PC_FOLDER.toLowerCase()) !== -1);
   
-  const instructions = filtered
-  .map(file => {
-    const wantedDest = file.substr(file.indexOf(NATIVE_PC_FOLDER) + NATIVE_PC_FOLDER.length + 1);
+  // Find the index of the natives folder + natives folder length + path.sep; going
+  //  to remove everything preceding that point in the filepath.
+  const idx = modFile.toLowerCase().indexOf(NATIVE_PC_FOLDER.toLowerCase())
+    + NATIVE_PC_FOLDER.length + 1;
+
+  // Filter out unwanted files.
+  const filtered = files.filter(file =>
+    (path.extname(file) !== '')
+    && (path.dirname(file.toLowerCase()).indexOf(NATIVE_PC_FOLDER.toLowerCase()) !== -1));
+
+  const instructions = filtered.map(file => {
     return {
       type: 'copy',
       source: file,
-      destination: wantedDest,
+      destination: file.substr(idx),
     };
   })
   
@@ -85,7 +93,8 @@ function installContent(files,
 function isSupported(files, gameId) {
   // Ensure that the archive structure has the nativePC Folder present.
   const supported = (gameId === 'monsterhunterworld') 
-    && (files.find(file => file.toLowerCase().indexOf(NATIVE_PC_FOLDER) !== -1) !== undefined)
+    && (files.find(file =>
+      file.toLowerCase().indexOf(NATIVE_PC_FOLDER.toLowerCase()) !== -1) !== undefined)
   return Promise.resolve({
     supported,
     requiredFiles: [],
