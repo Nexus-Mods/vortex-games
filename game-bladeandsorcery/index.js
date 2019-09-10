@@ -20,7 +20,12 @@ const OFFICIAL_MOD_MANIFEST = 'manifest.json';
 //  we're going to use this to compare against a mod's expected
 //  gameversion and inform users of possible incompatibility.
 //  (The global file is located in the game's StreamedAssets/Default path)
+//  *** U6 BACKWARDS COMPATIBILITY ***
 const GLOBAL_FILE = 'Global.json';
+
+// The global file has been renamed to Game.json in update 7.
+//  going to temporarily keep Global.json for backwards compatibility.
+const GAME_FILE = 'Game.json';
 
 async function getJSONElement(filePath, element) {
   return fs.readFileAsync(filePath, { encoding: 'utf-8' })
@@ -109,13 +114,23 @@ async function checkModGameVersion(destination, minModVersion, modFile) {
   }
 }
 
+function findGameConfig(discoveryPath) {
+  const newConfigFilePath = path.join(discoveryPath, streamingAssetsPath(), 'Default', GAME_FILE);
+  const oldConfigFilePath = path.join(discoveryPath, streamingAssetsPath(), 'Default', GLOBAL_FILE);
+  return fs.statAsync(newConfigFilePath)
+    .then(() => newConfigFilePath)
+    .catch(() => oldConfigFilePath);
+}
+
 async function getMinModVersion(discoveryPath) {
-  return getJSONElement(path.join(discoveryPath, streamingAssetsPath(), 'Default', GLOBAL_FILE), 'minModVersion')
+  return findGameConfig(discoveryPath).then(configFile => {
+    return getJSONElement(configFile, 'minModVersion')
     .then(version => { return { version, majorOnly: false } })
     .catch(err => (err.message.indexOf('JSON element is missing') !== -1)
-      ? getJSONElement(path.join(discoveryPath, streamingAssetsPath(), 'Default', GLOBAL_FILE), 'gameVersion')
+      ? getJSONElement(configFile, 'gameVersion')
           .then(version => { return { version, majorOnly: true } })
       : Promise.reject(err));
+  });
 }
 
 async function installOfficialMod(files,
