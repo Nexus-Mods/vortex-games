@@ -1,6 +1,6 @@
 const path = require('path');
 const semver = require('semver');
-const { actions, fs, log, util } = require('vortex-api');
+const { actions, fs, log, selectors, util } = require('vortex-api');
 
 // Nexus Mods id for the game.
 const BLOODSTAINED_ID = 'bloodstainedritualofthenight';
@@ -66,13 +66,15 @@ function migrate100(api, oldVersion) {
   }
 
   const state = api.store.getState();
-  const activatorId = util.getSafe(state, ['settings', 'mods', 'activator', BLOODSTAINED_ID], undefined);
+  const activatorId = selectors.activatorForGame(state, BLOODSTAINED_ID);
+  const activator = util.getActivator(activatorId);
+
   const discovery =
     util.getSafe(state, ['settings', 'gameMode', 'discovered', BLOODSTAINED_ID], undefined);
 
   if ((discovery === undefined)
       || (discovery.path === undefined)
-      || (activatorId === undefined)) {
+      || (activator === undefined)) {
     // if this game is not discovered or deployed there is no need to migrate
     log('debug', 'skipping bloodstained migration because no deployment set up for it');
     return Promise.resolve();
