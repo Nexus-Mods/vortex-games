@@ -1,9 +1,10 @@
 const { app, remote } = require('electron');
+const Big = require('big.js');
 const Promise = require('bluebird');
 const { parseXmlString } = require('libxmljs');
 const path = require('path');
 const { fs, log, util } = require('vortex-api');
-const Big = require('big.js');
+const winapi = require('winapi-bindings');
 
 const APPUNI = app || remote.app;
 const GAME_ID = 'x4foundations';

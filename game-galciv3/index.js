@@ -2,6 +2,7 @@ const Promise = require('bluebird');
 const { app, remote } = require('electron');
 const path = require('path');
 const { fs, selectors, util } = require('vortex-api');
+const winapi = require('winapi-bindings');
 
 const appUni = app || remote.app;
 const GAME_ID = 'galacticcivilizations3';

@@ -16,7 +16,7 @@ const MAB_MODULE_FILE = 'module.ini';
 
 // The common registry key path which can be used to
 //  find the installation folder using the game's steam ID.
-const steamReg = '\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Steam App ';
+const steamReg = 'SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Steam App ';
 
 // A map of file extensions mapped against their
 //  expected folder name. ()

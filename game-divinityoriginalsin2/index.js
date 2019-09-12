@@ -1,6 +1,7 @@
 const { app, remote } = require('electron');
 const path = require('path');
 const { selectors, util } = require('vortex-api');
+const winapi = require('winapi-bindings');
 
 const GAME_ID = 'divinityoriginalsin2';
 const GAME_ID_DE = 'divinityoriginalsin2definitiveedition';
@@ -26,8 +27,8 @@ function findGame() {
     }
     return Promise.resolve(instPath.value);
   } catch (err) {
-  return util.steam.findByName('Divinity: Original Sin 2')
-    .then(game => game.gamePath);
+    return util.steam.findByName('Divinity: Original Sin 2')
+      .then(game => game.gamePath);
   }
 }
 
