@@ -37,6 +37,8 @@ const GAME_PAK_FILE = 're_chunk_000.pak';
 const GAME_ID = 'residentevil22019';
 const STEAM_ID = 883710;
 
+const I18N_NAMESPACE = `game-${GAME_ID}`;
+
 function getFileListCache() {
   return (FILE_CACHE.length > 0)
     ? Promise.resolve(FILE_CACHE)
