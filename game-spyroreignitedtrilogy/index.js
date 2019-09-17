@@ -215,7 +215,7 @@ function LoadOrderBase(props) {
                   props.t('Changing your load order', { ns: I18N_NAMESPACE })),
                 React.createElement('p', {}, 
                   props.t('Drag and drop the mods on the left to reorder them. Spyro Reignited Trilogy loads mods in alphanumerical order so Vortex will add '
-                      + 'a number to the each mod to ensure they load in the order you set here. '
+                      + 'a number to each mod to ensure they load in the order you set here. '
                       + 'Mods placed at the bottom of the load order will have priority over those above them. '
                       + 'Once you are happy with the order, be sure to save it before starting the game.', { ns: I18N_NAMESPACE })),
                   React.createElement('p', {}, 
