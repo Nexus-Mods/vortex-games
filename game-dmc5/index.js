@@ -383,6 +383,11 @@ function invalidateFilePaths(wildCards, api, force = false) {
           : Promise.reject(error));
     }))
     .catch(util.NotFound, () => reportIncompleteList())
+    .catch(util.UserCanceled, () => api.sendNotification({
+      type: 'info',
+      message: 'Invalidation canceled by user',
+      displayMS: 5000,
+    }))
     .catch(err => err.message.indexOf('All entries invalidated') !== -1
       ? Promise.resolve()
       : api.showErrorNotification('Invalidation failed', err));
@@ -511,6 +516,11 @@ function main(context) {
             const wildCards = relFilePaths.map(fileEntry => fileEntry.replace(/\\/g, '/'))
             return revalidateFilePaths(wildCards.map(entry => murmur3.getMurmur3Hash(entry)), context.api);
           })
+          .catch(util.UserCanceled, () => api.sendNotification({
+            type: 'info',
+            message: 'Re-validation canceled by user',
+            displayMS: 5000,
+          }))
           .catch(err => null);
       })
       .finally(() => {
