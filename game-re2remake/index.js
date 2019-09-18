@@ -509,6 +509,7 @@ function main(context) {
 
     context.api.onAsync('did-deploy', (profileId, deployment) => {
       const api = context.api;
+      const store = context.api.store;
       const state = context.api.store.getState();
       const profile = selectors.profileById(state, profileId);
 
