@@ -430,7 +430,8 @@ function main(context) {
         .then(entries => {
           const relFilePaths = entries.map(entry => entry.replace(modFolder + path.sep, ''));
           const wildCards = relFilePaths.map(fileEntry => fileEntry.replace(/\\/g, '/'))
-          return invalidateFilePaths(wildCards, context.api, true);
+          return invalidateFilePaths(wildCards, context.api, true)
+            .then(() => store.dispatch(actions.setDeploymentNecessary(GAME_ID, true)));
         })
     })
     .finally(() => { store.dispatch(actions.stopActivity('mods', 'invalidations')); })
