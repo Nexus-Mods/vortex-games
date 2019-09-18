@@ -2,6 +2,9 @@ const Promise = require('bluebird');
 const path = require('path');
 const murmur3 = require('./murmur3');
 const cache = require('./cache');
+const { app, remote } = require('electron');
+const uniApp = app || remote.app;
+
 const { actions, fs, log, selectors, util } = require('vortex-api');
 
 // Expected file name for the qbms script.
@@ -9,7 +12,7 @@ const BMS_SCRIPT = path.join(__dirname, 'dmc5_pak_unpack.bms');
 
 // Invalidation qbms script - this script relies on a filtered.list
 //  file to be generated.
-const INVAL_SCRIPT = path.join(__dirname, 'dmc5_pak_invalidate.bms');
+const INVAL_SCRIPT = 'dmc5_pak_invalidate.bms';
 
 // Revalidation qbms script - this script relies on a invalcache.file
 //  file to be generated and placed next to the input archive.
@@ -21,10 +24,13 @@ const FILE_LIST = path.join(__dirname, 'dmc5_pak_names_release.list');
 
 let FILE_CACHE = [];
 
+// QBMS temporary folder within Vortex's appdata folder.
+const QBMS_TEMP_PATH = path.join(uniApp.getPath('userData'), 'temp', 'qbms');
+
 // DMC5 requires us to invalidate/zero-out file entries within
 //  the game's pak file; the filtered.list file is generated
 //  using the full file list.
-const FILTERED_LIST = path.join(__dirname, 'filtered.list');
+const FILTERED_LIST = path.join(QBMS_TEMP_PATH, 'filtered.list');
 
 // Regex pattern used to identify installed DLCs
 const DLC_FOLDER_RGX = /^\d+$/gm;
@@ -212,7 +218,8 @@ function getDiscoveryPath(api) {
 }
 
 function generateFilteredList(files) {
-  return getFileListCache()
+  return fs.ensureDirAsync(QBMS_TEMP_PATH)
+    .then(() => getFileListCache())
     .then(cache => {
       const filtered = [];
       files.forEach(file => {
@@ -323,6 +330,22 @@ function revalidateFilePaths(hashes, api) {
     });
 }
 
+function copyToTemp(fileName) {
+  const originalFile = path.join(__dirname, fileName);
+  return fs.statAsync(originalFile)
+    .then(() => fs.ensureDirAsync(QBMS_TEMP_PATH))
+    .then(() => fs.copyAsync(originalFile, path.join(QBMS_TEMP_PATH, fileName)))
+}
+
+function removeFromTemp(fileName) {
+  const filePath = path.join(QBMS_TEMP_PATH, fileName);
+  return fs.statAsync(filePath)
+    .catch(err => (err.code === 'ENOENT')
+      ? Promise.resolve()
+      : Promise.reject(err))
+    .then(() => fs.removeAsync(filePath));
+}
+
 function invalidateFilePaths(wildCards, api, force = false) {
   const reportIncompleteList = () => {
     api.showErrorNotification('Missing filepaths in game archives',
@@ -370,8 +393,9 @@ function invalidateFilePaths(wildCards, api, force = false) {
       let error;
       const archivePath = path.join(discoveryPath, res.arcPath);
       return generateFilteredList(data)
+        .then(() => copyToTemp(INVAL_SCRIPT))
         .then(() => new Promise((resolve) => {
-          api.events.emit('quickbms-operation', INVAL_SCRIPT,
+          api.events.emit('quickbms-operation', path.join(QBMS_TEMP_PATH, INVAL_SCRIPT),
             archivePath, discoveryPath, 'write', quickbmsOpts, err => {
               error = err;
               return resolve();
@@ -390,7 +414,9 @@ function invalidateFilePaths(wildCards, api, force = false) {
     }))
     .catch(err => err.message.indexOf('All entries invalidated') !== -1
       ? Promise.resolve()
-      : api.showErrorNotification('Invalidation failed', err));
+      : api.showErrorNotification('Invalidation failed', err))
+    .finally(() => removeFromTemp(INVAL_SCRIPT)
+      .then(() => removeFilteredList()))
 }
 
 function main(context) {
