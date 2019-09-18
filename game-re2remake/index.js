@@ -233,11 +233,10 @@ function copyToTemp(fileName) {
 
 function removeFromTemp(fileName) {
   const filePath = path.join(QBMS_TEMP_PATH, fileName);
-  return fs.statAsync(filePath)
+  return fs.removeAsync(filePath)
     .catch(err => (err.code === 'ENOENT')
       ? Promise.resolve()
       : Promise.reject(err))
-    .then(() => fs.removeAsync(filePath));
 }
 
 function generateFilteredList(files) {
