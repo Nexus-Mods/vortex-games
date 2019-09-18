@@ -477,7 +477,7 @@ function main(context) {
 
     const stagingFolder = selectors.installPathForGame(state, GAME_ID);
     store.dispatch(actions.startActivity('mods', 'invalidations'));
-    const installedMods = util.getSafe(state, ['persistent', 'mods', GAME_ID]);
+    const installedMods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
     const mods = Object.keys(installedMods);
     return Promise.each(mods, mod => {
       const modFolder = path.join(stagingFolder, mod);
@@ -562,7 +562,7 @@ function main(context) {
 
       const stagingFolder = selectors.installPathForGame(state, GAME_ID);
       store.dispatch(actions.startActivity('mods', 'revalidations'));
-      const installedMods = util.getSafe(state, ['persistent', 'mods', GAME_ID]);
+      const installedMods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
       const mods = Object.keys(installedMods);
       return Promise.each(mods, mod => {
         const modFolder = path.join(stagingFolder, mod);
