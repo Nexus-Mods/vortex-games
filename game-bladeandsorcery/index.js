@@ -21,11 +21,11 @@ const OFFICIAL_MOD_MANIFEST = 'manifest.json';
 //  gameversion and inform users of possible incompatibility.
 //  (The global file is located in the game's StreamedAssets/Default path)
 //  *** U6 BACKWARDS COMPATIBILITY ***
-const GLOBAL_FILE = 'Global.json';
+const GLOBAL_FILE = 'global.json';
 
 // The global file has been renamed to Game.json in update 7.
 //  going to temporarily keep Global.json for backwards compatibility.
-const GAME_FILE = 'Game.json';
+const GAME_FILE = 'game.json';
 
 async function getJSONElement(filePath, element) {
   return fs.readFileAsync(filePath, { encoding: 'utf-8' })
@@ -115,11 +115,15 @@ async function checkModGameVersion(destination, minModVersion, modFile) {
 }
 
 function findGameConfig(discoveryPath) {
-  const newConfigFilePath = path.join(discoveryPath, streamingAssetsPath(), 'Default', GAME_FILE);
-  const oldConfigFilePath = path.join(discoveryPath, streamingAssetsPath(), 'Default', GLOBAL_FILE);
-  return fs.statAsync(newConfigFilePath)
-    .then(() => newConfigFilePath)
-    .catch(() => oldConfigFilePath);
+  const expectedLocation = path.join(discoveryPath, streamingAssetsPath(), 'Default');
+  return fs.readdirAsync(expectedLocation)
+    .then(entries => {
+      const configFile = entries.find(file => (file.toLowerCase() === GAME_FILE)
+        || (file.toLowerCase() === GLOBAL_FILE));
+      return (configFile !== undefined)
+        ? Promise.resolve(path.join(expectedLocation, configFile))
+        : Promise.reject(new Error('Missing config file.'));
+    });
 }
 
 async function getMinModVersion(discoveryPath) {
@@ -165,7 +169,13 @@ async function installOfficialMod(files,
     minModVersion.version = minModVersion.version.toString().replace(',', '.');
   }
   catch (err) {
-    Promise.reject(err);
+    if (err.message.indexOf('Missing config file.') !== -1) {
+      api.showErrorNotification('Missing config file', 'Please run the game at least once to ensure it '
+        + 'generates all required game files; alternatively re-install the game.', { allowReport: false });
+      return Promise.reject(new util.ProcessCanceled('Missing config file.'))
+    }
+
+    return Promise.reject(err);
   }
 
   if (minModVersion === undefined) {
