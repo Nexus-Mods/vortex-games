@@ -161,9 +161,8 @@ function getInvalEntries(cacheDir, hashes, arcKey) {
           lowercase: lowerCaseBuf,
           uppercase: upperCaseBuf
         });
-
-        return prev;
       }
+      return prev;
     }, []);
 
     return Promise.resolve(entries);
