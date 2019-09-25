@@ -12,9 +12,17 @@ function prepareForModding(discovery) {
   return fs.ensureDirWritableAsync(path.join(discovery.path, 'datalocal'), () => Promise.resolve());
 }
 
+function isFomod(files) {
+  return files.find(file =>
+      (path.basename(file).toLowerCase() === 'moduleconfig.xml')
+      && (path.basename(path.dirname(file)).toLowerCase() === 'fomod'));
+}
+
 function testMod(files, gameId) {
+  const supported = (gameId === GAME_ID) && !isFomod(files);
+
   return Promise.resolve({
-    supported: gameId === GAME_ID,
+    supported,
     requiredFiles: []
   });
 }
