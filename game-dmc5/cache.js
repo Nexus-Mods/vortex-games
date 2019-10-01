@@ -165,7 +165,7 @@ function getInvalEntries(cacheDir, hashes, arcKey) {
       return prev;
     }, []);
 
-    return Promise.resolve(entries);
+    return Promise.resolve(entries || []);
   })
 }
 
