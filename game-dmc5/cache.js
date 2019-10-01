@@ -99,6 +99,9 @@ function findArcKeys(cacheDir, hashes) {
     const keys = Object.keys(invalCache);
     const arcKeys = hashes.reduce((prev, hash) => {
       keys.forEach(key => {
+        if (prev[key] === undefined) {
+          prev[key] = [];
+        }
         const entries = Object.keys(invalCache[key]).map(id => invalCache[key][id]);
         if (entries.find(entry => entry.hashVal === hash) !== undefined) {
           prev[key].push(hash);
@@ -106,7 +109,7 @@ function findArcKeys(cacheDir, hashes) {
       })
 
       return prev;
-    }, CACHE_TEMPLATE);
+    }, {});
 
     return Promise.resolve(arcKeys);
   });
