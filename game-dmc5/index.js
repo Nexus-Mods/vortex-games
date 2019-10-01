@@ -273,17 +273,21 @@ function filterOutInvalidated(wildCards, stagingFolder) {
         return Promise.resolve(wildCards);
       }
 
-      // We found matching invalidations, filter them out.
-      const arcKey = Object.keys(arcMap).find(key => arcMap[key].length > 0);
-      if (arcKey === undefined) {
-        return Promise.resolve(wildCards);
-      }
+      // Look up existing invalidations.
+      const mapKeys = Object.keys(arcMap).filter(key =>
+        entries.find(entry =>
+          arcMap[key].indexOf(entry.hash) !== -1) !== undefined);
+
+      let flat = [];
+      mapKeys.forEach(key => {
+        flat = flat.concat(arcMap[key]);
+      });
 
       const filtered = entries.reduce((accumulator, entry) => {
-        if (arcMap[arcKey].find(mapEntry => mapEntry === entry.hash) === undefined){
-          accumulator.push(entry.filePath);
-        }
-        return accumulator;
+        if (flat.find(mapEntry => mapEntry === entry.hash) === undefined) {
+            accumulator.push(entry.filePath);
+          }
+          return accumulator;
       }, []);
 
       return filtered.length > 0
