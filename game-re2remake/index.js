@@ -149,7 +149,8 @@ async function findArchiveFile(files, discoveryPath, api) {
     .catch(util.NotFound, () => fs.readdirAsync(discoveryPath)
       .then(entries => {
         let found;
-        const installedDLC = entries.filter(entry => entry.match(DLC_FOLDER_RGX));
+        const installedDLC = entries.filter(entry => 
+          ((entry !== STEAM_ID.toString()) && (entry.match(DLC_FOLDER_RGX))));
         return Promise.each(installedDLC, dlc => {
           archivePath = path.join(discoveryPath, dlc, DLC_PAK_FILE);
           return (found !== undefined)
@@ -460,7 +461,7 @@ function invalidateFilePaths(wildCards, api, force = false) {
               .then(entries => cache.insertOffsets(stagingFolder, entries, arcKey))
           : Promise.reject(error));
     }))
-    .catch(util.NotFound, () => reportIncompleteList())
+    .catch(util.NotFound, () => (force) ? null : reportIncompleteList())
     .catch(util.UserCanceled, () => api.sendNotification({
       type: 'info',
       message: 'Invalidation canceled by user',
