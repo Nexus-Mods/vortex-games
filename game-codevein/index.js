@@ -110,7 +110,6 @@ function modIsEnabled(props, mod) {
     : false;
 }
 
-
 function makePrefix(input) {
   let res = '';
   let rest = input;

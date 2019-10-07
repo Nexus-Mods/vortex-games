@@ -10,10 +10,8 @@ const SPYRO_ID = 'spyroreignitedtrilogy';
 
 const I18N_NAMESPACE = `game-${SPYRO_ID}`;
 
-// All Elex mods will be .pak files
+// All Spyro mods will be .pak files
 const MOD_FILE_EXT = ".pak";
-
-let needsPurge = false;
 
 function findGame() {
   return util.steam.findByAppId('996580')
@@ -70,7 +68,7 @@ function main(context) {
   context.registerGame({
     id: SPYRO_ID,
     name: 'Spyro Reignited Trilogy',
-    mergeMods: mod => loadOrderPrefix(context.api, mod) + '-' + mod.id,
+    mergeMods: mod => loadOrderPrefix(context.api, mod) + mod.id,
     queryPath: findGame,
     requiresCleanup: true,
     supportedTools: [],
@@ -101,13 +99,17 @@ function main(context) {
     }),
   });
 
-  context.once(() => {
-    context.api.onStateChange(['session', 'base', 'mainPage'], () => {
-      purgeAndDeploy();
-    })
-  });
-
   return true;
+}
+
+function makePrefix(input) {
+  let res = '';
+  let rest = input;
+  while (rest > 0) {
+    res = String.fromCharCode(65 + (rest % 25)) + res;
+    rest = Math.floor(rest / 25);
+  }
+  return util.pad(res, 'A', 3);
 }
 
 function loadOrderPrefix(api, mod) {
@@ -115,19 +117,11 @@ function loadOrderPrefix(api, mod) {
   const profile = selectors.activeProfile(state);
   const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], []);
   const pos = loadOrder.indexOf(mod.id);
-
-  return `${pos !== -1 ? pos : loadOrder.length}`; //trying to avoid -1 folder names
-}
-
-function purgeAndDeploy() {
-  if (needsPurge) {
-    _API.events.emit('purge-mods', false, (err) => {
-      if (!err) {
-        _API.events.emit('deploy-mods', () => undefined);
-        needsPurge = false;
-      }
-    });
+  if (pos === -1) {
+    return 'ZZZZ-';
   }
+
+  return makePrefix(pos) + '-';
 }
 
 function modIsEnabled(props, mod) {
@@ -177,7 +171,7 @@ function LoadOrderBase(props) {
               border: '1px solid var(--brand-secondary,#D78F46)',
             },
           }),
-          index + " - " + util.renderModName(props.mods[item])));
+          util.renderModName(props.mods[item])));
     }
   }
 
@@ -200,7 +194,7 @@ function LoadOrderBase(props) {
                   borderColor: 'var(--border-color, white)',
                 },
                 apply: ordered => {
-                  needsPurge = true;
+                  props.onSedDeploymentNecessary(props.profile.gameId, true);
                   return props.onSetOrder(props.profile.id, ordered)
                 },
               })
@@ -214,19 +208,11 @@ function LoadOrderBase(props) {
                 React.createElement('h2', {}, 
                   props.t('Changing your load order', { ns: I18N_NAMESPACE })),
                 React.createElement('p', {}, 
-                  props.t('Drag and drop the mods on the left to reorder them. Spyro Reignited Trilogy loads mods in alphanumerical order so Vortex will add '
-                      + 'a number to each mod to ensure they load in the order you set here. '
-                      + 'Mods placed at the bottom of the load order will have priority over those above them. '
-                      + 'Once you are happy with the order, be sure to save it before starting the game.', { ns: I18N_NAMESPACE })),
+                  props.t('Drag and drop the mods on the left to reorder them. Spyro Reignited Trilogy loads mods in alphanumerical order so Vortex prefixes '
+                      + 'the directory names with "AAA, AAB, AAC, ..." to ensure they load in the order you set here. '
+                      + 'Mods placed at the bottom of the load order will have priority over those above them.', { ns: I18N_NAMESPACE })),
                   React.createElement('p', {}, 
                   props.t('Note: You can only manage mods installed with Vortex. Installing other mods manually may cause unexpected errors.', { ns: I18N_NAMESPACE })),
-                  React.createElement('button', {
-                    id: 'save',
-                    className: 'btn btn-default',
-                    disabled: !props.needsPurge,
-                    onClick: () => purgeAndDeploy()
-                  }, 
-                  props.t('Save changes', { ns: I18N_NAMESPACE }))
               ))
         )))));
 }
@@ -234,7 +220,6 @@ function LoadOrderBase(props) {
 function mapStateToProps(state) {
   const profile = selectors.activeProfile(state);
   return {
-    needsPurge,
     profile,
     modState: util.getSafe(profile, ['modState'], {}),
     mods: util.getSafe(state, ['persistent', 'mods', profile.gameId], []),
@@ -244,6 +229,7 @@ function mapStateToProps(state) {
 
 function mapDispatchToProps(dispatch) {
   return {
+    onSedDeploymentNecessary: (gameId, necessary) => dispatch(actions.setDeploymentNecessary(gameId, necessary)),
     onSetOrder: (profileId, ordered) => dispatch(actions.setLoadOrder(profileId, ordered)),
   };
 }
