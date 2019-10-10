@@ -31,7 +31,7 @@ function main(context) {
 	//This is the main function Vortex will run when detecting the game extension. 
 	context.registerGame({
     id: GAME_ID,
-    name: 'Daggerfall unity',
+    name: 'Daggerfall Unity',
     mergeMods: true,
     queryPath: findGame,
     supportedTools: [],
