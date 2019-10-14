@@ -491,6 +491,15 @@ function main(context) {
     setup: (discovery) => prepareForModding(discovery, context.api),
   });
 
+  const missingModNotification = (modFolder) => {
+    context.api.showErrorNotification('Missing Mod Installation',
+      'A mod\'s installation folder is missing or is still being downloaded/removed.<br/>'
+    + 'Please ensure that the mod installation directory "{{modDir}}" exists.',
+      { replace: { modDir: modFolder },
+        isBBCode: true, allowReport: false });
+  };
+
+
   // Pre-qbms RE2 installer was not fit for purpose and needs to be removed.
   //  Users which have already downloaded mods need to be migrated.
   context.registerMigration(old => migrate010(context.api, old));
@@ -518,6 +527,15 @@ function main(context) {
           return invalidateFilePaths(wildCards, context.api, true)
             .then(() => store.dispatch(actions.setDeploymentNecessary(GAME_ID, true)));
         })
+        .catch(err => {
+          if (err.code === 'ENOENT') {
+            // Missing mod installation folder ? Inform user and continue.
+            missingModNotification(modFolder);
+            return Promise.resolve();
+          } else {
+            context.api.showErrorNotification('Invalidation failed', err);
+          }
+        });
     })
     .finally(() => { store.dispatch(actions.stopActivity('mods', 'invalidations')); })
   }, () => {
@@ -575,6 +593,15 @@ function main(context) {
               const wildCards = relFilePaths.map(fileEntry => fileEntry.replace(/\\/g, '/'))
               return invalidateFilePaths(wildCards, context.api);
             })
+            .catch(err => {
+              if (err.code === 'ENOENT') {
+                // Missing mod installation folder ? Inform user and continue.
+                missingModNotification(modFolder);
+                return Promise.resolve();
+              } else {
+                context.api.showErrorNotification('Invalidation failed', err);
+              }
+            });
         })
         .finally(() => {
           store.dispatch(actions.stopActivity('mods', 'invalidations'));
