@@ -492,11 +492,10 @@ function main(context) {
   });
 
   const missingModNotification = (modFolder) => {
-    context.api.showErrorNotification('Missing Mod Installation',
-      'A mod\'s installation folder is missing or is still being downloaded/removed.<br/>'
+    context.api.showErrorNotification('Missing mod installation folder',
+      'A mod\'s installation folder is missing or is still being downloaded/removed.'
     + 'Please ensure that the mod installation directory "{{modDir}}" exists.',
-      { replace: { modDir: modFolder },
-        isBBCode: true, allowReport: false });
+      { replace: { modDir: modFolder }, allowReport: false });
   };
 
 
