@@ -5,18 +5,18 @@ const { runPatcher } = require('patcher-harmony');
 
 const DATAPATH = path.join('Untitled_Data', 'Managed')
 const ENTRY_POINT = 'GameManager::Awake';
+const EPIC_APP_ID = 'Flour';
 
 function requiresLauncher() {
-  return util.epicGamesLauncher.isGameInstalled('Flour')
+  return util.epicGamesLauncher.isGameInstalled(EPIC_APP_ID)
     .then(epic => epic
-      ? { launcher: 'epic', addInfo: 'Flour' }
+      ? { launcher: 'epic', addInfo: EPIC_APP_ID }
       : undefined);
 }
 
 function findGame() {
-  // Currently no way for us to tell if the goose game is
-  //  installed.
-  return null;
+  return util.epicGamesLauncher.findByName(EPIC_APP_ID)
+    .then(epicEntry => epicEntry.gamePath);
 }
 
 function modPath() {
