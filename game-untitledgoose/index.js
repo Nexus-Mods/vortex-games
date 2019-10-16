@@ -1,7 +1,7 @@
 const Promise = require('bluebird');
 const path = require('path');
 const { fs, util } = require('vortex-api');
-const { runPatcher } = require('patcher-harmony');
+const { runPatcher } = require('harmony-patcher');
 
 const DATAPATH = path.join('Untitled_Data', 'Managed')
 const ENTRY_POINT = 'GameManager::Awake';
