@@ -42,6 +42,7 @@ const DLC_PAK_FILE = 're_dlc_000.pak';
 const GAME_PAK_FILE = 're_chunk_000.pak';
 const GAME_ID = 'residentevil22019';
 const STEAM_ID = 883710;
+const STEAM_ID_Z = 895950;
 
 const I18N_NAMESPACE = `game-${GAME_ID}`;
 
@@ -77,6 +78,7 @@ function addToFileList(files) {
 
 function findGame() {
   return util.steam.findByAppId(STEAM_ID.toString())
+    .catch(err => util.steam.findByAppId(STEAM_ID_Z.toString()))
     .then(game => game.gamePath);
 }
 
@@ -149,8 +151,9 @@ async function findArchiveFile(files, discoveryPath, api) {
     .catch(util.NotFound, () => fs.readdirAsync(discoveryPath)
       .then(entries => {
         let found;
-        const installedDLC = entries.filter(entry => 
-          ((entry !== STEAM_ID.toString()) && (entry.match(DLC_FOLDER_RGX))));
+        const installedDLC = entries.filter(entry => ((entry !== STEAM_ID.toString())
+                                                   && (entry !== STEAM_ID_Z.toString())
+                                                   && (entry.match(DLC_FOLDER_RGX))));
         return Promise.each(installedDLC, dlc => {
           archivePath = path.join(discoveryPath, dlc, DLC_PAK_FILE);
           return (found !== undefined)
@@ -485,9 +488,6 @@ function main(context) {
     queryModPath: () => '.',
     executable: () => 're2.exe',
     requiredFiles: ['re2.exe', GAME_PAK_FILE],
-    details: {
-      steamAppId: STEAM_ID,
-    },
     setup: (discovery) => prepareForModding(discovery, context.api),
   });
 
@@ -497,7 +497,6 @@ function main(context) {
     + 'Please ensure that the mod installation directory "{{modDir}}" exists.',
       { replace: { modDir: modFolder }, allowReport: false });
   };
-
 
   // Pre-qbms RE2 installer was not fit for purpose and needs to be removed.
   //  Users which have already downloaded mods need to be migrated.
