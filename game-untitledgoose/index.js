@@ -25,7 +25,7 @@ function modPath() {
 
 function prepareForModding(discovery) {
   const absPath = path.join(discovery.path, DATAPATH);
-  return runPatcher(absPath, ENTRY_POINT, false)
+  return runPatcher(__dirname, absPath, ENTRY_POINT, false)
     .then(() => fs.ensureDirWritableAsync(modPath(), () => Promise.resolve()));
 }
 
