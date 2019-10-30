@@ -87,24 +87,51 @@ function spawnProcess(exePath, args, logPath, api) {
       wstream.close();
 
       if (code !== 0) {
-        api.sendNotification({
-          type: 'error',
-          id: PATCH_NOTIFICATION_ID,
-          icon: 'icon-dialog-error',
-          message: 'Installation via external tools has failed. Please see logs in "{{userdata}}" for further details.',
-          replace: { userdata: uniApp.getPath('userData') },
-          actions: [
-            {
-              title: 'Error log', action: (dismiss) =>
-                api.showDialog(
-                  'error',
-                  'Final Fantasy XII: The Zodiac Age', {
-                  text: stdOutLines.join('\n') + '\n' + stdErrLines.join('\n'),
-                },
-                  [{ label: 'Close', action: () => dismiss() }]),
-            },
-          ],
-        });
+        if (code == 0xc0000135) {
+          api.sendNotification({
+            type: 'error',
+            id: PATCH_NOTIFICATION_ID,
+            icon: 'icon-dialog-error',
+            message: 'Installation via external tools has failed. VCRuntime or other DLLs missing.',
+            replace: { userdata: uniApp.getPath('userData') },
+            actions: [
+              {
+                title: 'See details', action: (dismiss) =>
+                  api.showDialog(
+                    'error',
+                    'Final Fantasy XII: The Zodiac Age', {
+                    bbcode: "The patching tool couldn't be executed, because one or more dynamic libraries are missing.<br/>"
+                      + "The most probable cause is MS Visual C++ Runtime. You can download it from Microsoft here:<br/><br/>"
+                      + "[url]https://support.microsoft.com/en-us/help/2977003/the-latest-supported-visual-c-downloads[/url]<br/><br/>"
+                      + "Download and install the newest (at the top of the page) [b]\"vc_redist.x64.exe\"[/b].<br/><br/>"
+                      + "Alternatively, just use this direct download link:<br/><br/>"
+                      + "[url]https://aka.ms/vs/16/release/vc_redist.x64.exe[/url]<br/><br/>"
+                      + "Once everything is installed, try again.",
+                  },
+                    [{ label: 'Close', action: () => dismiss() }]),
+              },
+            ],
+          });
+        } else {
+          api.sendNotification({
+            type: 'error',
+            id: PATCH_NOTIFICATION_ID,
+            icon: 'icon-dialog-error',
+            message: 'Installation via external tools has failed. Please see logs in "{{userdata}}" for further details.',
+            replace: { userdata: uniApp.getPath('userData') },
+            actions: [
+              {
+                title: 'Error log', action: (dismiss) =>
+                  api.showDialog(
+                    'error',
+                    'Final Fantasy XII: The Zodiac Age', {
+                    text: stdOutLines.join('\n') + '\n' + stdErrLines.join('\n'),
+                  },
+                    [{ label: 'Close', action: () => dismiss() }]),
+              },
+            ],
+          });
+        }
         return reject();
       }
 
