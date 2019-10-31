@@ -1,9 +1,9 @@
 ManifestFileVersion: 0
-CRC: 2654262016
+CRC: 4135459024
 Hashes:
   AssetFileHash:
     serializedVersion: 2
-    Hash: 6dd3bb9504cccc1e2a736e4b5129e072
+    Hash: 0ad0d96838535b615b077e32e1b88b14
   TypeTreeHash:
     serializedVersion: 2
     Hash: edb330618787436019472921b42fde67
@@ -32,9 +32,11 @@ ClassTypes:
 - Class: 224
   Script: {instanceID: 0}
 Assets:
+- Assets/VortexUIAssets/Textures/toggle_on-24px.png
 - Assets/VortexUIAssets/Fonts/roboto.ttf
 - Assets/VortexUIAssets/Textures/vortexTexture.png
 - Assets/VortexUIAssets/Textures/buttonTexture.png
 - Assets/VortexUIAssets/Textures/bg.png
 - Assets/Prefabs/VortexOverlay.prefab
+- Assets/VortexUIAssets/Textures/toggle_off-24px.png
 Dependencies: []
