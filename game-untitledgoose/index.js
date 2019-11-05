@@ -26,7 +26,7 @@ function modPath() {
 function prepareForModding(discovery) {
   const absPath = path.join(discovery.path, DATAPATH);
   return runPatcher(__dirname, absPath, ENTRY_POINT, false)
-    .then(() => fs.ensureDirWritableAsync(modPath(), () => Promise.resolve()));
+    .then(() => fs.ensureDirWritableAsync(path.join(absPath, 'VortexMods'), () => Promise.resolve()));
 }
 
 function main(context) {
