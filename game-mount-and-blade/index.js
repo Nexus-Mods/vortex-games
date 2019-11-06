@@ -42,7 +42,7 @@ const MAB_GAMES = {
     name: 'Mount & Blade',
     steamId: '22100',
     regPath: steamReg + '22100',
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     exec: 'mount&blade.exe',
     nativeModuleName: 'native',
   },

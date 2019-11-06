@@ -36,7 +36,7 @@ function main(context) {
     supportedTools,
     setup: prepareForModding,
     queryModPath: modPath,
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'Shadowrun.exe',
     requiredFiles: [
       'Shadowrun.exe',

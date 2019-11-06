@@ -24,7 +24,7 @@ class SubnauticaBelowZero {
       shell: true,
       }
     ];
-    this.logo = 'gameart.png';
+    this.logo = 'gameart.jpg';
     this.executable = () => 'SubnauticaZero.exe';
     this.requiredFiles = [
       'SubnauticaZero.exe'

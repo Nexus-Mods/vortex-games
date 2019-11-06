@@ -46,7 +46,7 @@ function main(context) {
     {
       id: GAME_ID,
       name: 'Prison Architect',
-      logo: 'gameart.png',
+      logo: 'gameart.jpg',
       mergeMods: true,
       queryPath: findGame,
       queryModPath: () => MODS_LOCAL,

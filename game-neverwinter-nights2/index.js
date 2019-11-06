@@ -41,7 +41,7 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: modPath,
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'nwn2.exe',
     requiredFiles: [
       'nwn2.exe',

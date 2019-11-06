@@ -23,7 +23,7 @@ class Subnautica {
       relative: true,
       shell: true,
     }];
-    this.logo = 'gameart.png';
+    this.logo = 'gameart.jpg';
     this.executable = () => 'Subnautica.exe';
     this.requiredFiles = [
       'Subnautica.exe'

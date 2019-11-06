@@ -135,7 +135,7 @@ function main(context) {
     requiresLauncher,
     queryPath: findGame,
     queryModPath,
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'bin_ship/daorigins.exe',
     setup: prepareForModding,
     requiredFiles: [

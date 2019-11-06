@@ -101,7 +101,7 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: modPath,
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'GalCiv3.exe',
     requiredFiles: [
       'GalCiv3.exe',

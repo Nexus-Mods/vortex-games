@@ -60,7 +60,7 @@ function main(context) {
   context.registerGame({
     id: GAME_ID,
     name: 'Vampire the Masquerade\tBloodlines',
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     mergeMods: true,
     queryPath: findGame,
     requiresLauncher,

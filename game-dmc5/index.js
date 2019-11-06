@@ -427,7 +427,7 @@ function main(context) {
   context.registerGame({
     id: GAME_ID,
     name: 'Devil May Cry 5',
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     mergeMods: true,
     queryPath: findGame,
     queryModPath: () => '.',

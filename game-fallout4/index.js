@@ -58,7 +58,7 @@ function main(context) {
     queryPath: findGame,
     supportedTools: tools,
     queryModPath: () => 'data',
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'Fallout4.exe',
     requiredFiles: [
       'Fallout4.exe',

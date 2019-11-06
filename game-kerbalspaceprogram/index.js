@@ -15,7 +15,7 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: () => 'GameData',
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'KSP_x64.exe',
     requiredFiles: [
       'KSP_x64.exe',

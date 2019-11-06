@@ -40,7 +40,7 @@ function main(context) {
     queryPath: findGame,
     supportedTools: [],
     queryModPath: () => 'CookedPC',
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: win32 ?
       () => 'bin/witcher2.exe' :
       () => 'launcher',

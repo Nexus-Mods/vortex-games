@@ -87,7 +87,7 @@ function main(context) {
     requiresLauncher,
     queryPath: findGame,
     queryModPath: modPath,
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'ModLauncher.exe',
     requiredFiles: [
       'Torchlight2.exe',

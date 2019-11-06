@@ -89,7 +89,7 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: () => 'mods',
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: (discoveryPath) => getExecutable(discoveryPath),
     requiredFiles: [],
     setup: prepareForModding,

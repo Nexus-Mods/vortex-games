@@ -30,7 +30,7 @@ function main(context) {
     queryPath: findGame,
     supportedTools: tools,
     queryModPath: () => path.join('tf', 'custom'),
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'hl2.exe',
     requiredFiles: [
       'hl2.exe',

@@ -24,7 +24,7 @@ class StardewValley {
     this.context = context;
     this.id = GAME_ID;
     this.name = 'Stardew Valley';
-    this.logo = 'gameart.png';
+    this.logo = 'gameart.jpg';
     this.requiredFiles = process.platform == 'win32'
       ? ['Stardew Valley.exe']
       : ['StardewValley', 'StardewValley.exe'];

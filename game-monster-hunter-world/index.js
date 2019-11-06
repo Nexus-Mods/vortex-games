@@ -45,7 +45,7 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: () => NATIVE_PC_FOLDER,
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => MHW_EXEC,
     requiredFiles: [
       MHW_EXEC,

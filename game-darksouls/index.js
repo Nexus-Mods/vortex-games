@@ -11,7 +11,7 @@ class DarkSouls {
     this.id = 'darksouls';
     this.name = 'Dark Souls';
     this.mergeMods = true;
-    this.logo = 'gameart.png';
+    this.logo = 'gameart.jpg';
     this.details = {
       steamAppId: 211420,
     };

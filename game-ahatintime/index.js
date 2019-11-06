@@ -77,7 +77,7 @@ function main(context) {
     queryPath: findGame,
     supportedTools: tools,
     queryModPath: () => 'HatInTimeGame/Mods',
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'Binaries/Win64/HatInTimeGame.exe',
     requiredFiles: [
       'Binaries/Win64/HatInTimeGame.exe',

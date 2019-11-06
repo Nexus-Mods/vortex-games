@@ -37,7 +37,7 @@ function main(context) {
     queryPath: findGame,
     queryModPath: modPath,
     requiresLauncher,
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'Untitled.exe',
     requiredFiles: [
       'Untitled.exe',

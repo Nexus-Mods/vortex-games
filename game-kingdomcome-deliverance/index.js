@@ -98,7 +98,7 @@ function LoadOrderBase(props) {
           React.createElement('img', {
             src: props.mods[item].attributes.pictureUrl
                   ? props.mods[item].attributes.pictureUrl
-                  : `${__dirname}/gameart.png`,
+                  : `${__dirname}/gameart.jpg`,
             className: 'mod-picture',
             width:'75px',
             height:'45px',
@@ -163,7 +163,7 @@ function main(context) {
     mergeMods: mod => transformId(mod.id),
     queryPath: findGame,
     queryModPath: () => 'Mods',
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'Bin/Win64/KingdomCome.exe',
     requiredFiles: [
       'Bin/Win64/KingdomCome.exe',

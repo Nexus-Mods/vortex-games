@@ -18,7 +18,7 @@ function main(context) {
     {
       id: NexusId,
       name: Name,
-      logo: 'gameart.png',
+      logo: 'gameart.jpg',
       mergeMods: true,
       queryPath: findGame,
       queryModPath: () => 'Mods',

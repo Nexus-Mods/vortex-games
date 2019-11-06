@@ -152,7 +152,7 @@ function main(context) {
   context.registerGame({
     id: GAME_ID,
     name: 'Dawn of Man',
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     mergeMods: true,
     queryPath: findGame,
     queryModPath: () => 'Mods',

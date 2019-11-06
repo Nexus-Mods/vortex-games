@@ -61,7 +61,7 @@ function installMod(files, destinationPath) {
 const gameParameters = {
   id: GAME_ID,
   name: 'GreedFall',
-  logo: 'gameart.png',
+  logo: 'gameart.jpg',
   mergeMods: true,
   queryPath: findGame,
   queryModPath: () => 'datalocal',

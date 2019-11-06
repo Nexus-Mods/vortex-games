@@ -109,7 +109,7 @@ function main(context) {
     queryPath: findGame,
     supportedTools: [],
     queryModPath: () => 'Mods',
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'bin/x64/witcher3.exe',
     setup: prepareForModding,
     requiredFiles: [

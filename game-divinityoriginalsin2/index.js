@@ -44,7 +44,7 @@ function main(context) {
     queryPath: findGame,
     supportedTools: [],
     queryModPath: modPath,
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'bin/SupportTool.exe',
     requiredFiles: [
       'bin/SupportTool.exe',

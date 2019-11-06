@@ -24,7 +24,7 @@ function main(context) {
     mergeArchive: filePath => path.basename(filePath).toLowerCase() === 'game_main.arc',
     queryPath: findGame,
     queryModPath: modPath,
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'DDDA.exe',
     requiredFiles: [
       'DDDA.exe',

@@ -313,7 +313,7 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: modPath,
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'game/bin/TS4.exe',
     setup: prepareForModding,
     supportedTools: [

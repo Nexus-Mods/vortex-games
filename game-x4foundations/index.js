@@ -161,7 +161,7 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: () => 'extensions',
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'X4.exe',
     setup: prepareForModding,
     requiredFiles: [

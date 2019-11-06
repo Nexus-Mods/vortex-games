@@ -22,7 +22,7 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: modPath,
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'grimrock.exe',
     requiredFiles: [
       'grimrock.exe',

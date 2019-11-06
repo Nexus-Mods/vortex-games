@@ -482,7 +482,7 @@ function main(context) {
   context.registerGame({
     id: GAME_ID,
     name: 'Resident Evil 2 (2019)',
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     mergeMods: true,
     queryPath: findGame,
     queryModPath: () => '.',

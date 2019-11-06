@@ -34,7 +34,7 @@ function main(context) {
     supportedTools: [],
     setup: prepareForModding,
     queryModPath: () => 'mods',
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'Grim Dawn.exe',
     requiredFiles: [
       'Grim Dawn.exe',

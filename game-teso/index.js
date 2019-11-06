@@ -35,7 +35,7 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: modPath,
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'Bethesda.net_Launcher.exe',
     requiredFiles: [
       'Bethesda.net_Launcher.exe',

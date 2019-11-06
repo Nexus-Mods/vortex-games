@@ -23,7 +23,7 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: () => 'Mods',
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'RimWorldWin64.exe',
     requiredFiles: [
       'RimWorldWin64.exe'
