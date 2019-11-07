@@ -484,7 +484,8 @@ function main(context) {
 
     context.api.onAsync('did-deploy', (profileId, deployment) => {
       const api = context.api;
-      const state = context.api.store.getState();
+      const store = context.api.store;
+      const state = store.getState();
       const profile = selectors.profileById(state, profileId);
 
       if (GAME_ID !== profile.gameId) {
@@ -502,7 +503,7 @@ function main(context) {
           .finally(() => { store.dispatch(actions.stopActivity('mods', 'invalidations')); });
       }
       return Promise.resolve();
-    })
+    });
 
     context.api.onAsync('bake-settings', (gameId, mods) => {
       if (gameId === GAME_ID) {
@@ -527,7 +528,8 @@ function main(context) {
     });
 
     context.api.events.on('purge-mods', () => {
-      const store = context.api.store;
+      const api = context.api;
+      const store = api.store;
       const state = store.getState();
       const activeGameId = selectors.activeGameId(state);
       if (activeGameId !== GAME_ID){
