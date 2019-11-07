@@ -1,5 +1,6 @@
-const { util } = require('vortex-api');
+const { fs, log, util } = require('vortex-api');
 const path = require('path');
+const MOD_FILE_EXT = ".vpk";
 
 const STEAM_ID = 440;
 const GAME_ID = 'teamfortress2';
@@ -20,7 +21,37 @@ let tools = [
     ],
   },
 ];
+function installContent(files) {
 
+  const modFile = files.find(file => path.extname(file).toLowerCase() === MOD_FILE_EXT);
+  const idx = modFile.indexOf(path.basename(modFile));
+  const rootPath = path.dirname(modFile);
+  
+ 
+  const filtered = files.filter(file => 
+    ((file.indexOf(rootPath) !== -1) 
+    && (!file.endsWith(path.sep))));
+
+  const instructions = filtered.map(file => {
+    return {
+      type: 'copy',
+      source: file,
+      destination: path.join(file.substr(idx)),
+    };
+  });
+
+  return Promise.resolve({ instructions });
+}
+function testSupportedContent(files, gameId) {
+ 
+  let supported = (gameId === GAME_ID ) &&
+    (files.find(file => path.extname(file).toLowerCase() === MOD_FILE_EXT) !== undefined);
+
+  return Promise.resolve({
+    supported,
+    requiredFiles: [],
+  });
+}
 function main(context) {
   context.registerGame({
     id: GAME_ID,
@@ -44,6 +75,9 @@ function main(context) {
       nexusPageId: GAME_ID,
     }
   });
+  
+  context.registerInstaller('teamfortress2-mod', 25, testSupportedContent, installContent);
+  
   return true;
 }
 
