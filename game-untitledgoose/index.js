@@ -44,9 +44,6 @@ function main(context) {
       'UnityPlayer.dll',
     ],
     setup: prepareForModding,
-    details: {
-      steamAppId: 427520,
-    },
   });
 
   return true;
