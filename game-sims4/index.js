@@ -314,22 +314,22 @@ function main(context) {
     queryPath: findGame,
     queryModPath: modPath,
     logo: 'gameart.jpg',
-    executable: () => 'game/bin/TS4.exe',
+    executable: () => 'game/bin/TS4_x64.exe',
     setup: prepareForModding,
     supportedTools: [
       {
-        id: 'exe64bit',
-        name: 'The Sims 4 (64 bit)',
+        id: 'exe32bit',
+        name: 'The Sims 4 (32 bit)',
         logo: 'icon.png',
-        executable: () => 'game/bin/TS4_x64.exe',
+        executable: () => 'game/bin_le/TS4.exe',
         requiredFiles: [
-          'game/bin/TS4_x64.exe',
+          'game/bin/TS4.exe',
         ],
         relative: true,
       },
     ],
     requiredFiles: [
-      'game/bin/TS4.exe',
+      'game/bin/TS4_x64.exe',
     ],
   });
 
