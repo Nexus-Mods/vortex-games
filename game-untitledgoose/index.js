@@ -17,7 +17,7 @@ function requiresLauncher() {
 }
 
 function findGame() {
-  return util.epicGamesLauncher.findByName(EPIC_APP_ID)
+  return util.epicGamesLauncher.findByAppId(EPIC_APP_ID)
     .then(epicEntry => epicEntry.gamePath);
 }
 
