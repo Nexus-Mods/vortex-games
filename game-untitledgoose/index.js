@@ -58,6 +58,18 @@ function main(context) {
     setup: prepareForModding,
   });
 
+  const isGameRunning = (state) => {
+    return Object.keys(util.getSafe(state, ['session', 'base', 'toolsRunning'], {})).length > 0;
+  }
+
+  const gameIsRunningNotif = () => {
+    context.api.sendNotification({
+      type: 'info',
+      message: 'Can\'t run harmony patcher while a tool/game is running',
+      displayMS: 5000,
+    });
+  }
+
   const reportPatcherError = (err) => {
     context.api.showErrorNotification('Patcher encountered errors',
       'The patcher was unable to finish its operation "{{errorMsg}}"',
@@ -71,6 +83,12 @@ function main(context) {
     if (gameMode !== GAME_ID) {
       return false;
     }
+
+    if (isGameRunning(state)) {
+      gameIsRunningNotif();
+      return true;
+    }
+
     const dataPath = path.join(getDiscoveryPath(state), DATAPATH);
     runPatcher(__dirname, dataPath, ENTRY_POINT, true)
       .catch(err => reportPatcherError(err));
@@ -88,6 +106,12 @@ function main(context) {
     if (gameMode !== GAME_ID) {
       return false;
     }
+
+    if (isGameRunning(state)) {
+      gameIsRunningNotif();
+      return true;
+    }
+
     const dataPath = path.join(getDiscoveryPath(state), DATAPATH);
     runPatcher(__dirname, dataPath, ENTRY_POINT, false)
       .catch(err => reportPatcherError(err));
