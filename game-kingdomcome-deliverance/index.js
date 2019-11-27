@@ -198,6 +198,15 @@ function main(context) {
         const store = context.api.store;
         const state = store.getState();
         const profile = selectors.activeProfile(state);
+        if ((profile === undefined) || (profile.gameId !== GAME_ID)) {
+          // This is a valid use case when the user chooses to manage KCD
+          //  and the active profile is still pointing towards the old
+          //  profile or perhaps he has yet to manage any game at all.
+          //  In this situation we don't want to commit any changes to
+          //  the mod's load order.
+          return;
+        }
+
         const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], []);
         const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', gameId], undefined);
         if ((discovery === undefined) || (discovery.path === undefined)) {
@@ -218,12 +227,14 @@ function main(context) {
 }
 
 function mapStateToProps(state) {
-  const profile = selectors.activeProfile(state);
+  const profile = selectors.activeProfile(state) || {};
+  const profileId = !!profile ? profile.id : '';
+  const gameId = !!profile ? profile.gameId : '';
   return {
     profile,
     modState: util.getSafe(profile, ['modState'], {}),
-    mods: util.getSafe(state, ['persistent', 'mods', profile.gameId], []),
-    order: util.getSafe(state, ['persistent', 'loadOrder', profile.id], []),
+    mods: util.getSafe(state, ['persistent', 'mods', gameId], []),
+    order: util.getSafe(state, ['persistent', 'loadOrder', profileId], []),
   };
 }
 
