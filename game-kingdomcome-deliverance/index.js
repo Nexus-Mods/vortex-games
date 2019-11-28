@@ -3,7 +3,7 @@ const React = require('react');
 const BS = require('react-bootstrap');
 const { connect } = require('react-redux');
 const path = require('path');
-const { actions, fs, DraggableList, FlexLayout, MainPage, selectors, util } = require('vortex-api');
+const { actions, fs, DraggableList, FlexLayout, log, MainPage, selectors, util } = require('vortex-api');
 
 const GAME_ID = 'kingdomcomedeliverance';
 const I18N_NAMESPACE = `game-${GAME_ID}`;
@@ -197,17 +197,21 @@ function main(context) {
       if (gameId === GAME_ID) {
         const store = context.api.store;
         const state = store.getState();
-        const profile = selectors.activeProfile(state);
-        if ((profile === undefined) || (profile.gameId !== GAME_ID)) {
-          // This is a valid use case when the user chooses to manage KCD
-          //  and the active profile is still pointing towards the old
-          //  profile or perhaps he has yet to manage any game at all.
-          //  In this situation we don't want to commit any changes to
-          //  the mod's load order.
+        const profileId = selectors.lastActiveProfileForGame(state, GAME_ID);
+
+        // Check if we managed to find the profile and whether it still exists
+        //  as the user could've potentially removed it since he used it last.
+        const profileIdExists = (!!profileId)
+          ? (util.getSafe(state, ['persistent', 'profiles', profileId], undefined) !== undefined)
+          : false;
+
+        if (!profileIdExists) {
+          // User removed the profile?
+          log('info', 'the last active profile for kingdomcomedeliverance is no longer available', profileId);
           return;
         }
 
-        const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], []);
+        const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profileId], []);
         const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', gameId], undefined);
         if ((discovery === undefined) || (discovery.path === undefined)) {
           // should never happen and if it does it will cause errors elsewhere as well
