@@ -50,7 +50,11 @@ function walkAsync(dir) {
       });
     });
   })
-  .then(() => Promise.resolve(entries));
+  .then(() => Promise.resolve(entries))
+  .catch(err => {
+    log('error', 'Unable to read mod directory', err);
+    return Promise.resolve(entries);
+  });
 }
 
 function refreshPakMods() {
