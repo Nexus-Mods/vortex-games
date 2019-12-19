@@ -1,7 +1,8 @@
+const Promise = require('bluebird');
+const winapi = require('winapi-bindings');
 const { fs, log, util } = require('vortex-api');
 const path = require('path');
 const MOD_FILE_EXT = ".vpk";
-
 const STEAM_ID = 440;
 const GAME_ID = 'teamfortress2';
 
