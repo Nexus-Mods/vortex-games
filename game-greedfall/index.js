@@ -1,6 +1,6 @@
 const Promise = require('bluebird');
 const path = require('path');
-const { fs, types, util } = require('vortex-api');
+const { fs, selectors, types, util } = require('vortex-api');
 
 const GAME_ID = 'greedfall';
 
@@ -8,8 +8,12 @@ function findGame() {
   return util.steam.findByAppId("606880").then(game => game.gamePath);
 }
 
+function modPath(discovery) {
+  return path.join(discovery.path, 'datalocal');
+}
+
 function prepareForModding(discovery) {
-  return fs.ensureDirWritableAsync(path.join(discovery.path, 'datalocal'), () => Promise.resolve());
+  return fs.ensureDirWritableAsync(modPath(discovery), () => Promise.resolve());
 }
 
 function isFomod(files) {
@@ -77,6 +81,26 @@ const gameParameters = {
 function main(context) {
   context.registerGame(gameParameters);
   context.registerInstaller('greedfall-mod', 25, testMod, installMod);
+
+  context.once(() => {
+    // after deployment update the modified time of all spk files to be current,
+    // otherwise the game won't load them.
+    context.api.onAsync('did-deploy', (profileId, deployment, setTitle) => {
+      const state = context.api.store.getState();
+      const profile = selectors.profileById(state, profileId);
+
+      if (GAME_ID !== profile.gameId) {
+        return Promise.resolve();
+      }
+
+      const discovery = selectors.discoveryByGame(state, profile.gameId);
+      const modDeployPath = modPath(discovery);
+
+      const now = new Date();
+      return Promise.map(deployment[''], file =>
+        fs.utimesAsync(path.join(modDeployPath, file.relPath), now, now));
+    });
+  });
 
   return true;
 }
