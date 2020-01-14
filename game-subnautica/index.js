@@ -28,6 +28,9 @@ class Subnautica {
     this.requiredFiles = [
       'Subnautica.exe'
     ];
+    this.environment = {
+      SteamAPPId: '264710',
+    };
     this.details = {
       steamAppId: 264710,
     };

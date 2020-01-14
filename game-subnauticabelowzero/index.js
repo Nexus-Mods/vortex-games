@@ -29,6 +29,9 @@ class SubnauticaBelowZero {
     this.requiredFiles = [
       'SubnauticaZero.exe'
     ];
+    this.environment = {
+      SteamAPPId: '848450',
+    };
     this.details = {
       steamAppId: 848450,
     };
@@ -47,6 +50,17 @@ class SubnauticaBelowZero {
   }
   
   async setup(discovery) {
+    const { store } = this.context.api;
+
+    if (util.getSafe(discovery, ['environment', 'SteamAPPId'], undefined) === undefined) {
+      // this game does weird things when the steam app id is not set, starting the original Subnautica game
+      // instead of Below Zero. I'm assuming this is a setup error somewhere in Steam but it seems to have existed
+      // for a while so who knows when it gets fixed
+      const environment = util.getSafe(discovery, ['environment'], {});
+      environment.SteamAPPId = '848450';
+      store.dispatch({ type: 'SET_GAME_PARAMETERS', payload: { gameId: GAME_ID, parameters: { environment } } });
+    }
+
     // skip if QModManager found
     let qmodPath = path.join(discovery.path, 'SubnauticaZero_Data', 'Managed', 'QModManager.exe');
   
