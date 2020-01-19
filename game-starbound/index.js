@@ -22,7 +22,7 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: () => 'mods',
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: gameExecutable,
     requiredFiles: [
       gameExecutable(),

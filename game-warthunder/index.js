@@ -47,7 +47,7 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: modPath,
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'win64/aces.exe',
     requiredFiles: [
       'win64/aces.exe',

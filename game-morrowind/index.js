@@ -29,7 +29,7 @@ function main(context) {
     queryPath: findGame,
     supportedTools: tools,
     queryModPath: () => 'Data Files',
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'morrowind.exe',
     requiredFiles: [
       'morrowind.exe',

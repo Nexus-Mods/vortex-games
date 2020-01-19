@@ -19,6 +19,15 @@ function readRegistryKey(hive, key, name) {
   }
 }
 
+function requiresLauncher(gamePath) {
+  // VtM Bloodlines does not seem to have any steam specific files within
+  //  the game's discovery path... Attempt to launch via Steam if
+  //  we're able to retrieve the game's information via the Steam wrapper
+  return util.steam.findByAppId(STEAM_ID.toString())
+    .then(game => Promise.resolve({ launcher: 'steam' }))
+    .catch(err => Promise.resolve(undefined));
+}
+
 function findGame() {
   return util.steam.findByAppId(STEAM_ID.toString())
     .then(game => game.gamePath)
@@ -51,9 +60,10 @@ function main(context) {
   context.registerGame({
     id: GAME_ID,
     name: 'Vampire the Masquerade\tBloodlines',
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     mergeMods: true,
     queryPath: findGame,
+    requiresLauncher,
     queryModPath: () => 'Vampire',
     executable: () => 'Vampire.exe',
     requiredFiles: [],

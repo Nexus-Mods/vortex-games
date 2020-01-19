@@ -101,7 +101,7 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: () => 'extensions',
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'XRebirth.exe',
     requiredFiles: [
       'XRebirth.exe',

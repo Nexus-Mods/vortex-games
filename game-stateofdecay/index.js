@@ -16,7 +16,7 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: () => 'game',
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'StateOfDecay.exe',
     requiredFiles: [
       'StateOfDecay.exe',

@@ -41,7 +41,7 @@ function queryModPath() {
 }
 
 function prepareForModding() {
-  return fs.ensureDirAsync(queryModPath())
+  return fs.ensureDirWritableAsync(queryModPath())
     .then(() => fs.ensureDirAsync(path.join(appUni.getPath('documents'), 'BioWare', 'Dragon Age', 'AddIns')))
     .then(() => fs.ensureDirAsync(path.dirname(addinsPath())));
 }
@@ -135,7 +135,7 @@ function main(context) {
     requiresLauncher,
     queryPath: findGame,
     queryModPath,
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'bin_ship/daorigins.exe',
     setup: prepareForModding,
     requiredFiles: [

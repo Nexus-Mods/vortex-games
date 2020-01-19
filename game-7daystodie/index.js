@@ -251,7 +251,7 @@ function main(context) {
     queryPath: findGame,
     queryModPath: () => 'Mods',
     requiresLauncher,
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: gameExecutable,
     requiredFiles: [
       '7DaysToDie.exe',

@@ -14,7 +14,7 @@ function main(context) {
   context.registerGame({
     id: 'xcom2',
     name: 'XCOM 2',
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     mergeMods: true,
     queryPath: findGame,
     queryModPath: () => path.join('XComGame', 'Mods'),

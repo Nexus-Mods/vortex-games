@@ -46,7 +46,7 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath,
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'bin_ship/dragonage2.exe',
     setup: prepareForModding,
     requiredFiles: [

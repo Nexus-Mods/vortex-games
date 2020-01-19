@@ -13,9 +13,11 @@ const LOCALE_MODS_FOLDER = {
   en_US: 'The Sims 4',
   de_DE: 'Die Sims 4',
   es_ES: 'Los Sims 4',
-  fr_FR: 'Les Sims 4',
+  // Yeah, the french even have more fancy directory names than everyone else...
+  // \u00a0 is a unicode "no-break space"
+  fr_FR: 'Les\u00a0Sims\u00a04',
   nl_NL: 'De Sims 4',
-}
+};
 
 const MODS_SUB_PATH = 'Vortex Mods';
 // attention: if this is changed, vortex will be unable to correctly filter
@@ -296,7 +298,7 @@ function migrate200(api, oldVersion) {
   // and we can't currently show a (working) dialog from the main process it has to be
   // this way.
   return api.awaitUI()
-    .then(() => new Promise((resolve) => { setTimeout(() => resolve(), 10000); } ))
+    .then(() => fs.ensureDirWritableAsync(path.join(bmp, MODS_SUB_PATH)))
     .then(() => api.emitAndAwait('purge-mods-in-path', 'thesims4', '', path.join(bmp, MODS_SUB_PATH)))
     .then(() => api.emitAndAwait('purge-mods-in-path', 'thesims4', '', bmp))
     .then(() => {
@@ -311,23 +313,23 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: modPath,
-    logo: 'gameart.png',
-    executable: () => 'game/bin/TS4.exe',
+    logo: 'gameart.jpg',
+    executable: () => 'game/bin/TS4_x64.exe',
     setup: prepareForModding,
     supportedTools: [
       {
-        id: 'exe64bit',
-        name: 'The Sims 4 (64 bit)',
+        id: 'exe32bit',
+        name: 'The Sims 4 (32 bit)',
         logo: 'icon.png',
-        executable: () => 'game/bin/TS4_x64.exe',
+        executable: () => 'game/bin_le/TS4.exe',
         requiredFiles: [
-          'game/bin/TS4_x64.exe',
+          'game/bin/TS4.exe',
         ],
         relative: true,
       },
     ],
     requiredFiles: [
-      'game/bin/TS4.exe',
+      'game/bin/TS4_x64.exe',
     ],
   });
 

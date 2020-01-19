@@ -30,7 +30,7 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: () => 'mods',
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'starsector.exe',
     requiredFiles: [
       'starsector.exe',

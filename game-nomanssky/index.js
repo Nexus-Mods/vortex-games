@@ -25,7 +25,7 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: modPath,
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'Binaries/NMS.exe',
     requiredFiles: [
       'Binaries/NMS.exe',

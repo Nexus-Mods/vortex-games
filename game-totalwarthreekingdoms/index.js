@@ -73,6 +73,7 @@ function testSupportedContent(files, gameId) {
 }
 
 function main(context) {
+  const launcherPath = path.join('launcher', 'launcher.exe');
   context.registerGame({
     id: TW3KINDOMS_ID,
     name: 'Total War: Three Kingdoms',
@@ -81,9 +82,10 @@ function main(context) {
     supportedTools: tools,
     queryModPath: () => 'data',
     logo: 'gameart.jpg',
-    executable: () => 'launcher/launcher.exe',
+    executable: () => launcherPath,
     requiredFiles: [
-      'launcher/launcher.exe', 
+      launcherPath,
+      'Three_Kingdoms.exe'
     ],
     setup: prepareForModding,
     details: {

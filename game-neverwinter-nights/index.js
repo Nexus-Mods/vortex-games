@@ -85,7 +85,7 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: () => modPath(context),
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'nwmain.exe',
     requiredFiles: [
       'nwmain.exe',

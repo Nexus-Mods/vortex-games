@@ -3,15 +3,12 @@ const path = require('path');
 const { actions, fs, log, util } = require('vortex-api');
 const rjson = require('relaxed-json');
 const semver = require('semver');
+const shortId = require('shortid');
 
 // Nexus Mods id for the game.
 const BLADEANDSORCERY_ID = 'bladeandsorcery';
 const RESOURCES_FILE = 'resources.assets';
 const UMA_PRESETS_FOLDER = 'UMAPresets';
-
-// MulleDK19's seems to be using the ConstructCache folder to store
-//  mod textures separately ? great...
-const CONSTRUCT_CACHE = 'ConstructCache';
 
 // MulleDK19 B&S mods are expected to have this json file at its root directory.
 const MULLE_MOD_INFO = 'mod.json';
@@ -23,19 +20,12 @@ const OFFICIAL_MOD_MANIFEST = 'manifest.json';
 //  we're going to use this to compare against a mod's expected
 //  gameversion and inform users of possible incompatibility.
 //  (The global file is located in the game's StreamedAssets/Default path)
-const GLOBAL_FILE = 'Global.json';
+//  *** U6 BACKWARDS COMPATIBILITY ***
+const GLOBAL_FILE = 'global.json';
 
-// let tools = [
-//   {
-//     id: 'BandSModLoader',
-//     name: 'MulleDK19 Mod Loader',
-//     executable: () => 'BASModLoaderConfig.exe',
-//     requiredFiles: [
-//       'BASModLoaderConfig.exe',
-//     ],
-//     relative: true,
-//   }
-// ]
+// The global file has been renamed to Game.json in update 7.
+//  going to temporarily keep Global.json for backwards compatibility.
+const GAME_FILE = 'game.json';
 
 async function getJSONElement(filePath, element) {
   return fs.readFileAsync(filePath, { encoding: 'utf-8' })
@@ -47,7 +37,10 @@ async function getJSONElement(filePath, element) {
           ? Promise.resolve(elementData)
           : Promise.reject(new util.DataInvalid(`"${element}" JSON element is missing`));
       } catch (err) {
-        return Promise.reject(err);
+        return ((err.message.indexOf('Unexpected end of JSON input') !== -1)
+             || (err.name.indexOf('SyntaxError') !== -1))
+          ? Promise.reject(new util.DataInvalid('Invalid manifest.json file'))
+          : Promise.reject(err);
       }
     });
 }
@@ -65,6 +58,9 @@ async function getModName(destination, modFile, element, ext) {
     return Promise.reject(new util.DataInvalid(`"${element}" JSON element is missing`));
   }
 
+  // remove all characters except for characters and numbers.
+  modName = modName.replace(/[^a-zA-Z0-9]+/g, "")
+
   return ext !== undefined
     ? Promise.resolve(path.basename(modName, ext))
     : Promise.resolve(modName);
@@ -77,30 +73,8 @@ function findGame() {
 }
 
 function prepareForModding(discovery, api) {
-  // MulleDK19's mod loader is no longer being updated (http://treesoft.dk/bas/modloader/);
-  //  leaving this code commented out for now, just in case he changes his mind.
-
-  // return fs.statAsync(path.join(discovery.path, 'BASModLoaderConfig.exe'))
-  //   .catch(err => api.sendNotification({
-  //     type: 'info',
-  //     message: 'MulleDK19 mod loader is missing',
-  //     actions: [
-  //       { title: 'More', action: (dismiss) =>
-  //         api.showDialog('info', 'MulleDK19 Mod Loader', {
-  //           text: api.translate('Certain B&S mods require MulleDK19\'s mod loader '
-  //                             + 'to function correctly. These mods are easily identifiable '
-  //                             + 'by the mod.json file; any mods that include that file will '
-  //                             + 'require the mod loader to be installed and configured.')
-  //         }, [ { label: 'Go to Mod Loader Page', action: () => {
-  //           util.opn('http://treesoft.dk/bas/modloader/download.html');
-  //           dismiss();
-  //           }}, {label: 'Close', action: () => dismiss() } ])
-  //       },
-  //     ],
-  //   }))
-  //   .then(() =>
-    return fs.ensureDirWritableAsync(path.join(discovery.path, streamingAssetsPath()),
-      () => Promise.resolve());//);
+  return fs.ensureDirWritableAsync(path.join(discovery.path, streamingAssetsPath()),
+    () => Promise.resolve());
 }
 
 function testModInstaller(files, gameId, fileName) {
@@ -117,24 +91,50 @@ function streamingAssetsPath() {
   return path.join('BladeAndSorcery_Data', 'StreamingAssets');
 }
 
-async function checkModGameVersion(destination, discoveryPath, modFile) {
+async function checkModGameVersion(destination, minModVersion, modFile) {
+  const coercedMin = semver.coerce(minModVersion.version);
+  const minVersion = minModVersion.majorOnly
+    ? coercedMin.major + '.x'
+    : `>=${coercedMin.version}`;
   try {
-    const globalGameVersion = await getJSONElement(path.join(discoveryPath, streamingAssetsPath(), 'Default', GLOBAL_FILE), 'gameVersion');
-    const modVersion = await getJSONElement(path.join(destination, modFile), 'GameVersion');
+    let modVersion = await getJSONElement(path.join(destination, modFile), 'GameVersion');
+    modVersion = modVersion.toString().replace(',', '.');
     const coercedMod = semver.coerce(modVersion.toString());
-    const coercedGlobal = semver.coerce(globalGameVersion.toString());
-    if ((coercedMod === null) || (coercedGlobal === null)) {
-      return Promise.reject(new util.DataInvalid('Invalid GameVersion element'));
+    if (coercedMod === null) {
+      return Promise.reject(new util.DataInvalid('Mod manifest has an invalid GameVersion element'));
     }
 
     return Promise.resolve({
-      match: semver.satisfies(coercedMod.version, coercedGlobal.version),
+      match: semver.satisfies(coercedMod.version, minVersion),
       modVersion: coercedMod.version,
-      globalVersion: coercedGlobal.version,
+      globalVersion: coercedMin.version,
     });
   } catch (err) {
     return Promise.reject(err);
   }
+}
+
+function findGameConfig(discoveryPath) {
+  const expectedLocation = path.join(discoveryPath, streamingAssetsPath(), 'Default');
+  return fs.readdirAsync(expectedLocation)
+    .then(entries => {
+      const configFile = entries.find(file => (file.toLowerCase() === GAME_FILE)
+        || (file.toLowerCase() === GLOBAL_FILE));
+      return (configFile !== undefined)
+        ? Promise.resolve(path.join(expectedLocation, configFile))
+        : Promise.reject(new Error('Missing config file.'));
+    });
+}
+
+async function getMinModVersion(discoveryPath) {
+  return findGameConfig(discoveryPath).then(configFile => {
+    return getJSONElement(configFile, 'minModVersion')
+    .then(version => { return { version, majorOnly: false } })
+    .catch(err => (err.message.indexOf('JSON element is missing') !== -1)
+      ? getJSONElement(configFile, 'gameVersion')
+          .then(version => { return { version, majorOnly: true } })
+      : Promise.reject(err));
+  });
 }
 
 async function installOfficialMod(files,
@@ -162,35 +162,74 @@ async function installOfficialMod(files,
     );
   });
 
-  const modFile = files.find(file => path.basename(file).toLowerCase() === OFFICIAL_MOD_MANIFEST);
-  const idx = modFile.indexOf(path.basename(modFile));
-  const rootPath = path.dirname(modFile);
+  let minModVersion;
   const discoveryPath = getDiscoveryPath(api);
+  try {
+    minModVersion = await getMinModVersion(discoveryPath);
+    minModVersion.version = minModVersion.version.toString().replace(',', '.');
+  }
+  catch (err) {
+    if (err.message.indexOf('Missing config file.') !== -1) {
+      api.showErrorNotification('Missing config file', 'Please run the game at least once to ensure it '
+        + 'generates all required game files; alternatively re-install the game.', { allowReport: false });
+      return Promise.reject(new util.ProcessCanceled('Missing config file.'))
+    }
 
-  const modName = await getModName(destinationPath, modFile, 'Name', undefined);
-  const createInstructions = () => new Promise((resolve, reject) => {
-    // Remove directories and anything that isn't in the rootPath.
-    const filtered = files.filter(file =>
-      ((file.indexOf(rootPath) !== -1)
-      && (!file.endsWith(path.sep))));
+    return Promise.reject(err);
+  }
 
-    const instructions = filtered.map(file => {
-      return {
-        type: 'copy',
-        source: file,
-        destination: path.join(modName, file.substr(idx)),
-      };
-    });
+  if (minModVersion === undefined) {
+    return Promise.reject(new util.DataInvalid('Failed to identify game version'));
+  }
 
-    return resolve({ instructions });
+  const usedModNames = [];
+
+  const manifestFiles = files.filter(file =>
+    path.basename(file).toLowerCase() === OFFICIAL_MOD_MANIFEST);
+
+  const createInstructions = (manifestFile) =>
+    getModName(destinationPath, manifestFile, 'Name', undefined)
+      .then(manifestModName => {
+        const isUsedModName = usedModNames.find(modName => modName === manifestModName) !== undefined;
+        const modName = (isUsedModName)
+          ? manifestModName + '_' + shortId.generate()
+          : manifestModName;
+
+        usedModNames.push(modName);
+
+        const idx = manifestFile.indexOf(path.basename(manifestFile));
+        const rootPath = path.dirname(manifestFile);
+
+        // Remove directories and anything that isn't in the rootPath.
+        const filtered = files.filter(file =>
+          ((file.indexOf(rootPath) !== -1)
+          && (!file.endsWith(path.sep))));
+
+        const instructions = filtered.map(file => {
+          return {
+            type: 'copy',
+            source: file,
+            destination: path.join(modName, file.substr(idx)),
+          };
+        });
+
+        return Promise.resolve(instructions);
+      });
+
+  return Promise.map(manifestFiles, manFile =>
+    checkModGameVersion(destinationPath, minModVersion, manFile)
+    .then(res => (!res.match)
+      ? versionMismatchDialog(res.globalVersion, res.modVersion)
+          .then(() => createInstructions(manFile))
+      : createInstructions(manFile))
+  ).then(manifestMods => {
+    const instructions = manifestMods.reduce((prev, instructions) => {
+      prev = prev.concat(instructions);
+      return prev;
+    }, []);
+
+    return Promise.resolve({ instructions });
   });
-  return checkModGameVersion(destinationPath, discoveryPath, modFile)
-    .then(res => {
-      return (!res.match)
-        ? versionMismatchDialog(res.globalVersion, res.modVersion)
-            .then(() => createInstructions())
-        : createInstructions();
-    })
 }
 
 async function installMulleMod(files,
@@ -199,7 +238,8 @@ async function installMulleMod(files,
                         progressDelegate,
                         api) {
   // MulleDK19's mod loader is no longer being updated and will not function
-  //  with B&S version 6.0 and higher (at least for now).
+  //  with B&S version 6.0 and higher. We're going to keep this modType installer
+  //  for the sake of stopping users from installing out of date mods.
   api.sendNotification({
     type: 'info',
     message: 'Incompatible Mod',
@@ -214,50 +254,6 @@ async function installMulleMod(files,
     ],
   });
   return Promise.reject(new util.ProcessCanceled());
-  // The mod.json file is expected to always be positioned in the root directory
-  //  of the mod itself; we're going to create the mod folder ourselves and place
-  //  the mod files within it.
-  // Some mods contain a ConstructCache folder which seems to be used to store/cache
-  //  certain textures. We're going to place these as well
-  // const isCacheFile = (filePath) => (filePath.endsWith(path.sep))
-  //                                && (filePath.indexOf(CONSTRUCT_CACHE) !== -1);
-  // const cacheFiles = files.filter(file => isCacheFile(file));
-  // let cacheIndex = undefined;
-  // if (cacheFiles.length > 0) {
-  //   // We just need to know the cache's index so we don't rely
-  //   //  on how the mod author packaged his files.
-  //   cacheIndex = cacheFiles[0].indexOf(CONSTRUCT_CACHE) + CONSTRUCT_CACHE.length;
-  // }
-  
-  // const modFile = files.find(file => path.basename(file) === MULLE_MOD_INFO);
-  // const idx = modFile.indexOf(path.basename(modFile));
-  // const rootPath = path.dirname(modFile);
-  // let modName = await getModName(destinationPath, modFile, 'Name', undefined);
-  // modName = modName.replace(/[^a-zA-Z0-9]/g, '');
-  // // Remove directories and anything that isn't in the rootPath.
-  // const filtered = files.filter(file =>
-  //   ((file.indexOf(rootPath) !== -1)
-  //   && (!file.endsWith(path.sep))));
-
-  // const instructions = filtered.map(file => {
-  //   return {
-  //     type: 'copy',
-  //     source: file,
-  //     destination: path.join('Mods', modName, file.substr(idx)),
-  //   };
-  // });
-
-  // if (cacheIndex !== undefined) {
-  //   cacheFiles.forEach(file => {
-  //     instructions.push({
-  //       type: 'copy',
-  //       source: file,
-  //       destination: path.join(CONSTRUCT_CACHE, file.substr(cacheIndex)),
-  //     });
-  //   });
-  // }
-
-  // return Promise.resolve({ instructions });
 }
 
 function installUMAPresetReplacer(files,
@@ -292,16 +288,18 @@ function installUMAPresetReplacer(files,
 }
 
 function instructionsHaveFile(instructions, fileName) {
+  const copies = instructions.filter(instruction => instruction.type === 'copy');
   return new Promise((resolve, reject) => {
-    const fileExists = instructions.find(inst => path.basename(inst.destination).toLowerCase() === fileName) !== undefined;
+    const fileExists = copies.find(inst => path.basename(inst.destination).toLowerCase() === fileName) !== undefined;
     return resolve(fileExists);
   })
 }
 
 function testUMAContent(instructions) {
+  const copies = instructions.filter(instruction => instruction.type === 'copy');
   return new Promise((resolve, reject) => {
-    const isUMAMod = (instructions.find(file => path.basename(file.destination) === RESOURCES_FILE) !== undefined)
-                  && (instructions.find(file => path.dirname(file.destination).indexOf(UMA_PRESETS_FOLDER) !== -1) !== undefined);
+    const isUMAMod = (copies.find(file => path.basename(file.destination) === RESOURCES_FILE) !== undefined)
+                  && (copies.find(file => path.dirname(file.destination).indexOf(UMA_PRESETS_FOLDER) !== -1) !== undefined);
     return resolve(isUMAMod);
   })
 }
@@ -333,17 +331,6 @@ const getDiscoveryPath = (api) => {
   return discovery.path;
 }
 
-// function getExecutable(discoveryPath) {
-//   const legacyExec = 'Blade & Sorcery.exe';
-//   const newExec = 'BladeAndSorcery.exe';
-//   try {
-//     fs.statSync(path.join(discoveryPath, legacyExec));
-//     return legacyExec;
-//   } catch (err) {
-//     return newExec;
-//   }
-// }
-
 function main(context) {
   const getUMADestination = () => {
     return path.join(getDiscoveryPath(context.api), 'BladeAndSorcery_Data');
@@ -366,6 +353,19 @@ function main(context) {
     requiredFiles: ['BladeAndSorcery.exe'],
     setup: (discovery) => prepareForModding(discovery, context.api),
     details: {
+      // The default queryModPath result is used for replacement mods,
+      //  this works in combination with the fomod stop patterns functionality
+      //  to correctly identify the folder structure which works quite well and
+      //  therefore should not be modified as that would require us to write duplicate code
+      //  for the same functionality which could possibly be less reliable than the battle
+      //  tested stop patterns.
+      //
+      // The BaS developers have requested that we do not open the StreamingAssets/Default
+      //  folder when users click the "Open Game Mods Folder" button on the mods page.
+      //  Instead of changing the path directly and write a migration function for such
+      //  a minor use case - we're going to provide a custom "Open Mods Path" value to be
+      //  used by the open-directory extension.
+      customOpenModsPath: streamingAssetsPath(),
       steamAppId: 629730,
     },
   });

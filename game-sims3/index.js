@@ -52,7 +52,7 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: modPath,
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'game/bin/TS3.exe',
     requiredFiles: [
       'game/bin/TS3.exe',

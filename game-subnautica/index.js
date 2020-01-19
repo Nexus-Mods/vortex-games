@@ -23,11 +23,14 @@ class Subnautica {
       relative: true,
       shell: true,
     }];
-    this.logo = 'gameart.png';
+    this.logo = 'gameart.jpg';
     this.executable = () => 'Subnautica.exe';
     this.requiredFiles = [
       'Subnautica.exe'
     ];
+    this.environment = {
+      SteamAPPId: '264710',
+    };
     this.details = {
       steamAppId: 264710,
     };

@@ -1,5 +1,6 @@
 const path = require('path');
-const { fs, log, util } = require('vortex-api');
+const semver = require('semver');
+const { actions, fs, log, selectors, util } = require('vortex-api');
 
 // Nexus Mods id for the game.
 const BLOODSTAINED_ID = 'bloodstainedritualofthenight';
@@ -12,8 +13,11 @@ function findGame() {
       .then(game => game.gamePath);
 }
 
+const oldModPath = path.join('BloodstainedRotN', 'Content', 'Paks', '~mod');
+const relModPath = path.join('BloodstainedRotN', 'Content', 'Paks', '~mods');
+
 function prepareForModding(discovery) {
-  return fs.ensureDirWritableAsync(path.join(discovery.path, 'BloodstainedRotN', 'Content', 'Paks', '~mod'),
+  return fs.ensureDirWritableAsync(path.join(discovery.path, relModPath),
     () => Promise.resolve());
 }
 
@@ -56,6 +60,37 @@ function testSupportedContent(files, gameId) {
   });
 }
 
+function migrate100(api, oldVersion) {
+  if (semver.gte(oldVersion || '0.0.1', '1.0.0')) {
+    return Promise.resolve();
+  }
+
+  const state = api.store.getState();
+  const activatorId = selectors.activatorForGame(state, BLOODSTAINED_ID);
+  const activator = util.getActivator(activatorId);
+
+  const discovery =
+    util.getSafe(state, ['settings', 'gameMode', 'discovered', BLOODSTAINED_ID], undefined);
+
+  if ((discovery === undefined)
+      || (discovery.path === undefined)
+      || (activator === undefined)) {
+    // if this game is not discovered or deployed there is no need to migrate
+    log('debug', 'skipping bloodstained migration because no deployment set up for it');
+    return Promise.resolve();
+  }
+
+  // would be good to inform the user beforehand but since this is run in the main process
+  // and we can't currently show a (working) dialog from the main process it has to be
+  // this way.
+  return api.awaitUI()
+    .then(() => fs.ensureDirWritableAsync(path.join(discovery.path, relModPath)))
+    .then(() => api.emitAndAwait('purge-mods-in-path', BLOODSTAINED_ID, '', path.join(discovery.path, oldModPath)))
+    .then(() => {
+      api.store.dispatch(actions.setDeploymentNecessary(BLOODSTAINED_ID, true));
+    });
+}
+
 function main(context) {
   context.registerGame({
     id: BLOODSTAINED_ID,
@@ -63,7 +98,7 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     supportedTools: [],
-    queryModPath: () => 'BloodstainedRotN/Content/Paks/~mod',
+    queryModPath: () => relModPath,
     logo: 'gameart.jpg',
     executable: () => 'BloodstainedROTN.exe',
     requiredFiles: [
@@ -80,6 +115,7 @@ function main(context) {
   });
 
   context.registerInstaller('bloodstainedrotn-mod', 25, testSupportedContent, installContent);
+  context.registerMigration(old => migrate100(context.api, old));
 
   return true;
 }

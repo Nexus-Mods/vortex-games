@@ -14,7 +14,7 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: () => 'ModdingTools',
-    logo: 'gameart.png',
+    logo: 'gameart.jpg',
     executable: () => 'Ellie_Ball_Project.exe',
     requiredFiles: [
       'Ellie_Ball_Project.exe',
