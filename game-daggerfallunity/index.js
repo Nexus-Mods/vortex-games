@@ -9,6 +9,7 @@ const ENV_LOG = path.join(LOCAL_LOW, 'DFTFU_Environment.log');
 const GAME_ID = 'daggerfallunity';
 const GAME_EXEC = 'DaggerfallUnity.exe';
 const CMD_PATTERN = 'CommandLine | ';
+const DFMOD_EXT = '.dfmod';
 
 
 function findGame() {
@@ -27,8 +28,64 @@ function findGame() {
   });
 }
 
+function testSupported(files, gameId) {
+  const notSupported = () => Promise.resolve({ supported: false, requiredFiles: [], });
+  const dfmods = files.filter(file => path.extname(file) === DFMOD_EXT);
+
+  // No point proceeding if we only find 0-1 dfmods.
+  if (dfmods.length < 2)
+    return notSupported();
+
+  // Game extension only supports Windows currently, so if we are able to find
+  //  the 'windows' substring within the filepath, we assume that's the mod
+  //  copy that's supposed to be deployed.
+  if (dfmods.find(mod => path.dirname(mod).toLowerCase().indexOf('windows') !== -1) === undefined)
+    return notSupported();
+
+  const supported = ((dfmods.length > 1) && (gameId === GAME_ID))
+    ? (new Set(dfmods.map(mod => path.basename(mod))).size !== dfmods.length)
+    : false;
+  
+  return Promise.resolve({
+    supported,
+    requiredFiles: [],
+  });
+}
+
+function install(files, destinationPath) {
+  const result = {
+    instructions: [],
+  };
+  const dfmods = files.filter(file => path.extname(file) === DFMOD_EXT)
+                      .map(mod => path.basename(mod));
+  let filtered = files.filter(file => !file.endsWith(path.sep));
+  filtered.forEach(file => {
+    if (dfmods.indexOf(path.basename(file)) !== -1) {
+      if (path.dirname(file).toLowerCase().indexOf('windows') !== -1) {
+        // This is the dfmod we want to install.
+        result.instructions.push({
+          type: 'copy',
+          source: file,
+          destination: path.basename(file),
+        });
+      }
+    } else {
+      // Non-dfmod file, might be needed - going to include it just in case
+      //  (also only if it's inside the windows folder)
+      if (path.dirname(file).toLowerCase().indexOf('windows') !== -1) {
+        result.instructions.push({
+          type: 'copy',
+          source: file,
+          destination: file,
+        });
+      }
+    }
+  });
+
+  return Promise.resolve(result);
+}
+
 function main(context) {
-	//This is the main function Vortex will run when detecting the game extension. 
 	context.registerGame({
     id: GAME_ID,
     name: 'Daggerfall Unity',
@@ -42,6 +99,11 @@ function main(context) {
       GAME_EXEC,
     ],
   });
+
+  // The game is multi-platform and many modders seem to be nesting the mod files
+  //  inside the target platform, we're only interested in the windows version
+  //  at this point
+  context.registerInstaller('dfmodmultiplatform', 15, testSupported, install);
 
 	return true
 }
