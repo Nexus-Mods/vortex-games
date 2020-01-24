@@ -1,15 +1,17 @@
 const
-  fs = require('fs'),
   path = require('path'),
   Promise = require('bluebird'),
   rjson = require('relaxed-json'),
   { promisify } = require('util'),
-  { actions, log, util } = require('vortex-api'),
+  { fs, log, util } = require('vortex-api'),
+  { SevenZip } = util,
   winapi = require('winapi-bindings');
 
 const MANIFEST_FILE = 'manifest.json';
 const GAME_ID = 'stardewvalley';
 const PTRN_CONTENT = path.sep + 'Content' + path.sep;
+const SMAPI_EXE = 'StardewModdingAPI.exe';
+const SMAPI_DATA = 'windows-install.dat';
 
 class StardewValley {
   /*********
@@ -31,6 +33,18 @@ class StardewValley {
     this.details = {
       steamAppId: 413150
     };
+    this.supportedTools = [
+      {
+        id: 'smapi', 
+        name: 'SMAPI',  
+        logo: 'smapi.png', 
+        executable: () => SMAPI_EXE, 
+        requiredFiles: [SMAPI_EXE],
+        shell: true,
+        exclusive: true,
+        relative: true,
+      }
+    ];
     this.mergeMods = true;
     this.requiresCleanup = true;
     this.shell = process.platform == 'win32';
@@ -93,7 +107,7 @@ class StardewValley {
    */
   executable() {
     return process.platform == 'win32'
-      ? 'StardewModdingAPI.exe'
+      ? 'StardewValley.exe'
       : 'StardewValley';
   }
 
@@ -117,33 +131,36 @@ class StardewValley {
    */
   async setup(discovery)
   {
+    // Make sure the folder for SMAPI mods exists. 
+    fs.ensureDirWritableAsync(path.join(discovery.path, 'Mods'));
     // skip if SMAPI found
-    let smapiPath = path.join(discovery.path, 'StardewModdingAPI.exe');
+    let smapiPath = path.join(discovery.path, SMAPI_EXE);
     let smapiFound = await this.getPathExistsAsync(smapiPath);
-    if (smapiFound)
+    if (smapiFound) 
       return;
 
     // show need-SMAPI dialogue
-    var context = this.context;
-    return new Promise((resolve, reject) => {
-      context.api.store.dispatch(
-        actions.showDialog(
-          'question',
-          'Action required',
-          { text: 'You must install SMAPI to use mods with Stardew Valley.' },
-          [
-            { label: 'Cancel', action: () => reject(new util.UserCanceled()) },
-            { label: 'Go to SMAPI page', action: () => { util.opn('https://smapi.io').catch(err => undefined); reject(new util.UserCanceled()); } }
-          ]
-        )
-      );
+    return this.context.api.sendNotification({
+      id: 'smapi-missing',
+      type: "warning",
+      title: "SMAPI is not installed",
+      message: "SMAPI is required to mod Stardew Valley.",
+      displayMS: 10000,
+      actions: [
+        {
+          title: "Get SMAPI",
+          action: () => util.opn('https://www.nexusmods.com/stardewvalley/mods/2400').catch(err => undefined)
+        }
+      ]
     });
+    
   }
 
 
   /*********
   ** Internal methods
   *********/
+
   /**
    * Asynchronously check whether a file or directory path exists.
    * @param {string} path - The file or directory path.
@@ -289,6 +306,58 @@ async function install(files,
     });
 }
 
+function isSMAPIModType(instructions) {
+  // Find the SMAPI exe file. 
+  const smapiData = instructions.find(inst => (inst.type === 'copy') && inst.source.endsWith(SMAPI_EXE));
+
+  return Promise.resolve(smapiData !== undefined);
+}
+
+function testSMAPI(files, gameId) {
+  // Make sure the download contains the SMAPI data archive.s
+  const supported = (gameId === GAME_ID) && (files.find(file => file.toLowerCase().indexOf(SMAPI_DATA) !== -1) !== undefined);
+  return Promise.resolve({
+      supported,
+      requiredFiles: [],
+  });
+}
+
+async function installSMAPI(files, destinationPath) {
+  // Find the SMAPI data archive
+  const dataFile = files.find(file => file.toLowerCase().endsWith(SMAPI_DATA));
+  
+  // file will be outdated after the walk operation so prepare a replacement. 
+  const updatedFiles = [];
+
+  const szip = new SevenZip();
+  // Unzip the files from the data archive. This doesn't seem to behave as described here: https://www.npmjs.com/package/node-7z#events
+  await szip.extractFull(path.join(destinationPath, dataFile), destinationPath);
+
+  // Find any files that are not in the parent folder. 
+  await util.walk(destinationPath, (iter, stats) => {
+      const relPath = path.relative(destinationPath, iter);
+      // Filter out files from the original install as they're no longer required.
+      if (!files.includes(relPath) && stats.isFile() && !files.includes(relPath+path.sep)) updatedFiles.push(relPath);
+      Promise.resolve();
+  });
+
+  // Find the SMAPI exe file. 
+  const smapiExe = updatedFiles.find(file => file.toLowerCase().endsWith(SMAPI_EXE.toLowerCase()));
+  const idx = smapiExe.indexOf(path.basename(smapiExe));
+
+  // Build the instructions for installation. 
+  const instructions = updatedFiles.map(file => {
+      return {
+          type: 'copy',
+          source: file,
+          destination: path.join(file.substr(idx)),
+      }
+  });
+
+  return Promise.resolve({ instructions });
+}
+
+
 module.exports = {
   default: function(context) {
     const getDiscoveryPath = () => {
@@ -302,7 +371,17 @@ module.exports = {
 
       return discovery.path;
     }
+
+    const getSMAPIPath = (game) => {
+      const state = context.api.store.getState();
+      const discovery = state.settings.gameMode.discovered[game.id];
+      return discovery.path;
+      }
+
     context.registerGame(new StardewValley(context));
+    // Register our SMAPI mod type and installer. Note: This currently flags an error in Vortex on installing correctly.
+    context.registerInstaller('smapi-installer', 30, testSMAPI, installSMAPI);
+    context.registerModType('SMAPI', 30, gameId => gameId === GAME_ID, getSMAPIPath, isSMAPIModType);
     context.registerInstaller('stardew-valley-installer', 50, testSupported, install);
     context.registerInstaller('sdvrootfolder', 50, testRootFolder, installRootFolder);
     context.registerModType('sdvrootfolder', 25, (gameId) => (gameId === GAME_ID),
