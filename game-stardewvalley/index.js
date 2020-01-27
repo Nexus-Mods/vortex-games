@@ -216,7 +216,7 @@ async function installRootFolder(files, destinationPath) {
   const contentFile = files.find(file => path.join('fakeDir', file).endsWith(PTRN_CONTENT));
   const idx = contentFile.indexOf(PTRN_CONTENT) + 1;
   const rootDir = path.basename(contentFile.substring(0, idx));
-  const filtered = files.filter(file => (path.extname(file) !== '')
+  const filtered = files.filter(file => !file.endsWith(path.sep)
     && (file.indexOf(rootDir) !== -1)
     && (path.extname(file) !== '.txt'));
   const instructions = filtered.map(file => {
@@ -258,7 +258,7 @@ async function install(files,
     const modFiles = files.filter(file =>
       (file.indexOf(rootFolder) !== -1)
       && (path.dirname(file) !== '.')
-      && (path.extname(file) !== ''));
+      && !file.endsWith(path.sep));
 
     return {
       manifestFile,
