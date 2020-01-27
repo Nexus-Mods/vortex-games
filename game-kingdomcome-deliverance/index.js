@@ -203,27 +203,23 @@ function main(context) {
       }
     });
 
-    context.api.events.on('purge-mods', () => {
+    context.api.events.on('purge-mods', (allowFallback, callback) => {
       const store = context.api.store;
       const state = store.getState();
       const activeGameId = selectors.activeGameId(state);
       if (activeGameId !== GAME_ID){
-        return Promise.resolve();
+        return;
       }
 
       const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
       if ((discovery === undefined) || (discovery.path === undefined)) {
         // should never happen and if it does it will cause errors elsewhere as well
         log('error', 'kingdomcomedeliverance was not discovered');
-        return Promise.resolve();
+        return;
       }
 
       const modsOrderFilePath = path.join(discovery.path, modsPath(), MODS_ORDER_FILENAME);
-      return fs.removeAsync(modsOrderFilePath).catch(err => {
-        return (err.code === 'ENOENT')
-          ? Promise.resolve()
-          : log('error', 'unable to remove load order file', err);
-      })
+      fs.removeAsync(modsOrderFilePath).catch(err => callback(err));
     });
 
     // the bake-settings event receives the list of enabled mods, sorted by priority. perfect.
