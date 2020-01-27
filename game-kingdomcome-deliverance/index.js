@@ -8,6 +8,8 @@ const { actions, fs, DraggableList, FlexLayout, log, MainPage, selectors, util }
 const GAME_ID = 'kingdomcomedeliverance';
 const I18N_NAMESPACE = `game-${GAME_ID}`;
 
+const MODS_ORDER_FILENAME = 'mod_order.txt';
+
 let _PAK_MODS = [];
 
 function findGame() {
@@ -158,6 +160,10 @@ function LoadOrderBase(props) {
         )))));
 }
 
+function modsPath() {
+  return 'Mods';
+}
+
 let _API = undefined;
 function main(context) {
   _API = context.api;
@@ -166,7 +172,7 @@ function main(context) {
     name: 'Kingdom Come:\tDeliverance',
     mergeMods: mod => transformId(mod.id),
     queryPath: findGame,
-    queryModPath: () => 'Mods',
+    queryModPath: modsPath,
     logo: 'gameart.jpg',
     executable: () => 'Bin/Win64/KingdomCome.exe',
     requiredFiles: [
@@ -196,6 +202,30 @@ function main(context) {
         refreshPakMods();
       }
     });
+
+    context.api.events.on('purge-mods', () => {
+      const store = context.api.store;
+      const state = store.getState();
+      const activeGameId = selectors.activeGameId(state);
+      if (activeGameId !== GAME_ID){
+        return Promise.resolve();
+      }
+
+      const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
+      if ((discovery === undefined) || (discovery.path === undefined)) {
+        // should never happen and if it does it will cause errors elsewhere as well
+        log('error', 'kingdomcomedeliverance was not discovered');
+        return Promise.resolve();
+      }
+
+      const modsOrderFilePath = path.join(discovery.path, modsPath(), MODS_ORDER_FILENAME);
+      return fs.removeAsync(modsOrderFilePath).catch(err => {
+        return (err.code === 'ENOENT')
+          ? Promise.resolve()
+          : log('error', 'unable to remove load order file', err);
+      })
+    });
+
     // the bake-settings event receives the list of enabled mods, sorted by priority. perfect.
     context.api.events.on('bake-settings', (gameId, mods) => {
       if (gameId === GAME_ID) {
@@ -215,7 +245,6 @@ function main(context) {
           return;
         }
 
-        const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profileId], []);
         const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', gameId], undefined);
         if ((discovery === undefined) || (discovery.path === undefined)) {
           // should never happen and if it does it will cause errors elsewhere as well
@@ -223,8 +252,22 @@ function main(context) {
           return;
         }
 
-        const modOrderFile = path.join(discovery.path, 'Mods', 'mod_order.txt');
-        const transformedMods = loadOrder.map(mod => transformId(mod));
+        const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profileId], []);
+        const modOrderFile = path.join(discovery.path, modsPath(), MODS_ORDER_FILENAME);
+        let transformedMods = loadOrder
+          .filter(mod => mods.find(enabledMod => enabledMod.id === mod) !== undefined)
+          .map(mod => transformId(mod));
+
+        const diff = mods.filter(x => !transformedMods.includes(transformId(x.id)));
+        if (diff.length !== 0) {
+          // Load order seems to be missing a mod. This is a valid scenario
+          //  as the load order may have not been updated by the user yet.
+          //  Add the new mods at the end of the load order.
+          const transformed = diff.map(mod => transformId(mod.id));
+          transformedMods = [ ...transformedMods, ...transformed ];
+          store.dispatch(actions.setLoadOrder(profileId, transformedMods));
+        }
+
         prepareForModding(discovery)
           .then(() => fs.writeFileAsync(modOrderFile, transformedMods.join('\n')))
       }
