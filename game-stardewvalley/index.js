@@ -338,5 +338,34 @@ module.exports = {
           ? Promise.resolve(hasContentFolder && hasModsFolder)
           : Promise.resolve(hasContentFolder);
       });
+
+    context.once(() => {
+      context.api.onAsync('added-files', async (profileId, files) => {
+        const state = context.api.store.getState();
+        const profile = selectors.profileById(state, profileId);
+        if (profile.gameId !== GAME_ID) {
+          // don't care about any other games
+          return;
+        }
+        const game = util.getGame(GAME_ID);
+        const discovery = selectors.discoveryByGame(state, GAME_ID);
+        const modPaths = game.getModPaths(discovery.path);
+        const installPath = selectors.installPathForGame(state, GAME_ID);
+
+        await Promise.map(files, async entry => {
+          // only act if we definitively know which mod owns the file
+          if (entry.candidates.length === 1) {
+            const mod = util.getSafe(state.persistent.mods, [GAME_ID, entry.candidates[0]], undefined);
+            const relPath = path.relative(modPaths[mod.type], entry.filePath);
+            const targetPath = path.join(installPath, mod.id, relPath);
+            // copy the new file back into the corresponding mod, then delete it. That way, vortex will
+            // create a link to it with the correct deployment method and not ask the user any questions
+            await fs.ensureDirAsync(path.dirname(targetPath));
+            await fs.copyAsync(entry.filePath, targetPath);
+            await fs.removeAsync(entry.filePath);
+          }
+        });
+      });
+    });
   }
 }
