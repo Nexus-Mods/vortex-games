@@ -1,10 +1,9 @@
 const
-  fs = require('fs'),
   path = require('path'),
   Promise = require('bluebird'),
   rjson = require('relaxed-json'),
   { promisify } = require('util'),
-  { actions, log, util } = require('vortex-api'),
+  { actions, fs, log, selectors, util } = require('vortex-api'),
   winapi = require('winapi-bindings');
 
 const MANIFEST_FILE = 'manifest.json';
@@ -151,7 +150,7 @@ class StardewValley {
   async getPathExistsAsync(path)
   {
     try {
-     await promisify(fs.access)(path, fs.constants.R_OK);
+     await fs.statAsync(path);
      return true;
     }
     catch(err) {
@@ -182,7 +181,7 @@ class StardewValley {
 async function getModName(destinationPath, manifestFile) {
   const manifestPath = path.join(destinationPath, manifestFile);
   try {
-    const file = await promisify(fs.readFile)(manifestPath, { encoding: 'utf8' });
+    const file = await fs.readFileAsync(manifestPath, { encoding: 'utf8' });
     // it seems to be not uncommon that these files are not valid json,
     // so we use relaxed-json to improve our chances of parsing successfully
     const data = rjson.parse(util.deBOM(file));
