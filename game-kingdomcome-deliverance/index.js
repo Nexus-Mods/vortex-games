@@ -14,7 +14,8 @@ let _PAK_MODS = [];
 
 function findGame() {
   return util.steam.findByAppId('379430')
-      .then(game => game.gamePath);
+    .catch(() => util.epicGamesLauncher.findByAppId('Eel'))
+    .then(game => game.gamePath);
 }
 
 function prepareForModding(discovery) {
@@ -174,11 +175,26 @@ function main(context) {
     queryPath: findGame,
     queryModPath: modsPath,
     logo: 'gameart.jpg',
-    executable: () => 'Bin/Win64/KingdomCome.exe',
+    executable: (discoveredPath) => {
+      try {
+        const epicPath = path.join('Bin', 'Win64MasterMasterEpicPGO', 'KingdomCome.exe')
+        fs.statSync(path.join(discoveredPath, epicPath));
+        return epicPath;
+      } catch (err) {
+        return path.join('Bin', 'Win64', 'KingdomCome.exe');
+      }
+    },
     requiredFiles: [
-      'Bin/Win64/KingdomCome.exe',
+      'Data/Levels/rataje/level.pak',
     ],
     setup: prepareForModding,
+    requiresLauncher: () => util.epicGamesLauncher.isGameInstalled('Eel')
+      .then(epic => epic
+        ? { launcher: 'epic', addInfo: 'Eel' }
+        : undefined),
+    environment: {
+      SteamAPPId: '379430',
+    },
     details: {
       steamAppId: 379430,
     },
