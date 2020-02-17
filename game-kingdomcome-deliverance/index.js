@@ -142,6 +142,7 @@ function LoadOrderBase(props) {
                   borderColor: 'var(--border-color, white)',
                 },
                 apply: ordered => {
+                  // TODO: Why exactly is a deployment necessary here? It should be sufficient to rewrite the mod_order.txt file
                   props.onSetDeploymentNecessary(props.profile.gameId, true);
                   return props.onSetOrder(props.profile.id, ordered)
                 },
@@ -252,50 +253,55 @@ function main(context) {
     //   deal with mods that have *not* been deployed by vortex.
     //   as such we should be reacting to did-deploy and get the list of files from a readdir in the mod directory
     context.api.events.on('bake-settings', (gameId, mods) => {
-      if (gameId === GAME_ID) {
-        const store = context.api.store;
-        const state = store.getState();
-        const profileId = selectors.lastActiveProfileForGame(state, GAME_ID);
-
-        // Check if we managed to find the profile and whether it still exists
-        //  as the user could've potentially removed it since he used it last.
-        const profileIdExists = (!!profileId)
-          ? (util.getSafe(state, ['persistent', 'profiles', profileId], undefined) !== undefined)
-          : false;
-
-        if (!profileIdExists) {
-          // User removed the profile?
-          log('info', 'the last active profile for kingdomcomedeliverance is no longer available', profileId);
-          return;
-        }
-
-        const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', gameId], undefined);
-        if ((discovery === undefined) || (discovery.path === undefined)) {
-          // should never happen and if it does it will cause errors elsewhere as well
-          log('error', 'kingdomcomedeliverance was not discovered');
-          return;
-        }
-
-        const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profileId], []);
-        const modOrderFile = path.join(discovery.path, modsPath(), MODS_ORDER_FILENAME);
-        let transformedMods = loadOrder
-          .filter(mod => mods.find(enabledMod => enabledMod.id === mod) !== undefined)
-          .map(mod => transformId(mod));
-
-        const diff = mods.filter(x => !transformedMods.includes(transformId(x.id)));
-        if (diff.length !== 0) {
-          // Load order seems to be missing a mod. This is a valid scenario
-          //  as the load order may have not been updated by the user yet.
-          //  Add the new mods at the end of the load order.
-          const transformed = diff.map(mod => transformId(mod.id));
-          transformedMods = [ ...transformedMods, ...transformed ];
-          store.dispatch(actions.setLoadOrder(profileId, transformedMods));
-        }
-
-        prepareForModding(discovery)
-          .then(() => fs.writeFileAsync(modOrderFile, transformedMods.join('\n')))
+      if (gameId !== GAME_ID) {
+        return Promise.resolve();
       }
-    })
+
+      const store = context.api.store;
+      const state = store.getState();
+      const profileId = selectors.lastActiveProfileForGame(state, GAME_ID);
+
+      // Check if we managed to find the profile and whether it still exists
+      //  as the user could've potentially removed it since he used it last.
+      const profileIdExists = (!!profileId)
+        ? (util.getSafe(state, ['persistent', 'profiles', profileId], undefined) !== undefined)
+        : false;
+
+      if (!profileIdExists) {
+        // User removed the profile?
+        log('info', 'the last active profile for kingdomcomedeliverance is no longer available', profileId);
+        return;
+      }
+
+      const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', gameId], undefined);
+      if ((discovery === undefined) || (discovery.path === undefined)) {
+        // should never happen and if it does it will cause errors elsewhere as well
+        log('error', 'kingdomcomedeliverance was not discovered');
+        return;
+      }
+
+      const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profileId], []);
+      const modOrderFile = path.join(discovery.path, modsPath(), MODS_ORDER_FILENAME);
+      let transformedMods = loadOrder
+        .filter(mod => mods.find(enabledMod => enabledMod.id === mod) !== undefined)
+        .map(mod => transformId(mod));
+
+      const diff = mods.filter(x => !transformedMods.includes(transformId(x.id)));
+      if (diff.length !== 0) {
+        // Load order seems to be missing a mod. This is a valid scenario
+        //  as the load order may have not been updated by the user yet.
+        //  Add the new mods at the end of the load order.
+        const transformed = diff.map(mod => transformId(mod.id));
+        transformedMods = [...transformedMods, ...transformed];
+        store.dispatch(actions.setLoadOrder(profileId, transformedMods));
+      }
+
+      prepareForModding(discovery)
+        .then(() => fs.writeFileAsync(modOrderFile, transformedMods.join('\n')))
+        .catch(err => {
+          context.api.showErrorNotification('failed to updated settings', err);
+        })
+    });
   });
 
   return true;
