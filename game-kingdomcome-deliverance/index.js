@@ -10,10 +10,12 @@ const I18N_NAMESPACE = `game-${GAME_ID}`;
 
 const MODS_ORDER_FILENAME = 'mod_order.txt';
 
+const STEAM_APPID = 379430;
+
 let _PAK_MODS = [];
 
 function findGame() {
-  return util.steam.findByAppId('379430')
+  return util.steam.findByAppId(STEAM_APPID.toString())
     .catch(() => util.epicGamesLauncher.findByAppId('Eel'))
     .then(game => game.gamePath);
 }
@@ -65,10 +67,13 @@ function refreshPakMods() {
   const installationPath = selectors.installPathForGame(state, GAME_ID);
   const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], []);
   const keys = Object.keys(mods);
+
+  const extL = input => path.extname(input).toLowerCase();
+
   return Promise.reduce(keys, (accum, mod) => {
     const modPath = path.join(installationPath, mods[mod].installationPath);
     return walkAsync(modPath)
-      .then(entries => (entries.find(file => file.toLowerCase().endsWith('.pak')) !== undefined)
+      .then(entries => (entries.find(fileName => ['.pak', '.cfg'].includes(extL(fileName))) !== undefined)
         ? accum.concat(mod)
         : accum);
   }, []).then(pakFiles => {
@@ -193,10 +198,10 @@ function main(context) {
         ? { launcher: 'epic', addInfo: 'Eel' }
         : undefined),
     environment: {
-      SteamAPPId: '379430',
+      SteamAPPId: STEAM_APPID.toString(),
     },
     details: {
-      steamAppId: 379430,
+      steamAppId: STEAM_APPID,
     },
   });
 
@@ -219,7 +224,7 @@ function main(context) {
       }
     });
 
-    context.api.events.on('purge-mods', (allowFallback, callback) => {
+    context.api.events.on('purge-mods', () => {
       const store = context.api.store;
       const state = store.getState();
       const activeGameId = selectors.activeGameId(state);
@@ -235,10 +240,17 @@ function main(context) {
       }
 
       const modsOrderFilePath = path.join(discovery.path, modsPath(), MODS_ORDER_FILENAME);
-      fs.removeAsync(modsOrderFilePath).catch(err => callback(err));
+      // TODO: This shouldn't happen here at all. The load order component should be picking up that the files
+      //   it's ordering have changed and write an updated order based on the files that still exist
+      fs.removeAsync(modsOrderFilePath).catch(err => {
+        log('warn', 'failed to clean up KCD mod order file', { message: err.message });
+      });
     });
 
     // the bake-settings event receives the list of enabled mods, sorted by priority. perfect.
+    // TODO: nope. We support users installing/managing mods outside vortex. this function needs to be able to
+    //   deal with mods that have *not* been deployed by vortex.
+    //   as such we should be reacting to did-deploy and get the list of files from a readdir in the mod directory
     context.api.events.on('bake-settings', (gameId, mods) => {
       if (gameId === GAME_ID) {
         const store = context.api.store;
