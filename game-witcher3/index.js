@@ -3,6 +3,7 @@ const path = require('path');
 const winapi = require('winapi-bindings');
 const { fs, selectors, util } = require('vortex-api');
 const { parseXmlString } = require('libxmljs');
+const semver = require('semver');
 
 const GAME_ID = 'witcher3';
 const SCRIPT_MERGER_ID = 'W3ScriptMerger';
