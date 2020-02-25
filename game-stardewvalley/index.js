@@ -35,14 +35,15 @@ class StardewValley {
     };
     this.supportedTools = [
       {
-        id: 'smapi', 
-        name: 'SMAPI',  
-        logo: 'smapi.png', 
-        executable: () => SMAPI_EXE, 
+        id: 'smapi',
+        name: 'SMAPI',
+        logo: 'smapi.png',
+        executable: () => SMAPI_EXE,
         requiredFiles: [SMAPI_EXE],
         shell: true,
         exclusive: true,
         relative: true,
+        defaultPrimary: true,
       }
     ];
     this.mergeMods = true;
@@ -257,7 +258,7 @@ async function testSupported(files, gameId) {
       const testFile = path.join('fakeDir', file);
       return (testFile.endsWith(PTRN_CONTENT));
     }) === undefined);
-  return { supported }
+  return { supported };
 }
 
 async function install(files,
