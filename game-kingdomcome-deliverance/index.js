@@ -342,13 +342,17 @@ function main(context) {
     context.api.onAsync('did-deploy', (profileId, deployment) => {
       const state = context.api.store.getState();
       const profile = selectors.profileById(state, profileId);
-      const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profileId], []);
-      const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', profile.gameId], undefined);
-      if (profile === undefined) {
-        // What ?
-        log('error', 'profile does not exist', profileId);
+      if (profile === undefined || profile.gameId !== GAME_ID) {
+
+        if (profile === undefined) {
+          log('error', 'profile does not exist', profileId);
+        }
+
         return Promise.resolve();
       }
+
+      const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profileId], []);
+      const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', profile.gameId], undefined);
 
       if ((discovery === undefined) || (discovery.path === undefined)) {
         // should never happen and if it does it will cause errors elsewhere as well
