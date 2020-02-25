@@ -23,7 +23,7 @@ const KOTOR_GAMES = {
     name: 'STAR WARS™ - Knights of the Old Republic™',
     steamId: '32370',
     gogId: '1207666283',
-    logo: 'gameartkotor.png',
+    logo: 'gameart.jpg',
     exec: 'swkotor.exe',
   },
   kotor2: {
@@ -32,7 +32,7 @@ const KOTOR_GAMES = {
     name: 'STAR WARS™ Knights of the Old Republic™ II - The Sith Lords™',
     steamId: '208580',
     gogId: '1421404581',
-    logo: 'gameartkotor2.png',
+    logo: 'gameartkotor2.jpg',
     exec: 'swkotor2.exe',
   },
 }

@@ -8,11 +8,16 @@ const { actions, fs, DraggableList, FlexLayout, log, MainPage, selectors, util }
 const GAME_ID = 'kingdomcomedeliverance';
 const I18N_NAMESPACE = `game-${GAME_ID}`;
 
+const MODS_ORDER_FILENAME = 'mod_order.txt';
+
+const STEAM_APPID = 379430;
+
 let _PAK_MODS = [];
 
 function findGame() {
-  return util.steam.findByAppId('379430')
-      .then(game => game.gamePath);
+  return util.steam.findByAppId(STEAM_APPID.toString())
+    .catch(() => util.epicGamesLauncher.findByAppId('Eel'))
+    .then(game => game.gamePath);
 }
 
 function prepareForModding(discovery) {
@@ -62,10 +67,13 @@ function refreshPakMods() {
   const installationPath = selectors.installPathForGame(state, GAME_ID);
   const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], []);
   const keys = Object.keys(mods);
+
+  const extL = input => path.extname(input).toLowerCase();
+
   return Promise.reduce(keys, (accum, mod) => {
     const modPath = path.join(installationPath, mods[mod].installationPath);
     return walkAsync(modPath)
-      .then(entries => (entries.find(file => file.toLowerCase().endsWith('.pak')) !== undefined)
+      .then(entries => (entries.find(fileName => ['.pak', '.cfg'].includes(extL(fileName))) !== undefined)
         ? accum.concat(mod)
         : accum);
   }, []).then(pakFiles => {
@@ -134,6 +142,7 @@ function LoadOrderBase(props) {
                   borderColor: 'var(--border-color, white)',
                 },
                 apply: ordered => {
+                  // TODO: Why exactly is a deployment necessary here? It should be sufficient to rewrite the mod_order.txt file
                   props.onSetDeploymentNecessary(props.profile.gameId, true);
                   return props.onSetOrder(props.profile.id, ordered)
                 },
@@ -158,6 +167,10 @@ function LoadOrderBase(props) {
         )))));
 }
 
+function modsPath() {
+  return 'Mods';
+}
+
 let _API = undefined;
 function main(context) {
   _API = context.api;
@@ -166,15 +179,30 @@ function main(context) {
     name: 'Kingdom Come:\tDeliverance',
     mergeMods: mod => transformId(mod.id),
     queryPath: findGame,
-    queryModPath: () => 'Mods',
+    queryModPath: modsPath,
     logo: 'gameart.jpg',
-    executable: () => 'Bin/Win64/KingdomCome.exe',
+    executable: (discoveredPath) => {
+      try {
+        const epicPath = path.join('Bin', 'Win64MasterMasterEpicPGO', 'KingdomCome.exe')
+        fs.statSync(path.join(discoveredPath, epicPath));
+        return epicPath;
+      } catch (err) {
+        return path.join('Bin', 'Win64', 'KingdomCome.exe');
+      }
+    },
     requiredFiles: [
-      'Bin/Win64/KingdomCome.exe',
+      'Data/Levels/rataje/level.pak',
     ],
     setup: prepareForModding,
+    requiresLauncher: () => util.epicGamesLauncher.isGameInstalled('Eel')
+      .then(epic => epic
+        ? { launcher: 'epic', addInfo: 'Eel' }
+        : undefined),
+    environment: {
+      SteamAPPId: STEAM_APPID.toString(),
+    },
     details: {
-      steamAppId: 379430,
+      steamAppId: STEAM_APPID,
     },
   });
 
@@ -196,39 +224,84 @@ function main(context) {
         refreshPakMods();
       }
     });
-    // the bake-settings event receives the list of enabled mods, sorted by priority. perfect.
-    context.api.events.on('bake-settings', (gameId, mods) => {
-      if (gameId === GAME_ID) {
-        const store = context.api.store;
-        const state = store.getState();
-        const profileId = selectors.lastActiveProfileForGame(state, GAME_ID);
 
-        // Check if we managed to find the profile and whether it still exists
-        //  as the user could've potentially removed it since he used it last.
-        const profileIdExists = (!!profileId)
-          ? (util.getSafe(state, ['persistent', 'profiles', profileId], undefined) !== undefined)
-          : false;
-
-        if (!profileIdExists) {
-          // User removed the profile?
-          log('info', 'the last active profile for kingdomcomedeliverance is no longer available', profileId);
-          return;
-        }
-
-        const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profileId], []);
-        const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', gameId], undefined);
-        if ((discovery === undefined) || (discovery.path === undefined)) {
-          // should never happen and if it does it will cause errors elsewhere as well
-          log('error', 'kingdomcomedeliverance was not discovered');
-          return;
-        }
-
-        const modOrderFile = path.join(discovery.path, 'Mods', 'mod_order.txt');
-        const transformedMods = loadOrder.map(mod => transformId(mod));
-        prepareForModding(discovery)
-          .then(() => fs.writeFileAsync(modOrderFile, transformedMods.join('\n')))
+    context.api.events.on('purge-mods', () => {
+      const store = context.api.store;
+      const state = store.getState();
+      const activeGameId = selectors.activeGameId(state);
+      if (activeGameId !== GAME_ID){
+        return;
       }
-    })
+
+      const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
+      if ((discovery === undefined) || (discovery.path === undefined)) {
+        // should never happen and if it does it will cause errors elsewhere as well
+        log('error', 'kingdomcomedeliverance was not discovered');
+        return;
+      }
+
+      const modsOrderFilePath = path.join(discovery.path, modsPath(), MODS_ORDER_FILENAME);
+      // TODO: This shouldn't happen here at all. The load order component should be picking up that the files
+      //   it's ordering have changed and write an updated order based on the files that still exist
+      fs.removeAsync(modsOrderFilePath).catch(err => {
+        log('warn', 'failed to clean up KCD mod order file', { message: err.message });
+      });
+    });
+
+    // the bake-settings event receives the list of enabled mods, sorted by priority. perfect.
+    // TODO: nope. We support users installing/managing mods outside vortex. this function needs to be able to
+    //   deal with mods that have *not* been deployed by vortex.
+    //   as such we should be reacting to did-deploy and get the list of files from a readdir in the mod directory
+    context.api.events.on('bake-settings', (gameId, mods) => {
+      if (gameId !== GAME_ID) {
+        return Promise.resolve();
+      }
+
+      const store = context.api.store;
+      const state = store.getState();
+      const profileId = selectors.lastActiveProfileForGame(state, GAME_ID);
+
+      // Check if we managed to find the profile and whether it still exists
+      //  as the user could've potentially removed it since he used it last.
+      const profileIdExists = (!!profileId)
+        ? (util.getSafe(state, ['persistent', 'profiles', profileId], undefined) !== undefined)
+        : false;
+
+      if (!profileIdExists) {
+        // User removed the profile?
+        log('info', 'the last active profile for kingdomcomedeliverance is no longer available', profileId);
+        return;
+      }
+
+      const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', gameId], undefined);
+      if ((discovery === undefined) || (discovery.path === undefined)) {
+        // should never happen and if it does it will cause errors elsewhere as well
+        log('error', 'kingdomcomedeliverance was not discovered');
+        return;
+      }
+
+      const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profileId], []);
+      const modOrderFile = path.join(discovery.path, modsPath(), MODS_ORDER_FILENAME);
+      let transformedMods = loadOrder
+        .filter(mod => mods.find(enabledMod => enabledMod.id === mod) !== undefined)
+        .map(mod => transformId(mod));
+
+      const diff = mods.filter(x => !transformedMods.includes(transformId(x.id)));
+      if (diff.length !== 0) {
+        // Load order seems to be missing a mod. This is a valid scenario
+        //  as the load order may have not been updated by the user yet.
+        //  Add the new mods at the end of the load order.
+        const transformed = diff.map(mod => transformId(mod.id));
+        transformedMods = [...transformedMods, ...transformed];
+        store.dispatch(actions.setLoadOrder(profileId, transformedMods));
+      }
+
+      prepareForModding(discovery)
+        .then(() => fs.writeFileAsync(modOrderFile, transformedMods.join('\n')))
+        .catch(err => {
+          context.api.showErrorNotification('failed to updated settings', err);
+        })
+    });
   });
 
   return true;

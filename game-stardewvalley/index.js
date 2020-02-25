@@ -3,7 +3,7 @@ const
   Promise = require('bluebird'),
   rjson = require('relaxed-json'),
   { promisify } = require('util'),
-  { fs, log, util } = require('vortex-api'),
+  { actions, fs, log, selectors, util } = require('vortex-api'),
   { SevenZip } = util,
   winapi = require('winapi-bindings');
 
@@ -168,7 +168,7 @@ class StardewValley {
   async getPathExistsAsync(path)
   {
     try {
-     await promisify(fs.access)(path, fs.constants.R_OK);
+     await fs.statAsync(path);
      return true;
     }
     catch(err) {
@@ -199,7 +199,7 @@ class StardewValley {
 async function getModName(destinationPath, manifestFile) {
   const manifestPath = path.join(destinationPath, manifestFile);
   try {
-    const file = await promisify(fs.readFile)(manifestPath, { encoding: 'utf8' });
+    const file = await fs.readFileAsync(manifestPath, { encoding: 'utf8' });
     // it seems to be not uncommon that these files are not valid json,
     // so we use relaxed-json to improve our chances of parsing successfully
     const data = rjson.parse(util.deBOM(file));
@@ -233,7 +233,7 @@ async function installRootFolder(files, destinationPath) {
   const contentFile = files.find(file => path.join('fakeDir', file).endsWith(PTRN_CONTENT));
   const idx = contentFile.indexOf(PTRN_CONTENT) + 1;
   const rootDir = path.basename(contentFile.substring(0, idx));
-  const filtered = files.filter(file => (path.extname(file) !== '')
+  const filtered = files.filter(file => !file.endsWith(path.sep)
     && (file.indexOf(rootDir) !== -1)
     && (path.extname(file) !== '.txt'));
   const instructions = filtered.map(file => {
@@ -275,7 +275,7 @@ async function install(files,
     const modFiles = files.filter(file =>
       (file.indexOf(rootFolder) !== -1)
       && (path.dirname(file) !== '.')
-      && (path.extname(file) !== ''));
+      && !file.endsWith(path.sep));
 
     return {
       manifestFile,
@@ -418,5 +418,34 @@ module.exports = {
           ? Promise.resolve(hasContentFolder && hasModsFolder)
           : Promise.resolve(hasContentFolder);
       });
+
+    context.once(() => {
+      context.api.onAsync('added-files', async (profileId, files) => {
+        const state = context.api.store.getState();
+        const profile = selectors.profileById(state, profileId);
+        if (profile.gameId !== GAME_ID) {
+          // don't care about any other games
+          return;
+        }
+        const game = util.getGame(GAME_ID);
+        const discovery = selectors.discoveryByGame(state, GAME_ID);
+        const modPaths = game.getModPaths(discovery.path);
+        const installPath = selectors.installPathForGame(state, GAME_ID);
+
+        await Promise.map(files, async entry => {
+          // only act if we definitively know which mod owns the file
+          if (entry.candidates.length === 1) {
+            const mod = util.getSafe(state.persistent.mods, [GAME_ID, entry.candidates[0]], undefined);
+            const relPath = path.relative(modPaths[mod.type], entry.filePath);
+            const targetPath = path.join(installPath, mod.id, relPath);
+            // copy the new file back into the corresponding mod, then delete it. That way, vortex will
+            // create a link to it with the correct deployment method and not ask the user any questions
+            await fs.ensureDirAsync(path.dirname(targetPath));
+            await fs.copyAsync(entry.filePath, targetPath);
+            await fs.removeAsync(entry.filePath);
+          }
+        });
+      });
+    });
   }
 }
