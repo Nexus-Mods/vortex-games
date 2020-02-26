@@ -175,7 +175,7 @@ function prepareForModding(context, discovery) {
   const missingScriptMerger = () => new Promise((resolve, reject) => {
     return api.sendNotification({
       id: notifId,
-      type: 'warning',
+      type: 'info',
       message: api.translate('Witcher 3 script merger not installed/configured', { ns: I18N_NAMESPACE }),
       allowSuppress: true,
       actions: [
@@ -324,6 +324,48 @@ function main(context) {
   context.registerModType('witcher3tl', 25, gameId => gameId === 'witcher3', getTLPath, testTL);
   context.registerModType('witcher3dlc', 25, gameId => gameId === 'witcher3', getDLCPath, testDLC);
 
+  context.registerLoadOrderPage({
+    gameId: GAME_ID,
+    loadOrderInfo: 'When organizing your Witcher 3 mods, please keep in mind that the top-most mod '
+                 + 'will win any conflicts - e.g. if mod 0001 and 0008 modify the same script file, ' 
+                 + 'the game will load mod 0001 and ignore the script file in 0008. Additionally - if the script '
+                 + 'merger is configured, Vortex will be able to ensure that any merged mods are '
+                 + 'locked at the top of the order, ensuring they get loaded first.',
+    gameArtURL: `${__dirname}/gameart.jpg`,
+    preSort: async (items) => {
+      const state = context.api.store.getState();
+      const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID]);
+      const scriptMerger = util.getSafe(discovery, ['tools', SCRIPT_MERGER_ID]);
+      if (!!scriptMerger && !!scriptMerger.path) {
+        const modNames = await getMergedModNames(path.dirname(scriptMerger.path));
+        _LOWEST_PREFIX = modNames.length;
+        const mergedId = modNames.length > 1
+          ? `mergedMod0000 - mergedMod${prefixDesignation(modNames.length - 1)}`
+          : (modNames.length !== 0) ? 'mergedMod0000' : undefined;
+
+        if (mergedId === undefined) {
+          // There are no merged mods - set the prefixes and move along.
+          items.forEach((item, idx) => item.prefix = prefixDesignation(idx + _LOWEST_PREFIX));
+          return Promise.resolve(items);
+        }
+
+        const mergedEntry = {
+          id: mergedId,
+          name: mergedId,
+          imgUrl: `${__dirname}/gameart.jpg`,
+          prefix: prefixDesignation(modNames.length - 1),
+          locked: true,
+        };
+        const mergedMod = items.find(item => item.id.startsWith('mergedMod'));
+        if (mergedMod !== undefined && mergedMod.id !== mergedEntry.id) {
+          items = items.splice(items.indexOf(mergedMod.id), 0);
+        }
+        items.forEach((item, idx) => item.prefix = prefixDesignation(idx + _LOWEST_PREFIX));
+        return Promise.resolve([].concat(mergedEntry, ...items));
+      }
+    },
+  });
+
   let lastEnabledModsState = [];
   context.once(() => {
     context.api.onStateChange(['persistent', 'profiles'], () => {
@@ -377,48 +419,6 @@ function main(context) {
           ],
         });
       }
-    });
-
-    context.api.events.emit('add-loadorder-game', {
-      gameId: GAME_ID,
-      loadOrderInfo: 'When organizing your Witcher 3 mods, please keep in mind that the top-most mod '
-                   + 'will win any conflicts - e.g. if mod 0001 and 0008 modify the same script file, ' 
-                   + 'the game will load mod 0001 and ignore the script file in 0008. Additionally - if the script '
-                   + 'merger is configured, Vortex will be able to ensure that any merged mods are '
-                   + 'locked at the top of the order, ensuring they get loaded first.',
-      gameArtURL: `${__dirname}/gameart.jpg`,
-      preSort: async (items) => {
-        const state = context.api.store.getState();
-        const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID]);
-        const scriptMerger = util.getSafe(discovery, ['tools', SCRIPT_MERGER_ID]);
-        if (!!scriptMerger && !!scriptMerger.path) {
-          const modNames = await getMergedModNames(path.dirname(scriptMerger.path));
-          _LOWEST_PREFIX = modNames.length;
-          const mergedId = modNames.length > 1
-            ? `mergedMod0000 - mergedMod${prefixDesignation(modNames.length - 1)}`
-            : (modNames.length !== 0) ? 'mergedMod0000' : undefined;
-
-          if (mergedId === undefined) {
-            // There are no merged mods - set the prefixes and move along.
-            items.forEach((item, idx) => item.prefix = prefixDesignation(idx + _LOWEST_PREFIX));
-            return Promise.resolve(items);
-          }
-
-          const mergedEntry = {
-            id: mergedId,
-            name: mergedId,
-            imgUrl: `${__dirname}/gameart.jpg`,
-            prefix: prefixDesignation(modNames.length - 1),
-            locked: true,
-          };
-          const mergedMod = items.find(item => item.id.startsWith('mergedMod'));
-          if (mergedMod !== undefined && mergedMod.id !== mergedEntry.id) {
-            items = items.splice(items.indexOf(mergedMod.id), 0);
-          }
-          items.forEach((item, idx) => item.prefix = prefixDesignation(idx + _LOWEST_PREFIX));
-          return Promise.resolve([].concat(mergedEntry, ...items));
-        }
-      },
     });
   });
 
