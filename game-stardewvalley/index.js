@@ -1,9 +1,9 @@
 const
   path = require('path'),
   Promise = require('bluebird'),
+  { remote } = require('electron'),
   rjson = require('relaxed-json'),
-  { promisify } = require('util'),
-  { actions, fs, log, selectors, util } = require('vortex-api'),
+  { fs, log, selectors, util } = require('vortex-api'),
   { SevenZip } = util,
   winapi = require('winapi-bindings');
 
@@ -308,7 +308,7 @@ async function install(files,
 }
 
 function isSMAPIModType(instructions) {
-  // Find the SMAPI exe file. 
+  // Find the SMAPI exe file.
   const smapiData = instructions.find(inst => (inst.type === 'copy') && inst.source.endsWith(SMAPI_EXE));
 
   return Promise.resolve(smapiData !== undefined);
@@ -358,6 +358,36 @@ async function installSMAPI(files, destinationPath) {
   return Promise.resolve({ instructions });
 }
 
+async function showSMAPILog(api, basePath, logFile) {
+  const logData = await fs.readFileAsync(path.join(basePath, logFile), { encoding: 'utf-8' });
+  await api.showDialog('info', 'SMAPI Log', {
+    text: 'Your SMAPI log is displayed below. To share it, click "Copy & Share" which will copy it to your clipboard and open the SMAPI log sharing website. ' +
+      'Next, paste your code into the text box and press "save & parse log". You can now share a link to this page with others so they can see your log file.\n\n' + logData
+  }, [{
+    label: 'Copy & Share log', action: () => {
+      const timestamp = new Date().toISOString().replace(/^.+T([^\.]+).+/, '$1');
+      clipboard.writeText(`[${timestamp} INFO Vortex] Log exported by Vortex ${remote.app.getVersion()}.\n` + logData);
+      return util.opn('https://smapi.io/log').catch(err => undefined);
+    }
+  }, { label: 'Close', action: () => undefined }]);
+}
+
+async function onShowSMAPILog(api) {
+  //Read and display the log.
+  const basePath = path.join(remote.app.getPath('appData'), 'stardewvalley', 'errorlogs');
+  try {
+    //If the crash log exists, show that.
+    await showSMAPILog(api, basePath, "SMAPI-crash.txt");
+  } catch (err) {
+    try {
+      //Otherwise show the normal log.
+      await showSMAPILog(api, basePath, "SMAPI-latest.txt");
+    } catch (err) {
+      //Or Inform the user there are no logs.
+      api.sendNotification({ type: 'info', title: 'No SMAPI logs found.', message: '', displayMS: 5000 });
+    }
+  }
+}
 
 module.exports = {
   default: function(context) {
@@ -418,6 +448,15 @@ module.exports = {
         return (hasManifest)
           ? Promise.resolve(hasContentFolder && hasModsFolder)
           : Promise.resolve(hasContentFolder);
+      });
+
+    context.registerAction('mod-icons', 999, 'changelog', {}, 'SMAPI Log',
+      () => onShowSMAPILog(context.api),
+      () => {
+        //Only show the SMAPI log button for SDV. 
+        const state = context.api.store.getState();
+        const gameMode = selectors.activeGameId(state);
+        return (gameMode === GAME_ID);
       });
 
     context.once(() => {
