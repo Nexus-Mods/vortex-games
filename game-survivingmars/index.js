@@ -2,9 +2,9 @@ const Promise = require('bluebird');
 const { remote } = require('electron');
 const path = require('path');
 const winapi = require('winapi-bindings');
-const { fs, util } = require('vortex-api');
+const { log, fs, util } = require('vortex-api');
 
-// Mods for Surviving Mars normally have this file containing mod data. 
+// Mods for Surviving Mars normally have this file cont#aining mod data.
 const MOD_FILE = "modcontent.hpk"
 
 // Nexus Mods id for the game.
@@ -13,7 +13,8 @@ const SURVIVINGMARS_ID = 'survivingmars';
 // Game has different executable names depending where
 //  the user purchased it from.
 const STEAM_EXE = 'MarsSteam.exe';
-const GOG_EXE = 'MarsGOG.exe'
+const GOG_EXE = 'MarsGOG.exe';
+const EPIC_EXE = 'MarsEpic.exe';
 
 function findGame() {
   try {
@@ -27,6 +28,7 @@ function findGame() {
     return Promise.resolve(instPath.value);
   } catch (err) {
     return util.steam.findByAppId('464920')
+      .catch(() => util.epicGamesLauncher.findByAppId('Ovenbird'))
       .then(game => game.gamePath);
   }
 }
@@ -79,18 +81,33 @@ function testSupportedContent(files, gameId) {
 }
 
 function getExecutable(discoveryPath) {
+  const isCorrectExec = (exec) => {
+    try {
+      fs.statSync(path.join(discoveryPath, exec));
+      return true;
+    } catch (err) {
+      return false;
+    }
+  };
+
   if (discoveryPath === undefined) {
     return STEAM_EXE;
   }
 
-  let execFile = GOG_EXE;
-  try {
-    fs.statSync(path.join(discoveryPath, GOG_EXE))
-  } catch (err) {
-    execFile = STEAM_EXE;
+  if (isCorrectExec(STEAM_EXE)) {
+    return STEAM_EXE;
   }
 
-  return execFile;
+  if (isCorrectExec(GOG_EXE)) {
+    return GOG_EXE;
+  }
+
+  if (isCorrectExec(EPIC_EXE)) {
+    return EPIC_EXE;
+  }
+
+  log('error', 'could not resolve game executable.');
+  return STEAM_EXE;
 }
 
 function main(context) {

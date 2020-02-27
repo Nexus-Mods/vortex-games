@@ -12,7 +12,11 @@ const MODS_ORDER_FILENAME = 'mod_order.txt';
 
 const STEAM_APPID = 379430;
 
-let _PAK_MODS = [];
+const _MODS_STATE = {
+  enabled: [],
+  disabled: [],
+  display: [],
+}
 
 function findGame() {
   return util.steam.findByAppId(STEAM_APPID.toString())
@@ -20,9 +24,13 @@ function findGame() {
     .then(game => game.gamePath);
 }
 
-function prepareForModding(discovery) {
-  return refreshPakMods().then(() => fs.ensureDirWritableAsync(path.join(discovery.path, 'Mods'),
-    () => Promise.resolve()));
+function prepareForModding(context, discovery) {
+  const state = context.api.store.getState();
+  const profile = selectors.activeProfile(state);
+  return fs.ensureDirWritableAsync(path.join(discovery.path, 'Mods'), () => Promise.resolve())
+    .then(() => getCurrentOrder(path.join(discovery.path, modsPath(), MODS_ORDER_FILENAME)))
+    .catch(err => err.code === 'ENOENT' ? Promise.resolve([]) : Promise.reject(err))
+    .then(data => setNewOrder({ context, profile }, data.split('\n')))
 }
 
 function transformId(input) {
@@ -30,10 +38,8 @@ function transformId(input) {
   return input.replace(/[ -.]/g, '');
 }
 
-function modIsEnabled(props, mod) {
-  return (!!props.modState[mod])
-    ? props.modState[mod].enabled
-    : false;
+function getCurrentOrder(modOrderFilepath) {
+  return fs.readFileAsync(modOrderFilepath, { encoding: 'utf8' });
 }
 
 function walkAsync(dir) {
@@ -62,41 +68,98 @@ function walkAsync(dir) {
   });
 }
 
-function refreshPakMods() {
-  const state = _API.store.getState();
+
+function readModsFolder(modsFolder) {
+  const extL = input => path.extname(input).toLowerCase();
+  const isValidMod = modFile => ['.pak', '.cfg', '.manifest'].indexOf(extL(modFile)) !== -1;
+
+  // Reads the provided folderPath and attempts to identify all
+  //  currently deployed mods.
+  return fs.readdirAsync(modsFolder)
+    .then(entries => Promise.reduce(entries, (accum, current) => {
+      const currentPath = path.join(modsFolder, current);
+      return fs.readdirAsync(currentPath)
+        .then(modFiles => {
+          if (modFiles.some(isValidMod) === true) {
+            accum.push(current);
+          }
+          return Promise.resolve(accum);
+        })
+        .catch(err => Promise.resolve(accum))
+    }, []));
+}
+
+function listHasMod(modId, list) {
+  return list.map(mod =>
+    transformId(mod).toLowerCase()).includes(modId.toLowerCase());
+}
+
+function getManuallyAddedMods(disabledMods, enabledMods, modOrderFilepath) {
+  const modsPath = path.dirname(modOrderFilepath);
+
+  return readModsFolder(modsPath).then(deployedMods =>
+    getCurrentOrder(modOrderFilepath)
+      .catch(err => (err.code === 'ENOENT') ? Promise.resolve('') : Promise.reject(err))
+      .then(data => {
+        // 1. Confirmed to exist (deployed) inside the mods directory.
+        // 2. Is not part of any of the mod lists which Vortex manages.
+        const manuallyAdded = data.split('\n').filter(entry =>
+            !listHasMod(entry, enabledMods)
+          && !listHasMod(entry, disabledMods)
+          && listHasMod(entry, deployedMods));
+
+        return Promise.resolve(manuallyAdded);
+      }));
+}
+
+function refreshModList(context, discoveryPath) {
+  const state = context.api.store.getState();
+  const profile = selectors.activeProfile(state);
   const installationPath = selectors.installPathForGame(state, GAME_ID);
   const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], []);
-  const keys = Object.keys(mods);
+  const modKeys = Object.keys(mods);
+  const modState = util.getSafe(profile, ['modState'], {});
+  const enabled = modKeys.filter(mod => !!modState[mod] && modState[mod].enabled);
+  const disabled = modKeys.filter(dis => !enabled.includes(dis));
 
   const extL = input => path.extname(input).toLowerCase();
-
-  return Promise.reduce(keys, (accum, mod) => {
+  return Promise.reduce(enabled, (accum, mod) => {
     const modPath = path.join(installationPath, mods[mod].installationPath);
     return walkAsync(modPath)
-      .then(entries => (entries.find(fileName => ['.pak', '.cfg'].includes(extL(fileName))) !== undefined)
+      .then(entries => (entries.find(fileName => ['.pak', '.cfg', '.manifest'].includes(extL(fileName))) !== undefined)
         ? accum.concat(mod)
         : accum);
-  }, []).then(pakFiles => {
-    _PAK_MODS = pakFiles;
-    return Promise.resolve();
+  }, []).then(managedMods => {
+    return getManuallyAddedMods(disabled, enabled, path.join(discoveryPath, modsPath(), MODS_ORDER_FILENAME))
+      .then(manuallyAdded => {
+        _MODS_STATE.enabled = [].concat(managedMods
+          .map(mod => transformId(mod)), manuallyAdded);
+        _MODS_STATE.disabled = disabled;
+        _MODS_STATE.display = _MODS_STATE.enabled;
+        return Promise.resolve();
+      })
   });
 }
 
 function LoadOrderBase(props) {
-  const loValue = (input) => {
-    const idx = props.order.indexOf(input);
-    return idx !== -1 ? idx : props.order.length;
-  }
-
-  const filtered = Object.keys(props.mods).filter(mod => (modIsEnabled(props, mod)) && (_PAK_MODS.indexOf(mod) !== -1));
-  const sorted = filtered.sort((lhs, rhs) => loValue(lhs) - loValue(rhs));
+  const getMod = (item) => {
+    const keys = Object.keys(props.mods);
+    const found = keys.find(key => transformId(key) === item);
+    return found !== undefined
+      ? props.mods[found]
+      : { attributes: { name: item } };
+  };
 
   class ItemRenderer extends React.Component {
     render() {
+      if (props.mods === undefined) {
+        return null;
+      }
+
       const item = this.props.item;
-      return !modIsEnabled(props, item)
-        ? null
-        : React.createElement(BS.ListGroupItem, {
+      const mod = getMod(item);
+
+      return React.createElement(BS.ListGroupItem, {
             style: {
               backgroundColor: 'var(--brand-bg, black)',
               borderBottom: '2px solid var(--border-color, white)'
@@ -108,8 +171,8 @@ function LoadOrderBase(props) {
             },
           },
           React.createElement('img', {
-            src: props.mods[item].attributes.pictureUrl
-                  ? props.mods[item].attributes.pictureUrl
+            src: !!mod.attributes.pictureUrl
+                  ? mod.attributes.pictureUrl
                   : `${__dirname}/gameart.jpg`,
             className: 'mod-picture',
             width:'75px',
@@ -119,7 +182,7 @@ function LoadOrderBase(props) {
               border: '1px solid var(--brand-secondary,#D78F46)',
             },
           }),
-          util.renderModName(props.mods[item])));
+          util.renderModName(mod)))
     }
   }
 
@@ -132,7 +195,7 @@ function LoadOrderBase(props) {
               React.createElement(DraggableList, {
                 id: 'kcd-loadorder',
                 itemTypeId: 'kcd-loadorder-item',
-                items: sorted,
+                items: _MODS_STATE.display,
                 itemRenderer: ItemRenderer,
                 style: {
                   height: '100%',
@@ -142,9 +205,11 @@ function LoadOrderBase(props) {
                   borderColor: 'var(--border-color, white)',
                 },
                 apply: ordered => {
-                  // TODO: Why exactly is a deployment necessary here? It should be sufficient to rewrite the mod_order.txt file
-                  props.onSetDeploymentNecessary(props.profile.gameId, true);
-                  return props.onSetOrder(props.profile.id, ordered)
+                  // We only write to the mod_order file when we deploy to avoid (unlikely) situations
+                  //  where a file descriptor remains open, blocking file operations when the user
+                  //  changes the load order very quickly. This is all theoretical at this point.
+                  props.onSetDeploymentNecessary(GAME_ID, true);
+                  return setNewOrder(props, ordered);
                 },
               })
             ),
@@ -158,11 +223,13 @@ function LoadOrderBase(props) {
                   props.t('Changing your load order', { ns: I18N_NAMESPACE })),
                 React.createElement('p', {},
                   props.t('Drag and drop the mods on the left to reorder them. Kingdom Come: Deliverance uses a mod_order.txt file '
-                      + 'to define the order in which .PAK files are loaded, Vortex will write the folder names of the displayed '
+                      + 'to define the order in which mods are loaded, Vortex will write the folder names of the displayed '
                       + 'mods in the order you have set. '
                       + 'Mods placed at the bottom of the load order will have priority over those above them.', { ns: I18N_NAMESPACE })),
                   React.createElement('p', {},
-                  props.t('Note: You can only manage mods installed with Vortex. Installing other mods manually may cause unexpected errors.', { ns: I18N_NAMESPACE })),
+                  props.t('Note: Vortex will detect manually added mods as long as these have been added to the mod_order.txt file. '
+                        + 'Manually added mods are not managed by Vortex - to remove these, you will have to '
+                        + 'manually erase the entry from the mod_order.txt file.', { ns: I18N_NAMESPACE })),
               ))
         )))));
 }
@@ -171,9 +238,23 @@ function modsPath() {
   return 'Mods';
 }
 
-let _API = undefined;
+function setNewOrder(props, ordered) {
+  const { context, profile, onSetOrder } = props;
+
+  _MODS_STATE.display = ordered;
+
+  return (!!onSetOrder)
+    ? onSetOrder(profile.id, ordered)
+    : context.api.store.dispatch(actions.setLoadOrder(profile.id, ordered));
+}
+
+function writeOrderFile(filePath, modList) {
+  return fs.removeAsync(filePath)
+    .catch(err => err.code === 'ENOENT' ? Promise.resolve() : Promise.reject(err))
+    .then(() => fs.writeFileAsync(filePath, modList.join('\n'), { encoding: 'utf8' }));
+}
+
 function main(context) {
-  _API = context.api;
   context.registerGame({
     id: GAME_ID,
     name: 'Kingdom Come:\tDeliverance',
@@ -193,7 +274,9 @@ function main(context) {
     requiredFiles: [
       'Data/Levels/rataje/level.pak',
     ],
-    setup: prepareForModding,
+    setup: (discovery) => prepareForModding(context, discovery),
+    //requiresCleanup: true, // Theoretically not needed, as we look for several file extensions when
+                             //  checking whether a mod is valid or not. This may change.
     requiresLauncher: () => util.epicGamesLauncher.isGameInstalled('Eel')
       .then(epic => epic
         ? { launcher: 'epic', addInfo: 'Eel' }
@@ -219,17 +302,19 @@ function main(context) {
   context.once(() => {
     context.api.events.on('mod-enabled', (profileId, modId) => {
       const state = context.api.store.getState();
+      const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
+
       const profile = util.getSafe(state, ['persistent', 'profiles', profileId], undefined);
-      if (!!profile && (profile.gameId === GAME_ID) && (_PAK_MODS.indexOf(modId) === -1)) {
-        refreshPakMods();
+      if (!!profile && (profile.gameId === GAME_ID) && (_MODS_STATE.display.indexOf(modId) === -1)) {
+        refreshModList(context, discovery.path);
       }
     });
 
     context.api.events.on('purge-mods', () => {
       const store = context.api.store;
       const state = store.getState();
-      const activeGameId = selectors.activeGameId(state);
-      if (activeGameId !== GAME_ID){
+      const profile = selectors.activeProfile(state);
+      if (profile === undefined || profile.gameId !== GAME_ID){
         return;
       }
 
@@ -241,65 +326,66 @@ function main(context) {
       }
 
       const modsOrderFilePath = path.join(discovery.path, modsPath(), MODS_ORDER_FILENAME);
-      // TODO: This shouldn't happen here at all. The load order component should be picking up that the files
-      //   it's ordering have changed and write an updated order based on the files that still exist
-      fs.removeAsync(modsOrderFilePath).catch(err => {
-        log('warn', 'failed to clean up KCD mod order file', { message: err.message });
-      });
+      const managedMods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
+      const modKeys = Object.keys(managedMods);
+      const modState = util.getSafe(profile, ['modState'], {});
+      const enabled = modKeys.filter(mod => !!modState[mod] && modState[mod].enabled);
+      const disabled = modKeys.filter(dis => !enabled.includes(dis));
+      getManuallyAddedMods(disabled, enabled, modsOrderFilePath)
+        .then(manuallyAdded => {
+          writeOrderFile(modsOrderFilePath, manuallyAdded)
+            .then(() => setNewOrder({ context, profile }, manuallyAdded));
+        })
+        .catch(err => context.api.showErrorNotification('Failed to re-instate manually added mods', err));
     });
 
-    // the bake-settings event receives the list of enabled mods, sorted by priority. perfect.
-    // TODO: nope. We support users installing/managing mods outside vortex. this function needs to be able to
-    //   deal with mods that have *not* been deployed by vortex.
-    //   as such we should be reacting to did-deploy and get the list of files from a readdir in the mod directory
-    context.api.events.on('bake-settings', (gameId, mods) => {
-      if (gameId !== GAME_ID) {
+    context.api.onAsync('did-deploy', (profileId, deployment) => {
+      const state = context.api.store.getState();
+      const profile = selectors.profileById(state, profileId);
+      if (profile === undefined || profile.gameId !== GAME_ID) {
+
+        if (profile === undefined) {
+          log('error', 'profile does not exist', profileId);
+        }
+
         return Promise.resolve();
       }
 
-      const store = context.api.store;
-      const state = store.getState();
-      const profileId = selectors.lastActiveProfileForGame(state, GAME_ID);
+      const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profileId], []);
+      const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', profile.gameId], undefined);
 
-      // Check if we managed to find the profile and whether it still exists
-      //  as the user could've potentially removed it since he used it last.
-      const profileIdExists = (!!profileId)
-        ? (util.getSafe(state, ['persistent', 'profiles', profileId], undefined) !== undefined)
-        : false;
-
-      if (!profileIdExists) {
-        // User removed the profile?
-        log('info', 'the last active profile for kingdomcomedeliverance is no longer available', profileId);
-        return;
-      }
-
-      const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', gameId], undefined);
       if ((discovery === undefined) || (discovery.path === undefined)) {
         // should never happen and if it does it will cause errors elsewhere as well
         log('error', 'kingdomcomedeliverance was not discovered');
-        return;
+        return Promise.resolve();
       }
 
-      const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profileId], []);
-      const modOrderFile = path.join(discovery.path, modsPath(), MODS_ORDER_FILENAME);
-      let transformedMods = loadOrder
-        .filter(mod => mods.find(enabledMod => enabledMod.id === mod) !== undefined)
-        .map(mod => transformId(mod));
+      const modsFolder = path.join(discovery.path, modsPath());
+      const modOrderFile = path.join(modsFolder, MODS_ORDER_FILENAME);
 
-      const diff = mods.filter(x => !transformedMods.includes(transformId(x.id)));
-      if (diff.length !== 0) {
-        // Load order seems to be missing a mod. This is a valid scenario
-        //  as the load order may have not been updated by the user yet.
-        //  Add the new mods at the end of the load order.
-        const transformed = diff.map(mod => transformId(mod.id));
-        transformedMods = [...transformedMods, ...transformed];
-        store.dispatch(actions.setLoadOrder(profileId, transformedMods));
-      }
+      return refreshModList(context, discovery.path)
+        .then(() => {
+          let missing = loadOrder
+            .filter(mod => !listHasMod(transformId(mod), _MODS_STATE.enabled)
+                        && !listHasMod(transformId(mod), _MODS_STATE.disabled))
+            .map(mod => transformId(mod)) || [];
 
-      prepareForModding(discovery)
-        .then(() => fs.writeFileAsync(modOrderFile, transformedMods.join('\n')))
-        .catch(err => {
-          context.api.showErrorNotification('failed to updated settings', err);
+          // This is theoretically unecessary - but it will ensure no duplicates
+          //  are added.
+          missing = [ ...new Set(missing) ];
+          const transformed = [ ..._MODS_STATE.enabled, ...missing ];
+          const loValue = (input) => {
+            const idx = loadOrder.indexOf(input);
+            return idx !== -1 ? idx : loadOrder.length;
+          }
+
+          // Sort
+          let sorted = transformed.length > 1
+            ? transformed.sort((lhs, rhs) => loValue(lhs) - loValue(rhs))
+            : transformed;
+
+          setNewOrder({ context, profile }, sorted);
+          return writeOrderFile(modOrderFile, transformed);
         })
     });
   });
