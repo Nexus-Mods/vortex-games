@@ -298,8 +298,6 @@ function main(context) {
     requiredFiles: [
       'bin/x64/witcher3.exe',
     ],
-    requiresCleanup: true, // Technically this is not needed from the game's perspective and the
-                           //  mods would run fine, but the mods folder can become VERY messy without it.
     details: {
       steamAppId: 292030,
     }
