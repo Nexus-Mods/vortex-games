@@ -1,7 +1,8 @@
 const Promise = require('bluebird');
 const path = require('path');
-const { fs, log, selectors, util } = require('vortex-api');
+const { fs, util } = require('vortex-api');
 const { runPatcher } = require('harmony-patcher');
+const semver = require('semver');
 
 const DATAPATH = path.join('Untitled_Data', 'Managed')
 const ENTRY_POINT = 'GameManager::Awake';
@@ -37,8 +38,21 @@ function getDiscoveryPath(state) {
 
 function prepareForModding(discovery) {
   const absPath = path.join(discovery.path, DATAPATH);
-  return runPatcher(__dirname, absPath, ENTRY_POINT, false)
-    .then(() => fs.ensureDirWritableAsync(path.join(absPath, 'VortexMods'), () => Promise.resolve()));
+  return fs.ensureDirWritableAsync(path.join(absPath, 'VortexMods'), () => Promise.resolve());
+}
+
+function migrate010(api, oldVersion) {
+  if (semver.gte(oldVersion, '0.1.0')) {
+    return Promise.resolve();
+  }
+
+  const state = api.store.getState();
+  const absPath = path.join(getDiscoveryPath(state), DATAPATH);
+  const assemblyPath = path.join(absPath, 'VortexHarmonyInstaller.dll');
+  // Test if the patch exists and remove it, if it is.
+  return fs.statAsync(assemblyPath)
+    .then(() => runPatcher(__dirname, absPath, ENTRY_POINT, true))
+    .catch(err => err.code === 'ENOENT' ? Promise.resolve() : Promise.reject(err));
 }
 
 function main(context) {
@@ -55,72 +69,18 @@ function main(context) {
       'Untitled.exe',
       'UnityPlayer.dll',
     ],
+    details: {
+      harmonyPatchDetails: {
+        dataPath: DATAPATH,
+        entryPoint: ENTRY_POINT,
+        modsPath: modPath(),
+        injectVIGO: true,
+      },
+    },
     setup: prepareForModding,
   });
 
-  const isGameRunning = (state) => {
-    return Object.keys(util.getSafe(state, ['session', 'base', 'toolsRunning'], {})).length > 0;
-  }
-
-  const gameIsRunningNotif = () => {
-    context.api.sendNotification({
-      type: 'info',
-      message: 'Can\'t run harmony patcher while a tool/game is running',
-      displayMS: 5000,
-    });
-  }
-
-  const reportPatcherError = (err) => {
-    context.api.showErrorNotification('Patcher encountered errors',
-      'The patcher was unable to finish its operation "{{errorMsg}}"',
-      { replace: { errorMsg: err } });
-  };
-
-  context.registerAction('mod-icons', 500, 'savegame', {}, 'Patcher - Remove', () => {
-    const store = context.api.store;
-    const state = store.getState();
-    const gameMode = selectors.activeGameId(state);
-    if (gameMode !== GAME_ID) {
-      return false;
-    }
-
-    if (isGameRunning(state)) {
-      gameIsRunningNotif();
-      return true;
-    }
-
-    const dataPath = path.join(getDiscoveryPath(state), DATAPATH);
-    runPatcher(__dirname, dataPath, ENTRY_POINT, true)
-      .catch(err => reportPatcherError(err));
-    return true;
-  }, () => {
-    const state = context.api.store.getState();
-    const gameMode = selectors.activeGameId(state);
-    return (gameMode === GAME_ID)
-  });
-
-  context.registerAction('mod-icons', 500, 'savegame', {}, 'Patcher - Add', () => {
-    const store = context.api.store;
-    const state = store.getState();
-    const gameMode = selectors.activeGameId(state);
-    if (gameMode !== GAME_ID) {
-      return false;
-    }
-
-    if (isGameRunning(state)) {
-      gameIsRunningNotif();
-      return true;
-    }
-
-    const dataPath = path.join(getDiscoveryPath(state), DATAPATH);
-    runPatcher(__dirname, dataPath, ENTRY_POINT, false)
-      .catch(err => reportPatcherError(err));
-    return true;
-  }, () => {
-    const state = context.api.store.getState();
-    const gameMode = selectors.activeGameId(state);
-    return (gameMode === GAME_ID)
-  });
+  context.registerMigration(old => migrate010(context.api, old));
 
   return true;
 }
