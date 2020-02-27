@@ -1,6 +1,6 @@
 const Promise = require('bluebird');
 const path = require('path');
-const { fs, util } = require('vortex-api');
+const { fs, log, util } = require('vortex-api');
 const { runPatcher } = require('harmony-patcher');
 const semver = require('semver');
 
@@ -29,7 +29,7 @@ function modPath() {
 function getDiscoveryPath(state) {
   const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
   if ((discovery === undefined) || (discovery.path === undefined)) {
-    log('error', 'untitledgoosegame was not discovered');
+    log('debug', 'untitledgoosegame was not discovered');
     return undefined;
   }
 
@@ -47,7 +47,14 @@ function migrate010(api, oldVersion) {
   }
 
   const state = api.store.getState();
-  const absPath = path.join(getDiscoveryPath(state), DATAPATH);
+  const discoveryPath = getDiscoveryPath(state);
+  if (discoveryPath === undefined) {
+    // Game was not discovered, this is a valid use case.
+    //  User might not own the game.
+    return Promise.resolve();
+  }
+
+  const absPath = path.join(discoveryPath, DATAPATH);
   const assemblyPath = path.join(absPath, 'VortexHarmonyInstaller.dll');
   // Test if the patch exists and remove it, if it is.
   return fs.statAsync(assemblyPath)
