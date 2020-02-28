@@ -124,7 +124,9 @@ function main(context) {
   };
 
   const testReshade = (instructions) => {
-    const filtered = instructions.filter(instr => (instr.type === 'copy') && (path.extname(instr.source) === '.ini'));
+    const filtered = instructions.filter(instr => (instr.type === 'copy')
+                                               && (path.extname(instr.source) === '.ini')
+                                               && (instr.source.toLowerCase().indexOf(NATIVE_PC_FOLDER.toLowerCase()) === -1));
     return Promise.resolve(filtered.length > 0);
   };
 
@@ -178,7 +180,11 @@ function installContent(files,
 }
 
 function isReshadeMod(files, gameId) {
-  const filtered = files.filter(file => (path.extname(file) === '.ini'));
+  const filtered = files.filter(file => (file.split(path.sep)
+                                             .map(element => element.toLowerCase())
+                                             .indexOf(NATIVE_PC_FOLDER.toLowerCase()) === -1)
+                                     && (path.extname(file) === '.ini'));
+
   const supported = (gameId === GAME_ID) && (filtered.length > 0);
   return Promise.resolve({
     supported,
