@@ -301,7 +301,8 @@ async function preSort(context, items) {
   }))
 
   const manualEntries = manuallyAddedMods
-    .filter(key => items.find(item => item.id === key) === undefined)
+    .filter(key => (items.find(item => item.id === key) === undefined)
+                && (mergedEntries.find(entry => entry.id === key) === undefined))
     .map(key => ({
       id: key,
       name: key,
