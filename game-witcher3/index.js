@@ -188,48 +188,47 @@ function testDLC(instructions) {
 function prepareForModding(context, discovery) {
   const notifId = 'missing-script-merger';
   const api = context.api;
-  const missingScriptMerger = () => new Promise((resolve, reject) => {
-    return api.sendNotification({
-      id: notifId,
-      type: 'info',
-      message: api.translate('Witcher 3 script merger not installed/configured', { ns: I18N_NAMESPACE }),
-      allowSuppress: true,
-      actions: [
-        {
-          title: 'More',
-          action: () => {
-            api.showDialog('info', 'Witcher 3', {
-              bbcode: api.translate('Many Witcher 3 mods consist of small scripts to change game '
-              + 'functionality. At times, two or more mods may attempt to change the same script, '
-              + 'this will result in a conflict which can generally be solved by changing the order '
-              + 'in which the mods are loaded (top-most mod overwrites the other).[br][/br][br][/br] Alternatively, a '
-              + 'W3 script merging tool exists which will (as the name suggests) merge the two mods together.[br][/br]'
-              + 'It is highly recommended to download and install the tool and configure it to work with Vortex.[br][/br]'
-              + 'You can find more information on how to ' 
-              + '[url=https://wiki.nexusmods.com/index.php/Tool_Setup:_W3ScriptMerger]configure the script merger here.[/url]' , { ns: I18N_NAMESPACE }),
-            }, [
-              { label: 'Cancel', action: () => resolve() },
-              { label: 'Download', action: () => util.opn('https://www.nexusmods.com/witcher3/mods/484')
-                                                  .catch(err => resolve())
-                                                  .then(() => resolve()) },
-            ]);
-          },
+  const missingScriptMerger = () => api.sendNotification({
+    id: notifId,
+    type: 'info',
+    message: api.translate('Witcher 3 script merger not installed/configured', { ns: I18N_NAMESPACE }),
+    allowSuppress: true,
+    actions: [
+      {
+        title: 'More',
+        action: () => {
+          api.showDialog('info', 'Witcher 3', {
+            bbcode: api.translate('Many Witcher 3 mods consist of small scripts to change game '
+            + 'functionality. At times, two or more mods may attempt to change the same script, '
+            + 'this will result in a conflict which can generally be solved by changing the order '
+            + 'in which the mods are loaded (top-most mod overwrites the other).[br][/br][br][/br] Alternatively, a '
+            + 'W3 script merging tool exists which will (as the name suggests) merge the two mods together.[br][/br]'
+            + 'It is highly recommended to download and install the tool and configure it to work with Vortex.[br][/br]'
+            + 'You can find more information on how to '
+            + '[url=https://wiki.nexusmods.com/index.php/Tool_Setup:_W3ScriptMerger]configure the script merger here.[/url]' , { ns: I18N_NAMESPACE }),
+          }, [
+            { label: 'Cancel', action: () => {
+              api.dismissNotification('missing-script-merger');
+            }},
+            { label: 'Download', action: () => util.opn('https://www.nexusmods.com/witcher3/mods/484')
+                                                .catch(err => null)
+                                                .then(() => api.dismissNotification('missing-script-merger')) },
+          ]);
         },
-      ],
-    });
-  })
-
-  const findScriptMerger = () => new Promise((resolve, reject) => {
-    const raiseMissingNotif = () => missingScriptMerger().then(() => resolve());
-    const scriptMergerPath = util.getSafe(discovery, ['tools', SCRIPT_MERGER_ID, 'path'], undefined);
-    return (scriptMergerPath !== undefined)
-      ? fs.statAsync(scriptMergerPath)
-          .then(() => resolve())
-          .catch(err => raiseMissingNotif())
-      : raiseMissingNotif();
+      },
+    ],
   });
 
-  return findScriptMerger().then(() => fs.ensureDirAsync(path.join(discovery.path, 'Mods')));
+  const scriptMergerPath = util.getSafe(discovery, ['tools', SCRIPT_MERGER_ID, 'path'], undefined);
+  const findScriptMerger = () => {
+    return (scriptMergerPath !== undefined)
+      ? fs.statAsync(scriptMergerPath)
+          .catch(() => missingScriptMerger())
+      : missingScriptMerger();
+  };
+
+  return fs.ensureDirAsync(path.join(discovery.path, 'Mods'))
+    .tap(() => findScriptMerger());
 }
 
 function getScriptMergerTool(api) {
@@ -252,37 +251,64 @@ function runScriptMerger(api) {
   return api.runExecutable(tool.path, [], { suggestDeploy: true });
 }
 
+async function setINIStruct(context, loadOrder) {
+  const state = context.api.store.getState();
+  const profile = selectors.activeProfile(state) || undefined;
+  loadOrder = (!!loadOrder)
+    ? loadOrder
+    : util.getSafe(state, ['persistent', 'loadOrder', profile.id], {})
+
+  const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], []);
+  const modKeys = Object.keys(mods);
+  const loKeys = Object.keys(loadOrder);
+  const managed = modKeys.filter(mod => loKeys.includes(mod));
+  return getManagedModNames(context, managed.map(key => mods[key])).then(res => {
+    return Promise.each(loKeys, key => {
+      const managedEntry = res.find(entry => entry.id === key);
+      const modId = managedEntry !== undefined ? managedEntry.name : key;
+
+      _INI_STRUCT[modId] = {
+        Enabled: '1',
+        Priority: loadOrder[key].pos + 1,
+        VortexKey: key,
+      };
+    });
+  })
+}
+
 async function preSort(context, items) {
   const state = context.api.store.getState();
   const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID]);
   const scriptMerger = util.getSafe(discovery, ['tools', SCRIPT_MERGER_ID]);
+  let mergedModNames = [];
   if (!!scriptMerger && !!scriptMerger.path) {
-    const mergedModNames = await getMergedModNames(path.dirname(scriptMerger.path));
-    const manuallyAddedMods = await getManuallyAddedMods(context);
-
-    if ((mergedModNames.length === 0) && (manuallyAddedMods.length === 0)) {
-      return items || [];
-    }
-
-    const mergedEntries = mergedModNames
-      .filter(modName =>items.find(item => item.id === modName) === undefined)
-      .map(modName => ({
-        id: modName,
-        name: modName,
-        imgUrl: `${__dirname}/gameart.jpg`,
-        locked: true,
-    }))
-    
-    const manualEntries = manuallyAddedMods
-      .filter(key => items.find(item => item.id === key) === undefined)
-      .map(key => ({
-        id: key,
-        name: key,
-        imgUrl: `${__dirname}/gameart.jpg`,
-    }));
-
-    return Promise.resolve([].concat(...mergedEntries, ...items, ...manualEntries));
+    mergedModNames = await getMergedModNames(path.dirname(scriptMerger.path));
   }
+
+  const manuallyAddedMods = await getManuallyAddedMods(context);
+
+  if ((mergedModNames.length === 0) && (manuallyAddedMods.length === 0)) {
+    return items || [];
+  }
+
+  const mergedEntries = mergedModNames
+    .filter(modName =>items.find(item => item.id === modName) === undefined)
+    .map(modName => ({
+      id: modName,
+      name: modName,
+      imgUrl: `${__dirname}/gameart.jpg`,
+      locked: true,
+  }))
+
+  const manualEntries = manuallyAddedMods
+    .filter(key => items.find(item => item.id === key) === undefined)
+    .map(key => ({
+      id: key,
+      name: key,
+      imgUrl: `${__dirname}/gameart.jpg`,
+  }));
+
+  return Promise.resolve([].concat(...mergedEntries, ...items, ...manualEntries));
 }
 
 function getManagedModNames(context, mods) {
@@ -336,9 +362,9 @@ function main(context) {
   context.registerLoadOrderPage({
     gameId: GAME_ID,
     loadOrderInfo: 'When organizing your Witcher 3 mods, please keep in mind that the top-most mod '
-                 + 'will win any conflicts - e.g. if mod 0001 and 0008 modify the same script file, ' 
-                 + 'the game will load mod 0001 and ignore the script file in 0008. Additionally - if the script '
-                 + 'merger is configured, Vortex will be able to ensure that any merged mods are '
+                 + 'will win any conflicts - e.g. if both mod x and mod y modify the same script file, '
+                 + 'and the game loads mod y before mod x - mod x will be ignored by the game. If the script '
+                 + 'merger is configured, Vortex will be able to ensure that any merged mods it finds are '
                  + 'locked at the top of the order, ensuring they get loaded first.',
     gameArtURL: `${__dirname}/gameart.jpg`,
     preSort: (items) => preSort(context, items),
@@ -347,30 +373,50 @@ function main(context) {
         return;
       }
       previousLO = loadOrder;
-      const state = context.api.store.getState();
-      const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], []);
-      const modKeys = Object.keys(mods);
-      const loKeys = Object.keys(loadOrder);
-      const managed = modKeys.filter(mod => loKeys.includes(mod));
-      return getManagedModNames(context, managed.map(key => mods[key])).then(res => {
-        return Promise.each(loKeys, key => {
-          const managedEntry = res.find(entry => entry.id === key);
-          const modId = managedEntry !== undefined ? managedEntry.name : key;
-
-          _INI_STRUCT[modId] = {
-            Enabled: '1',
-            Priority: loadOrder[key].pos + 1,
-            VortexKey: key,
-          };
-        });
-      })
+      setINIStruct(context, loadOrder);
     },
   });
 
   let lastEnabledModsState = [];
   context.once(() => {
-    context.api.onAsync('did-deploy', () => writeToModSettings());
+    context.api.onAsync('did-deploy', (profileId, deployment) => {
+      const profile = selectors.profileById(context.api.store.getState(), profileId);
+      if (!!profile && (profile.gameId === GAME_ID)) {
+        return setINIStruct(context)
+          .then(() => writeToModSettings())
+          .catch(err => {
+            context.api.showErrorNotification('Failed to modify load order file', err);
+            return Promise.resolve();
+          });
+      }
+    });
+    context.api.events.on('purge-mods', () => {
+      const state = context.api.store.getState();
+      const profile = selectors.activeProfile(state);
+      if (!!profile && (profile.gameId === GAME_ID)) {
+        return getManuallyAddedMods(context).then((manuallyAdded) => {
+          if (manuallyAdded.length > 0) {
+            let newStruct = {};
+            manuallyAdded.forEach(mod => {
+              newStruct[mod] = {
+                Enabled: _INI_STRUCT[mod].Enabled,
+                Priority: _INI_STRUCT[mod].Priority,
+              }
+            })
 
+            _INI_STRUCT = newStruct;
+            writeToModSettings()
+              .catch(err => context.api.showErrorNotification('Failed to cleanup load order file', err));
+          } else {
+            const filePath = getLoadOrderFilePath();
+            fs.removeAsync(filePath)
+              .catch(err => (err.code === 'ENOENT')
+                ? Promise.resolve()
+                : context.api.showErrorNotification('Failed to cleanup load order file', err));
+          }
+        });
+      }
+    });
     context.api.onStateChange(['persistent', 'profiles'], () => {
       const state = context.api.store.getState();
       const profile = selectors.activeProfile(state);
