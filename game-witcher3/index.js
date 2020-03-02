@@ -205,7 +205,7 @@ function prepareForModding(context, discovery) {
             + 'W3 script merging tool exists which will (as the name suggests) merge the two mods together.[br][/br]'
             + 'It is highly recommended to download and install the tool and configure it to work with Vortex.[br][/br]'
             + 'You can find more information on how to '
-            + '[url=https://wiki.nexusmods.com/index.php/Tool_Setup:_W3ScriptMerger]configure the script merger here.[/url]' , { ns: I18N_NAMESPACE }),
+            + '[url=https://wiki.nexusmods.com/index.php/Tool_Setup:_Witcher_3_Script_Merger]configure the script merger here.[/url]' , { ns: I18N_NAMESPACE }),
           }, [
             { label: 'Cancel', action: () => {
               api.dismissNotification('missing-script-merger');
