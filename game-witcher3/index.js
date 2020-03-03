@@ -65,11 +65,28 @@ function ensureModSettings() {
 function getManuallyAddedMods(context) {
   return ensureModSettings().then(ini => {
     const state = context.api.store.getState();
+    const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
     const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], []);
     const modKeys = Object.keys(mods);
     const iniEntries = Object.keys(ini.data);
-    return iniEntries.filter(entry => (ini.data[entry].VK === entry) && !modKeys.includes(entry)) || [];
+    const manualCandidates = iniEntries.filter(entry => {
+      const hasVortexKey = util.getSafe(ini.data[entry], ['VK'], undefined) !== undefined;
+      return ((!hasVortexKey) || (ini.data[entry].VK === entry) && !modKeys.includes(entry))
+    }) || [];
+    const modsPath = path.join(discovery.path, 'Mods');
+    return Promise.reduce(manualCandidates, (accum, mod) => {
+      return fs.statAsync(path.join(modsPath, mod))
+        .then(() => {
+          accum.push(mod);
+          return accum;
+        })
+        .catch(err => accum)
+    }, []);
   })
+  .catch(err => {
+    context.api.showErrorNotification('Failed to lookup manually added mods', err)
+    return Promise.resolve([]);
+  });
 }
 
 function getMergedModNames(scriptMergerPath) {
