@@ -268,25 +268,47 @@ function runScriptMerger(api) {
   return api.runExecutable(tool.path, [], { suggestDeploy: true });
 }
 
-async function setINIStruct(context, loadOrder) {
+async function getAllMods(context) {
   const state = context.api.store.getState();
-  const profile = selectors.activeProfile(state) || undefined;
-  loadOrder = (!!loadOrder)
-    ? loadOrder
-    : util.getSafe(state, ['persistent', 'loadOrder', profile.id], {})
+  const profile = selectors.activeProfile(state);
+  const modState = util.getSafe(state, ['persistent', 'profiles', profile.id, 'modState'], {});
+  const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
+  const enabledMods = Object.keys(modState).filter(key => modState[key].enabled);
+  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID]);
+  const scriptMerger = util.getSafe(discovery, ['tools', SCRIPT_MERGER_ID]);
+  let mergedModNames = [];
+  if (!!scriptMerger && !!scriptMerger.path) {
+    mergedModNames = await getMergedModNames(path.dirname(scriptMerger.path));
+  }
 
-  const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], []);
-  const modKeys = Object.keys(mods);
-  const loKeys = Object.keys(loadOrder);
-  const managed = modKeys.filter(mod => loKeys.includes(mod));
-  return getManagedModNames(context, managed.map(key => mods[key])).then(res => {
-    return Promise.each(loKeys, key => {
-      const managedEntry = res.find(entry => entry.id === key);
-      const modId = managedEntry !== undefined ? managedEntry.name : key;
+  const manuallyAddedMods = await getManuallyAddedMods(context);
+  const managedMods = await getManagedModNames(context, enabledMods.map(key => mods[key]));
+  return Promise.resolve([].concat(mergedModNames, managedMods, manuallyAddedMods));
+}
 
-      _INI_STRUCT[modId] = {
+async function setINIStruct(context, loadOrder) {
+  let nextAvailableIdx = Object.keys(loadOrder).length;
+  const getNextIdx = () => {
+    return nextAvailableIdx++;
+  }
+  return getAllMods(context).then(mods => {
+    _INI_STRUCT = {};
+    return Promise.each(mods, mod => {
+      let name;
+      let key;
+      if (typeof(mod) === 'object' && mod !== null) {
+        name = mod.name;
+        key = mod.id;
+      } else {
+        name = mod;
+        key = mod;
+      }
+
+      _INI_STRUCT[name] = {
         Enabled: '1',
-        Priority: loadOrder[key].pos + 1,
+        Priority: util.getSafe(loadOrder, [key], undefined) !== undefined
+          ? loadOrder[key].pos + 1
+          : getNextIdx(),
         VK: key,
       };
     });
@@ -391,16 +413,23 @@ function main(context) {
         return;
       }
       previousLO = loadOrder;
-      setINIStruct(context, loadOrder);
+      setINIStruct(context, loadOrder)
+        .then(() => writeToModSettings())
+        .catch(err => {
+          context.api.showErrorNotification('Failed to modify load order file', err);
+          return;
+        });
     },
   });
 
   let lastEnabledModsState = [];
   context.once(() => {
     context.api.onAsync('did-deploy', (profileId, deployment) => {
-      const profile = selectors.profileById(context.api.store.getState(), profileId);
+      const state = context.api.store.getState();
+      const profile = selectors.profileById(state, profileId);
       if (!!profile && (profile.gameId === GAME_ID)) {
-        return setINIStruct(context)
+        const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], {})
+        return setINIStruct(context, loadOrder)
           .then(() => writeToModSettings())
           .catch(err => {
             context.api.showErrorNotification('Failed to modify load order file', err);
