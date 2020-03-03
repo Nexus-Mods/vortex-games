@@ -41,7 +41,7 @@ function writeToModSettings() {
         ini.data[key] = {
           Enabled: '1',
           Priority: _INI_STRUCT[key].Priority,
-          VortexKey: _INI_STRUCT[key].VortexKey,
+          VK: _INI_STRUCT[key].VK,
         }
         return Promise.resolve();
       })
@@ -68,7 +68,7 @@ function getManuallyAddedMods(context) {
     const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], []);
     const modKeys = Object.keys(mods);
     const iniEntries = Object.keys(ini.data);
-    return iniEntries.filter(entry => (ini.data[entry].VortexKey === entry) && !modKeys.includes(entry)) || [];
+    return iniEntries.filter(entry => (ini.data[entry].VK === entry) && !modKeys.includes(entry)) || [];
   })
 }
 
@@ -270,7 +270,7 @@ async function setINIStruct(context, loadOrder) {
       _INI_STRUCT[modId] = {
         Enabled: '1',
         Priority: loadOrder[key].pos + 1,
-        VortexKey: key,
+        VK: key,
       };
     });
   })
@@ -395,13 +395,14 @@ function main(context) {
       const state = context.api.store.getState();
       const profile = selectors.activeProfile(state);
       if (!!profile && (profile.gameId === GAME_ID)) {
+        const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], undefined);
         return getManuallyAddedMods(context).then((manuallyAdded) => {
           if (manuallyAdded.length > 0) {
             let newStruct = {};
-            manuallyAdded.forEach(mod => {
+            manuallyAdded.forEach((mod, idx) => {
               newStruct[mod] = {
-                Enabled: _INI_STRUCT[mod].Enabled,
-                Priority: _INI_STRUCT[mod].Priority,
+                Enabled: 1,
+                Priority: ((loadOrder !== undefined && !!loadOrder[mod]) ? loadOrder[mod].pos : idx) + 1,
               }
             })
 
