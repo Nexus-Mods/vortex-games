@@ -89,8 +89,16 @@ function getManuallyAddedMods(context) {
   });
 }
 
-function getMergedModNames(scriptMergerPath) {
-  return fs.readFileAsync(path.join(scriptMergerPath, MERGE_INV_MANIFEST))
+function getMergedModNames(context) {
+  const state = context.api.store.getState();
+  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID]);
+  const scriptMerger = util.getSafe(discovery, ['tools', SCRIPT_MERGER_ID]);
+  if ((scriptMerger === undefined) || (scriptMerger.path === undefined)) {
+    return Promise.resolve([]);
+  }
+
+  const modsPath = path.join(discovery.path, 'Mods');
+  return fs.readFileAsync(path.join(path.dirname(scriptMerger.path), MERGE_INV_MANIFEST))
     .then(xmlData => {
       try {
         const mergedModNames = [];
@@ -98,7 +106,11 @@ function getMergedModNames(scriptMergerPath) {
         mergeData.find('//MergedModName').forEach(modElement => {
           mergedModNames.push(modElement.text());
         })
-        return Promise.resolve(mergedModNames);
+        return Promise.reduce(mergedModNames, (accum, mod) => fs.statAsync(path.join(modsPath, mod))
+          .then(() => {
+            accum.push(mod);
+            return accum;
+          }).catch(err => accum), []);
       } catch (err) {
         return Promise.reject(err);
       }
@@ -271,14 +283,8 @@ async function getAllMods(context) {
   const modState = util.getSafe(state, ['persistent', 'profiles', profile.id, 'modState'], {});
   const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
   const enabledMods = Object.keys(modState).filter(key => modState[key].enabled);
-  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID]);
-  const scriptMerger = util.getSafe(discovery, ['tools', SCRIPT_MERGER_ID]);
-  let mergedModNames = [];
-  if (!!scriptMerger && !!scriptMerger.path) {
-    mergedModNames = await getMergedModNames(path.dirname(scriptMerger.path));
-  }
-
-  const manuallyAddedMods = await getManuallyAddedMods(context);
+  const mergedModNames = await getMergedModNames(context);
+  const manuallyAddedMods = await getManuallyAddedMods(context).filter(mod => !mergedModNames.includes(mod));
   const managedMods = await getManagedModNames(context, enabledMods.map(key => mods[key]));
   return Promise.resolve([].concat(mergedModNames, managedMods, manuallyAddedMods));
 }
@@ -313,14 +319,7 @@ async function setINIStruct(context, loadOrder) {
 }
 
 async function preSort(context, items) {
-  const state = context.api.store.getState();
-  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID]);
-  const scriptMerger = util.getSafe(discovery, ['tools', SCRIPT_MERGER_ID]);
-  let mergedModNames = [];
-  if (!!scriptMerger && !!scriptMerger.path) {
-    mergedModNames = await getMergedModNames(path.dirname(scriptMerger.path));
-  }
-
+  const mergedModNames = await getMergedModNames(context);
   const manuallyAddedMods = await getManuallyAddedMods(context);
 
   if ((mergedModNames.length === 0) && (manuallyAddedMods.length === 0)) {
@@ -423,9 +422,14 @@ function main(context) {
   context.once(() => {
     context.api.onAsync('did-deploy', (profileId, deployment) => {
       const state = context.api.store.getState();
-      const profile = selectors.profileById(state, profileId);
-      if (!!profile && (profile.gameId === GAME_ID)) {
-        const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], {})
+      const activeProfile = selectors.activeProfile(state);
+      const deployProfile = selectors.profileById(state, profileId);
+      if (!!activeProfile && !!deployProfile && (deployProfile.id !== activeProfile.id)) {
+        return Promise.resolve();
+      }
+
+      if (!!activeProfile && (activeProfile.gameId === GAME_ID)) {
+        const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {})
         return setINIStruct(context, loadOrder)
           .then(() => writeToModSettings())
           .catch(err => {
