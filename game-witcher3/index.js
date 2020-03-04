@@ -215,19 +215,16 @@ function prepareForModding(context, discovery) {
         title: 'More',
         action: () => {
           api.showDialog('info', 'Witcher 3', {
-            bbcode: api.translate('Many Witcher 3 mods consist of small scripts to change game '
-            + 'functionality. At times, two or more mods may attempt to change the same script, '
-            + 'this will result in a conflict which can generally be solved by changing the order '
-            + 'in which the mods are loaded (top-most mod overwrites the other).[br][/br][br][/br] Alternatively, a '
-            + 'W3 script merging tool exists which will (as the name suggests) merge the two mods together.[br][/br]'
-            + 'It is highly recommended to download and install the tool and configure it to work with Vortex.[br][/br]'
-            + 'You can find more information on how to '
-            + '[url=https://wiki.nexusmods.com/index.php/Tool_Setup:_Witcher_3_Script_Merger]configure the script merger here.[/url]' , { ns: I18N_NAMESPACE }),
+            bbcode: api.translate('Many Witcher 3 mods add or edit game scripts. When several mods ' 
+              + 'editing the same script are installed, these mods need to be merged using a tool ' 
+              + 'called Witcher 3 Script Merger. You can download the merger right now and '
+              + '[url=https://wiki.nexusmods.com/index.php/Tool_Setup:_Witcher_3_Script_Merger]find out more about how to configure it as a tool for use in Vortex.[/url][br][/br][br][/br]' 
+              + 'Note: While script merging works well with the vast majority of mods, there is no guarantee for a satisfying outcome in every single case.', { ns: I18N_NAMESPACE }),
           }, [
             { label: 'Cancel', action: () => {
               api.dismissNotification('missing-script-merger');
             }},
-            { label: 'Download', action: () => util.opn('https://www.nexusmods.com/witcher3/mods/484')
+            { label: 'Download Script Merger', action: () => util.opn('https://www.nexusmods.com/witcher3/mods/484')
                                                 .catch(err => null)
                                                 .then(() => api.dismissNotification('missing-script-merger')) },
           ]);
@@ -499,7 +496,7 @@ function main(context) {
               action: () => {
                 context.api.showDialog('info', 'Witcher 3', {
                   text: 'Your mods state has changed since the last time you ran the script merger. ' 
-                      + 'It is highly recommended to run the tool and check whether any new script conflicts '
+                      + 'You may want to run the merger tool and check whether any new script conflicts '
                       + 'are present, or if existing merges have become unecessary.',
                 }, [
                   { label: 'Close' },
