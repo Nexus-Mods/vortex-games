@@ -387,8 +387,6 @@ function main(context) {
     return discovery.path;
   };
 
-  context.registerMigration(old => migrate110(context.api, old));
-
   context.registerInstaller('witcher3tl', 25, testSupportedTL, installTL);
   context.registerInstaller('witcher3content', 50, testSupportedContent, installContent);
   context.registerModType('witcher3tl', 25, gameId => gameId === 'witcher3', getTLPath, testTL);
