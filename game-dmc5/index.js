@@ -20,7 +20,9 @@ const REVAL_SCRIPT = path.join(__dirname, 'dmc5_pak_revalidate.bms');
 
 // DMC5 filenames are encrypted. The list file contains
 //  the actual filenames mapped against their murmur3 hash.
-const FILE_LIST = path.join(__dirname, 'dmc5_pak_names_release.list');
+const ORIGINAL_FILE_LIST = path.join(__dirname, 'dmc5_pak_names_release.list');
+
+let _FILE_LIST;
 
 let FILE_CACHE = [];
 
@@ -44,7 +46,7 @@ const STEAM_ID = 601150;
 function getFileListCache() {
   return (FILE_CACHE.length > 0)
     ? Promise.resolve(FILE_CACHE)
-    : fs.readFileAsync(FILE_LIST, { encoding: 'utf-8' })
+    : fs.readFileAsync(_FILE_LIST, { encoding: 'utf-8' })
       .then(data => {
         FILE_CACHE = data.split('\n');
         return Promise.resolve(FILE_CACHE);
@@ -66,7 +68,7 @@ function addToFileList(files) {
       ? '\n' + lines.join('\n')
       : lines.join('\n');
 
-    return fs.writeFileAsync(FILE_LIST, data, { encoding: 'utf-8', flag: 'a' })
+    return fs.writeFileAsync(_FILE_LIST, data, { encoding: 'utf-8', flag: 'a' })
       .then(() => { FILE_CACHE = FILE_CACHE.concat(lines); })
     })
 }
@@ -114,8 +116,16 @@ function prepareForModding(discovery, api) {
     displayInformation();
   }
 
-  return fs.ensureDirWritableAsync(
-    path.join(discovery.path, 'natives'), () => Promise.resolve());
+  return ensureListBackup(state).then(() => fs.ensureDirWritableAsync(
+    path.join(discovery.path, 'natives'), () => Promise.resolve()));
+}
+
+function ensureListBackup(state) {
+  const stagingFolder = selectors.installPathForGame(state, GAME_ID);
+  _FILE_LIST = path.join(stagingFolder, path.basename(ORIGINAL_FILE_LIST));
+  return fs.statAsync(_FILE_LIST)
+    .then(() => Promise.resolve()) // Backup already present.
+    .catch(err => fs.copyAsync(ORIGINAL_FILE_LIST, _FILE_LIST));
 }
 
 function testArchive(files, discoveryPath, archivePath, api) {
