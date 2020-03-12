@@ -1,7 +1,7 @@
 const Promise = require('bluebird');
 const path = require('path');
 const { fs, log, util } = require('vortex-api');
-const { runPatcher } = require('harmony-patcher');
+const { addLoadOrderPage, raiseConsentDialog, runPatcher } = require('harmony-patcher');
 const semver = require('semver');
 
 const DATAPATH = path.join('Untitled_Data', 'Managed')
@@ -36,9 +36,10 @@ function getDiscoveryPath(state) {
   return discovery.path;
 }
 
-function prepareForModding(discovery) {
+function prepareForModding(context, discovery) {
   const absPath = path.join(discovery.path, DATAPATH);
-  return fs.ensureDirWritableAsync(path.join(absPath, 'VortexMods'), () => Promise.resolve());
+  return raiseConsentDialog(context, GAME_ID)
+    .then(() => fs.ensureDirWritableAsync(path.join(absPath, 'VortexMods'), () => Promise.resolve()));
 }
 
 function migrate010(api, oldVersion) {
@@ -84,9 +85,13 @@ function main(context) {
         injectVIGO: true,
       },
     },
-    setup: prepareForModding,
+    setup: (discovery) => prepareForModding(context, discovery),
   });
 
+  addLoadOrderPage(context, GAME_ID, (props) =>
+    'Drag and drop your mods in the order you wish Vortex to load/execute the mods/patches. '
+  + 'Topmost mod/patch will be loaded first.',
+    path.join(__dirname, 'gameart.jpg'));
   context.registerMigration(old => migrate010(context.api, old));
 
   return true;
