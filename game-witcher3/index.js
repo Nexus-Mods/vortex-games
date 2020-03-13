@@ -331,7 +331,7 @@ async function setINIStruct(context, loadOrder) {
   })
 }
 
-async function preSort(context, items) {
+async function preSort(context, items, direction) {
   const mergedModNames = await getMergedModNames(context);
   const manuallyAddedMods = await getManuallyAddedMods(context);
 
@@ -357,7 +357,10 @@ async function preSort(context, items) {
       imgUrl: `${__dirname}/gameart.jpg`,
   }));
 
-  return Promise.resolve([].concat(...mergedEntries, ...items, ...manualEntries));
+  const preSorted = [].concat(...mergedEntries, ...items, ...manualEntries);
+  return (direction === 'descending')
+    ? Promise.resolve(preSorted.reverse())
+    : Promise.resolve(preSorted);
 }
 
 function getManagedModNames(context, mods) {
@@ -374,13 +377,14 @@ function infoComponent(context, props) {
   return React.createElement(BS.Panel, { id: 'loadorderinfo' },
     React.createElement('h2', {}, t('Changing your load order', { ns: I18N_NAMESPACE })),
     React.createElement(FlexLayout.Flex, {},
-    React.createElement('p', {},
-      t('When organizing your Witcher 3 mods, please keep in mind that the top-most mod '
-      + 'will win any conflicts - e.g. if both mod x and mod y modify the same script file, '
-      + 'and the game loads mod y before mod x - mod x will be ignored by the game. If the script '
-      + 'merger is configured, Vortex will be able to ensure that any merged mods it finds are '
-      + 'locked at the top of the order, ensuring they get loaded first.', { ns: I18N_NAMESPACE }),
-      )), React.createElement(BS.Button, { onClick: props.refresh }, t('Refresh')));
+    React.createElement('div', {},
+    React.createElement('p', {}, t('You can adjust the load priority for The Witcher 3 by dragging each mod up or down '
+      + 'on this page. Mods are loaded by the game in descending order, based on the index number '
+      + '(e.g. The mod at index 1 will have priority over the one at index 2). If two mods make '
+      + 'edits to the same script the mod with the lower index number will completely overwrite the '
+      + 'changes from any mods with a higher index. To combine multiple changes to the same script file, please use ', { ns: I18N_NAMESPACE }),
+    React.createElement('a', { onClick: () => util.opn('https://www.nexusmods.com/witcher3/mods/484') }, t('Witcher 3 Script Merger.', { ns: I18N_NAMESPACE }))))),
+    React.createElement(BS.Button, { onClick: props.refresh }, t('Refresh')));
 }
 
 function queryScriptMerge(context, reason) {
@@ -457,7 +461,7 @@ function main(context) {
     gameId: GAME_ID,
     createInfoPanel: (props) => infoComponent(context, props),
     gameArtURL: `${__dirname}/gameart.jpg`,
-    preSort: (items) => preSort(context, items),
+    preSort: (items, direction) => preSort(context, items, direction),
     callback: (loadOrder) => {
       if (loadOrder === previousLO) {
         return;
