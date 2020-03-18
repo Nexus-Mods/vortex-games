@@ -3,7 +3,7 @@ const path = require('path');
 const winapi = require('winapi-bindings');
 const { actions, fs, util } = require('vortex-api');
 
-const HID = 'hid.dll';
+const DINPUT = 'dinput8.dll';
 const GAME_ID = 'monsterhunterworld';
 const RESHADE_DIRNAME = 'reshade-shaders';
 
@@ -40,14 +40,13 @@ function findGame() {
 }
 
 function prepareForModding(discovery, api) {
-  const strackerAssembly = path.join(discovery.path, HID);
+  const modEngineDInput = path.join(discovery.path, DINPUT);
   const showModEngineDialog = () => new Promise((resolve, reject) => {
     api.store.dispatch(actions.showDialog('question', 'Action required',
       {
-        bbcode: 'Monster Hunter: World requires "Stracker\'s Loader" for most mods to install and function correctly.\n'
-                + 'Vortex is able to install Stracker\'s Loader as a mod, but please ensure to enable and assign\n'
-                + 'it the dinput modType [url=https://wiki.nexusmods.com/index.php/Modding_Monster_Hunter:_World_with_Vortex]as seen here[/url] '
-                + 'before deploying. This mod needs to be deployed at all times.'
+        message: 'Monster Hunter: World requires "Stracker\'s Loader" for most mods to install and function correctly.\n'
+                + 'Vortex is able to install Stracker\'s Loader automatically (as a mod) but please ensure it is enabled\n'
+                + 'and deployed at all times.'
       },
       [
         { label: 'Continue', action: () => resolve() },
@@ -60,7 +59,7 @@ function prepareForModding(discovery, api) {
 
   // Check whether Stracker's Loader is installed.
   return fs.ensureDirWritableAsync(path.join(discovery.path, NATIVE_PC_FOLDER), () => Promise.resolve())
-    .then(() => fs.statAsync(strackerAssembly)
+    .then(() => fs.statAsync(modEngineDInput)
       .catch(err => (err.code === 'ENOENT')
         ? showModEngineDialog()
         : Promise.reject(err)));
