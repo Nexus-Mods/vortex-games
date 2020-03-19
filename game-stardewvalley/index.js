@@ -1,7 +1,7 @@
 const
   path = require('path'),
   Promise = require('bluebird'),
-  { remote } = require('electron'),
+  { clipboard, remote } = require('electron'),
   rjson = require('relaxed-json'),
   { fs, log, selectors, util } = require('vortex-api'),
   { SevenZip } = util,
