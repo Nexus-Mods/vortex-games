@@ -3,7 +3,7 @@ const path = require('path');
 const winapi = require('winapi-bindings');
 const { actions, fs, util } = require('vortex-api');
 
-const DINPUT = 'dinput8.dll';
+const STRACKER_ASSEMBLIES = ['hid.dll', 'loader.dll'];
 const GAME_ID = 'monsterhunterworld';
 const RESHADE_DIRNAME = 'reshade-shaders';
 
@@ -40,7 +40,6 @@ function findGame() {
 }
 
 function prepareForModding(discovery, api) {
-  const modEngineDInput = path.join(discovery.path, DINPUT);
   const showModEngineDialog = () => new Promise((resolve, reject) => {
     api.store.dispatch(actions.showDialog('question', 'Action required',
       {
@@ -59,10 +58,14 @@ function prepareForModding(discovery, api) {
 
   // Check whether Stracker's Loader is installed.
   return fs.ensureDirWritableAsync(path.join(discovery.path, NATIVE_PC_FOLDER), () => Promise.resolve())
-    .then(() => fs.statAsync(modEngineDInput)
-      .catch(err => (err.code === 'ENOENT')
-        ? showModEngineDialog()
-        : Promise.reject(err)));
+    .then(() => Promise.each(STRACKER_ASSEMBLIES, assembly => {
+      const assemblyPath = path.join(discovery.path, assembly);
+      return fs.statAsync(assemblyPath)
+    })
+    .then(() => Promise.resolve())
+    .catch(err => (err.code === 'ENOENT')
+      ? showModEngineDialog()
+      : Promise.reject(err)));
 }
 
 function main(context) {
@@ -123,6 +126,15 @@ function main(context) {
     }
   };
 
+  const testStracker = (instructions) => {
+    const filtered = instructions.filter(instr => (instr.type === 'copy')
+      && (path.extname(instr.source) === '.dll'));
+
+    const matches = filtered.filter(instr =>
+      STRACKER_ASSEMBLIES.includes(path.basename(instr.source).toLowerCase()));
+    return Promise.resolve(matches.length === STRACKER_ASSEMBLIES.length);
+  };
+
   const testReshade = (instructions) => {
     const filtered = instructions.filter(instr => (instr.type === 'copy')
                                                && (path.extname(instr.source) === '.ini')
@@ -130,6 +142,7 @@ function main(context) {
     return Promise.resolve(filtered.length > 0);
   };
 
+  context.registerModType('mhwstrackermodloader', 25, gameId => gameId === GAME_ID, getPath, testStracker);
   context.registerModType('mhwreshade', 25, gameId => gameId === GAME_ID, getPath, testReshade);
   context.registerInstaller('monster-hunter-mod', 25, isSupported, installContent);
   context.registerInstaller('mhwreshadeinstaller', 24, isReshadeMod, (files, destinationPath, gameId, progressDelegate) => {
