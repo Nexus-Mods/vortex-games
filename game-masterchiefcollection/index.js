@@ -117,8 +117,7 @@ class MasterChiefCollectionGame {
   }
 
   queryPath() {
-    //return util.GameStoreHelper.findByAppId([STEAM_ID, MS_APPID])
-    return util.GameStoreHelper.findByAppId([STEAM_ID])
+    return util.GameStoreHelper.findByAppId([STEAM_ID, MS_APPID])
       .then(game => {
         _GAME_STORE_ID = game.gameStoreId;
         return game.gamePath
@@ -127,7 +126,15 @@ class MasterChiefCollectionGame {
 
   requiresLauncher(gamePath) {
     if (_GAME_STORE_ID === 'xbox') {
-      return Promise.resolve({ launcher: 'xbox', addInfo: MS_APPID });
+      return Promise.resolve({
+        launcher: 'xbox',
+        addInfo: {
+          appId: MS_APPID,
+          args: [
+            { appExecName: 'HaloMCCShippingNoEAC' },
+          ],
+        }
+      });
     } else if (_GAME_STORE_ID === 'steam') {
       return Promise.resolve({
         launcher: 'steam',
