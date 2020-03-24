@@ -130,7 +130,7 @@ class MasterChiefCollectionGame {
         launcher: 'xbox',
         addInfo: {
           appId: MS_APPID,
-          args: [
+          parameters: [
             { appExecName: 'HaloMCCShippingNoEAC' },
           ],
         }
@@ -140,8 +140,8 @@ class MasterChiefCollectionGame {
         launcher: 'steam',
         addInfo: {
           appId: STEAM_ID,
-          args: ['option1'],
-          launchType: 'posix',
+          parameters: ['option1'],
+          launchType: 'gamestore',
         }
       });
     }
