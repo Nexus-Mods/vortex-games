@@ -45,8 +45,8 @@ class MasterChiefCollectionGame {
     this.supportedTools = [
       {
         id: 'haloassemblytool',
-        name: 'Halo Assembly Tool',
-        logo: path.join(__dirname, 'assemblytool.png'),
+        name: 'Assembly',
+        logo: 'assemblytool.png',
         executable: () => 'Assembly.exe',
         requiredFiles: [
           'Assembly.exe',
