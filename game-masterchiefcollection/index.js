@@ -298,7 +298,9 @@ module.exports = {
         if (haloEntries.length > 1) {
           return 'Multiple';
         } else {
-          return haloEntries[0].name;
+          return (!!haloEntries && (haloEntries.length > 0))
+            ? haloEntries[0].name
+            : 'None';
         }
       },
       isDefaultVisible: true,
