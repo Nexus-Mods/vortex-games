@@ -45,8 +45,8 @@ class MasterChiefCollectionGame {
     this.supportedTools = [
       {
         id: 'haloassemblytool',
-        name: 'Halo Assembly Tool',
-        logo: path.join(__dirname, 'assemblytool.png'),
+        name: 'Assembly',
+        logo: 'assemblytool.png',
         executable: () => 'Assembly.exe',
         requiredFiles: [
           'Assembly.exe',
@@ -298,7 +298,9 @@ module.exports = {
         if (haloEntries.length > 1) {
           return 'Multiple';
         } else {
-          return haloEntries[0].name;
+          return (!!haloEntries && (haloEntries.length > 0))
+            ? haloEntries[0].name
+            : 'None';
         }
       },
       isDefaultVisible: true,
