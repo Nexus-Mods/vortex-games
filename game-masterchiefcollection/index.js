@@ -36,11 +36,23 @@ class MasterChiefCollectionGame {
   constructor(context) {
     this.context = context;
     this.id = GAME_ID;
-    this.name = 'Halo: Master Chief Collection';
+    this.name = 'Halo: The Master Chief Collection';
     this.shortName = 'Halo: MCC';
     this.logo = 'gameart.jpg';
     this.requiredFiles = [
       this.executable(),
+    ];
+    this.supportedTools = [
+      {
+        id: 'haloassemblytool',
+        name: 'Halo Assembly Tool',
+        logo: path.join(__dirname, 'assemblytool.png'),
+        executable: () => 'Assembly.exe',
+        requiredFiles: [
+          'Assembly.exe',
+        ],
+        relative: true,
+      },
     ];
     this.details = {
       steamAppId: STEAM_ID.toString(),
@@ -94,7 +106,7 @@ class MasterChiefCollectionGame {
       this.context.api.showDialog('warn', 'Xbox Store Permissions', {
         bbcode: 'Halo: MCC appears to be installed through the Xbox game store and your account ' 
               + 'does not have permissions to write new files. This needs to be resolved manually '
-              + 'before mods can be deployed [url=https://wiki.nexusmods.com/index.php/Changing_Xbox_Store_permissions]as seen here.[/url]',
+              + 'before mods can be deployed [url=https://wiki.nexusmods.com/index.php/Modding_Halo:_The_Master_Chief_Collection_with_Vortex]as seen here.[/url]',
       }, [
         { label: 'Close' },
       ]);
