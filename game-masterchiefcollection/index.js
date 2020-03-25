@@ -45,6 +45,7 @@ class MasterChiefCollectionGame {
     this.name = 'Halo: The Master Chief Collection';
     this.shortName = 'Halo: MCC';
     this.logo = 'gameart.jpg';
+    this.api = context.api;
     this.requiredFiles = [
       this.executable(),
     ];
@@ -124,7 +125,22 @@ class MasterChiefCollectionGame {
       const segments = discovery.path.split(path.sep).filter(seg => !!seg);
       const idx = segments.indexOf('WindowsApps');
       const progFiles = segments.splice(0, idx).join(path.sep);
-      return fs.ensureDirWritableAsync(path.join(progFiles, 'ModifiableWindowsApps', 'HaloMCC'), () => Promise.resolve())
+      return fs.ensureDirWritableAsync(path.join(progFiles, 'ModifiableWindowsApps', 'HaloMCC'), () => {
+        return this.api.showDialog('info', 'Need to change file permissions', {
+          text: 'Vortex needs to change the file permissions on the game mod directory so it '
+              + 'can install mods. Windows will ask if you want to allow Vortex to make changes to your system. ',
+        }, [
+          { label: 'Cancel' },
+          { label: 'Continue' },
+        ])
+        .then(result => {
+          if (result.action === 'Cancel') {
+            return Promise.reject(new util.UserCanceled());
+          } else {
+            return Promise.resolve();
+          }
+        });
+      })
         .catch(err => (err.code === 'EPERM')
           ? xboxWarning() : Promise.reject(err));
     }
