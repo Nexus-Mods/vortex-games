@@ -3,6 +3,7 @@ const path = require('path');
 const Promise = require('bluebird');
 const { parseXmlString } = require('libxmljs');
 const { actions, fs, FlexLayout, OptionsFilter, log, selectors, util } = require('vortex-api');
+const rjson = require('relaxed-json');
 
 const React = require('react');
 
@@ -17,6 +18,11 @@ const React = require('react');
 const MS_APPID = 'Microsoft.Chelan';
 const STEAM_ID = '976730';
 const GAME_ID = 'halothemasterchiefcollection';
+
+const MOD_CONFIG_FILE = 'modpack_config.cfg';
+const MOD_CONFIG_DEST_ELEMENT = '$MCC_home\\';
+const ASSEMBLY_EXT = '.asmp';
+const MAP_EXT = '.map';
 
 // At the time of writing this extension, only Halo: Combat Evolved and Halo Reach were available.
 //  We may have to come back to this object as more of the games get released.
@@ -242,6 +248,65 @@ function install(context, files, destinationPath) {
   });
 }
 
+function testModConfigInstaller(files, gameId) {
+  const isAssemblyOnlyMod = () => {
+    // The presense of an .asmp file without any .map files is a clear indication
+    //  that this mod can only be installed using the Assembly tool which we've
+    //  yet to integrate into Vortex. This installer will not install these mods.
+    return (files.find(file => path.extname(file) === ASSEMBLY_EXT) !== undefined)
+      && (files.find(file => path.extname(file) === MAP_EXT) === undefined);
+  };
+  return (gameId !== GAME_ID)
+   ? Promise.resolve({ supported: false, requiredFiles: [] })
+   : Promise.resolve({
+     supported: (files.find(file => path.basename(file) === MOD_CONFIG_FILE) !== undefined)
+      && !isAssemblyOnlyMod(),
+     requiredFiles: [],
+    });
+}
+
+function installModConfig(files, destinationPath) {
+  // Find the mod config file and use it to build the instructions.
+  const modConfigFile = files.find(file => path.basename(file) === MOD_CONFIG_FILE);
+  const filtered = files.filter(file => {
+    // No directories, assembly tool files, readmes or mod config files.
+    const segments = file.split(path.sep);
+    const lastElementExt = path.extname(segments[segments.length - 1]);
+    return (modConfigFile !== file) && ['', '.txt', ASSEMBLY_EXT].indexOf(lastElementExt) === -1;
+  });
+  return fs.readFileAsync(path.join(destinationPath, modConfigFile), { encoding: 'utf8' })
+    .then(configData => {
+      let data;
+      try {
+        data = rjson.parse(util.deBOM(configData));
+      } catch (err) {
+        log('error', 'Unable to parse modpack_config.cfg', err);
+        return Promise.reject(new util.DataInvalid('Invalid modpack_config.cfg file'));
+      }
+
+      return (!!data.entries)
+        ? Promise.reduce(filtered, (accum, file) => {
+          const matchingEntry = data.entries.find(entry =>
+            ('src' in entry) && (entry.src.toLowerCase() === file.toLowerCase()));
+          if (!!matchingEntry) {
+            const destination = matchingEntry.dest.substring(MOD_CONFIG_DEST_ELEMENT.length);
+            accum.push({
+              type: 'copy',
+              source: file,
+              destination,
+            });
+          } else {
+            // This may just be a pointless addition by the mod author - we're going to log
+            //  this and continue.
+            log('warn', 'Failed to find matching manifest entry for file in archive', file);
+          }
+
+          return accum;
+        }, [])
+        : Promise.reject(new util.DataInvalid('modpack_config.cfg file contains no entries'))
+    }).then(instructions => Promise.resolve({ instructions }));
+}
+
 module.exports = {
   default: context => {
     context.registerGame(new MasterChiefCollectionGame(context));
@@ -255,7 +320,11 @@ module.exports = {
     //   return collator;
     // };
 
-    context.registerInstaller('masterchiefinstaller', 25, testInstaller, (files, destinationPath) => install(context, files, destinationPath));
+    context.registerInstaller('masterchiefmodconfiginstaller',
+      20, testModConfigInstaller, installModConfig);
+
+    context.registerInstaller('masterchiefinstaller', 25, testInstaller,
+      (files, destinationPath) => install(context, files, destinationPath));
 
     context.registerTableAttribute('mods', {
       id: 'gameType',
