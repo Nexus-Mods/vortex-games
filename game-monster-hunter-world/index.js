@@ -3,7 +3,7 @@ const path = require('path');
 const winapi = require('winapi-bindings');
 const { actions, fs, util } = require('vortex-api');
 
-const STRACKER_ASSEMBLIES = ['hid.dll', 'loader.dll'];
+const STRACKER_FILES = ['loader-config.json', 'loader.dll'];
 const GAME_ID = 'monsterhunterworld';
 const RESHADE_DIRNAME = 'reshade-shaders';
 
@@ -58,8 +58,8 @@ function prepareForModding(discovery, api) {
 
   // Check whether Stracker's Loader is installed.
   return fs.ensureDirWritableAsync(path.join(discovery.path, NATIVE_PC_FOLDER), () => Promise.resolve())
-    .then(() => Promise.each(STRACKER_ASSEMBLIES, assembly => {
-      const assemblyPath = path.join(discovery.path, assembly);
+    .then(() => Promise.each(STRACKER_FILES, file => {
+      const assemblyPath = path.join(discovery.path, file);
       return fs.statAsync(assemblyPath)
     })
     .then(() => Promise.resolve())
@@ -127,12 +127,11 @@ function main(context) {
   };
 
   const testStracker = (instructions) => {
-    const filtered = instructions.filter(instr => (instr.type === 'copy')
-      && (path.extname(instr.source) === '.dll'));
+    const filtered = instructions.filter(instr => (instr.type === 'copy'));
 
     const matches = filtered.filter(instr =>
-      STRACKER_ASSEMBLIES.includes(path.basename(instr.source).toLowerCase()));
-    return Promise.resolve(matches.length === STRACKER_ASSEMBLIES.length);
+      STRACKER_FILES.includes(path.basename(instr.source).toLowerCase()));
+    return Promise.resolve(matches.length === STRACKER_FILES.length);
   };
 
   const testReshade = (instructions) => {
