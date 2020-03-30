@@ -358,7 +358,26 @@ async function preSort(context, items, direction) {
       external: true,
   }));
 
-  const preSorted = [].concat(...mergedEntries, ...items, ...manualEntries);
+  const state = context.api.store.getState();
+  const activeProfile = selectors.activeProfile(state);
+  const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
+  const keys = Object.keys(loadOrder);
+  const knownManuallyAdded = manualEntries.filter(entry => keys.includes(entry.id)) || [];
+  const unknownManuallyAdded = manualEntries.filter(entry => !keys.includes(entry.id)) || [];
+  const filteredOrder = keys
+    .filter(key => !mergedModNames.includes(key))
+    .reduce((accum,key) => {
+      accum[key] = loadOrder[key];
+      return accum;
+    }, []);
+  knownManuallyAdded.forEach(known => {
+    const diff = keys.length - Object.keys(filteredOrder).length;
+
+    const pos = filteredOrder[known.id].pos - diff;
+    items = [].concat(items.slice(0, pos) || [], known, items.slice(pos) || []);
+  });
+
+  const preSorted = [].concat(...mergedEntries, ...items, ...unknownManuallyAdded);
   return (direction === 'descending')
     ? Promise.resolve(preSorted.reverse())
     : Promise.resolve(preSorted);
@@ -462,10 +481,14 @@ function main(context) {
   context.registerModType('witcher3tl', 25, gameId => gameId === 'witcher3', getTLPath, testTL);
   context.registerModType('witcher3dlc', 25, gameId => gameId === 'witcher3', getDLCPath, testDLC);
 
+  let refreshFunc;
   let previousLO = {};
   context.registerLoadOrderPage({
     gameId: GAME_ID,
-    createInfoPanel: (props) => infoComponent(context, props),
+    createInfoPanel: (props) => {
+      refreshFunc = props.refresh;
+      return infoComponent(context, props);
+    },
     gameArtURL: `${__dirname}/gameart.jpg`,
     preSort: (items, direction) => preSort(context, items, direction),
     callback: (loadOrder) => {
@@ -506,6 +529,10 @@ function main(context) {
         const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {})
         return setINIStruct(context, loadOrder)
           .then(() => writeToModSettings())
+          .then(() => {
+            (!!refreshFunc) ? refreshFunc() : null;
+            return Promise.resolve();
+          })
           .catch(err => {
             context.api.showErrorNotification('Failed to modify load order file', err);
             return Promise.resolve();
@@ -529,6 +556,10 @@ function main(context) {
 
             _INI_STRUCT = newStruct;
             writeToModSettings()
+              .then(() => {
+                (!!refreshFunc) ? refreshFunc() : null;
+                return Promise.resolve();
+              })
               .catch(err => context.api.showErrorNotification('Failed to cleanup load order file', err));
           } else {
             const filePath = getLoadOrderFilePath();
