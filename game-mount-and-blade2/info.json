@@ -1,0 +1,7 @@
+{
+  "name": "Mount and Blade II: Bannerlord Support",
+  "author": "Black Tree Gaming Ltd.",
+  "version": "0.2.0",
+  "description": "A Vortex extension for Mount and Blade II: Bannerlord mod management.",
+  "type": "game"
+}
