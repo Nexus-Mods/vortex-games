@@ -607,6 +607,8 @@ function main(context) {
         return Promise.resolve();
       }
 
+      _IS_SORTING = true;
+
       try {
         const deployedSubModules = await getDeployedSubModPaths(context);
         CACHE = await getDeployedModData(context, deployedSubModules);
@@ -649,7 +651,7 @@ function main(context) {
           id: 'mnb2-sort-finished',
           type: 'info',
           message: context.api.translate('Finished sorting', { ns: I18N_NAMESPACE }),
-        }));
+        })).finally(() => _IS_SORTING = false);
   }, () => {
     const state = context.api.store.getState();
     const gameId = selectors.activeGameId(state);
