@@ -48,21 +48,6 @@ const BANNERLORD_EXEC = path.join('bin', 'Win64_Shipping_Client', 'Bannerlord.ex
 //  Casing is actually "SubModule.xml"
 const SUBMOD_FILE = "submodule.xml";
 
-const officialLauncher = {
-  id: 'TaleWorldsBannerlordLauncher',
-  name: 'Official Launcher',
-  logo: 'twlauncher.png',
-  executable: () => LAUNCHER_EXEC,
-  requiredFiles: [
-    LAUNCHER_EXEC,
-  ],
-  relative: true,
-}
-
-const supportedTools = [
-  officialLauncher,
-];
-
 async function walkAsync(dir, levelsDeep = 2) {
   let entries = [];
   return fs.readdirAsync(dir).then(files => {
@@ -199,6 +184,7 @@ async function getXMLData(xmlFilePath) {
 }
 
 async function refreshGameParams(context, loadOrder) {
+  // Go through the enabled entries so we can form our game parameters.
   const enabled = (!!loadOrder && Object.keys(loadOrder).length > 0)
     ? Object.keys(loadOrder)
         .filter(key => loadOrder[key].enabled)
@@ -208,13 +194,20 @@ async function refreshGameParams(context, loadOrder) {
         .filter(subMod => subMod.enabled)
         .map(subMod => subMod.subModId);
 
-  // Currently Singleplayer only! (more research into mp needs to be done)
+  // Currently Singleplayer only! (more research into MP needs to be done)
   const parameters = [
     PARAMS_TEMPLATE[0].replace('{{gameMode}}', 'singleplayer'),
     PARAMS_TEMPLATE[1].replace('{{subModIds}}', enabled.map(key => `*${key}`).join('')),
   ];
 
-  context.api.store.dispatch(actions.setGameParameters(GAME_ID, { parameters }));
+  // This launcher will not function unless the path is guaranteed to point
+  //  towards the bannerlord executable. Given that earlier versions of this
+  //  extension had targeted TaleWorlds.Launcher.exe instead - we need to make
+  //  sure this is set correctly.
+  context.api.store.dispatch(actions.setGameParameters(GAME_ID, {
+    executable: BANNERLORD_EXEC,
+    parameters
+  }));
   
   return Promise.resolve();
 }
@@ -333,7 +326,25 @@ async function installSubModules(files, destinationPath) {
   .then(merged => Promise.resolve({ instructions: merged }));
 }
 
+function ensureOfficialLauncher(context, discovery) {
+  context.api.store.dispatch(actions.addDiscoveredTool(GAME_ID, 'TaleWorldsBannerlordLauncher', {
+    id: 'TaleWorldsBannerlordLauncher',
+    name: 'Official Launcher',
+    logo: 'twlauncher.png',
+    executable: () => path.basename(LAUNCHER_EXEC),
+    requiredFiles: [
+      path.basename(LAUNCHER_EXEC),
+    ],
+    path: path.join(discovery.path, LAUNCHER_EXEC),
+    relative: true,
+    workingDirectory: path.join(discovery.path, 'bin', 'Win64_Shipping_Client'),
+  }));
+}
+
 async function prepareForModding(context, discovery) {
+  // Quickly ensure that the official Launcher is added.
+  ensureOfficialLauncher(context, discovery);
+
   const idRegexp = /\<Id\>(.*?)\<\/Id\>/gm;
   const enabledRegexp = /\<IsSelected\>(.*?)\<\/IsSelected\>/gm;
   const trimTagsRegexp = /<[^>]*>?/gm;
@@ -565,7 +576,6 @@ function main(context) {
     name: 'Mount & Blade II:\tBannerlord',
     mergeMods: true,
     queryPath: findGame,
-    supportedTools,
     queryModPath: () => '.',
     logo: 'gameart.jpg',
     executable: () => BANNERLORD_EXEC,
@@ -653,6 +663,7 @@ function main(context) {
           id: 'mnb2-sort-finished',
           type: 'info',
           message: context.api.translate('Finished sorting', { ns: I18N_NAMESPACE }),
+          displayMS: 5000,
         })).finally(() => _IS_SORTING = false);
   }, () => {
     const state = context.api.store.getState();
