@@ -39,6 +39,37 @@ function findGame() {
   }
 }
 
+const tools = [
+  {
+    id: 'HunterPie',
+    name: 'HunterPie',
+    logo: 'HunterPie.png',
+    executable: () => 'HunterPie.exe',
+    requiredFiles: [
+      'HunterPie.exe',
+    ],
+  },
+  {
+    id: 'SmartHunter',
+    name: 'SmartHunter',
+    logo: 'SmartHunter.png',
+    executable: () => 'SmartHunter.exe',
+    requiredFiles: [
+      'SmartHunter.exe',
+    ],
+  },
+  {
+    id: 'MHWTransmog',
+    name: 'MHW Transmog',
+    logo: 'MHWTransmog.png',
+    executable: () => 'MHWTransmog.exe',
+    requiredFiles: [
+      'MHWTransmog.exe',
+    ],
+    shell: true,
+  },
+];
+
 function prepareForModding(discovery, api) {
   const showModEngineDialog = () => new Promise((resolve, reject) => {
     api.store.dispatch(actions.showDialog('question', 'Action required',
@@ -103,6 +134,7 @@ function main(context) {
     name: 'Monster Hunter: World',
     mergeMods: true,
     queryPath: findGame,
+    supportedTools: tools,
     queryModPath: () => NATIVE_PC_FOLDER,
     logo: 'gameart.jpg',
     executable: () => MHW_EXEC,
