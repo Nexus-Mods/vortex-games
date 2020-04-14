@@ -671,7 +671,7 @@ function main(context) {
         return Promise.resolve();
       }
 
-      if ((!!activeProfile.gameId) && (GAME_ID !== activeProfile.gameId)) {
+      if (activeProfile?.gameId !== GAME_ID) {
         // Different game
         return Promise.resolve();
       }
