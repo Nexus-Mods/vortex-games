@@ -70,7 +70,7 @@ class CustomItemRenderer extends React.Component {
       key,
       style: { height: '48px' },
     },
-    React.createElement(FlexLayout, { type: 'row', height: '20px', justifyContent: 'space-between' },
+    React.createElement(FlexLayout, { type: 'row', height: '20px' },
       React.createElement(FlexLayout.Flex, {
         style: {
           display: 'flex',
