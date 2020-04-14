@@ -51,7 +51,7 @@ const SUBMOD_FILE = "submodule.xml";
 const officialLauncher = {
   id: 'TaleWorldsBannerlordLauncher',
   name: 'Official Launcher',
-  logo: 'gameart.jpg',
+  logo: 'twlauncher.png',
   executable: () => LAUNCHER_EXEC,
   requiredFiles: [
     LAUNCHER_EXEC,
