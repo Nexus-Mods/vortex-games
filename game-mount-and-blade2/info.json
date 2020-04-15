@@ -1,5 +1,6 @@
 {
-  "name": "Mount and Blade II: Bannerlord Support",
+  "id": "Mount and Blade II Bannerlord support-90-0-1-1-1585574611",
+  "name": "Game: Mount and Blade II: Bannerlord",
   "author": "Black Tree Gaming Ltd.",
   "version": "0.2.0",
   "description": "A Vortex extension for Mount and Blade II: Bannerlord mod management.",
