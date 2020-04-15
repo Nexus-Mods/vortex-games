@@ -77,7 +77,8 @@ class CustomItemRenderer extends React.Component {
           justifyContent: 'flex-start',
           alignItems: 'center',
           height: '20px',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          whiteSpace: 'nowrap'
         }
       }, (this.isItemInvalid(item))
         ? this.renderInvalidEntry(item)
