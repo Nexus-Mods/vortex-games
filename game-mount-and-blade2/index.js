@@ -672,7 +672,7 @@ function main(context) {
   });
 
   context.once(() => {
-    context.api.onAsync('did-deploy', (profileId, deployment) => {
+    context.api.onAsync('did-deploy', async (profileId, deployment) => {
       const state = context.api.store.getState();
       const activeProfile = selectors.activeProfile(state);
       const deployProfile = selectors.profileById(state, profileId);
@@ -686,6 +686,15 @@ function main(context) {
         // Different game
         return Promise.resolve();
       }
+
+      const deployedSubModules = await getDeployedSubModPaths(context);
+      CACHE = await getDeployedModData(context, deployedSubModules);
+
+      // We're going to do a quick tSort at this point - not going to
+      //  change the user's load order, but this will highlight any
+      //  cyclic or missing dependencies.
+      const modIds = Object.keys(CACHE);
+      const sorted = tSort(modIds, true);
 
       const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
       return refreshGameParams(context, loadOrder);
