@@ -610,10 +610,12 @@ function main(context) {
     },
   });
 
+  let refreshFunc;
   // Register the LO page.
   context.registerLoadOrderPage({
     gameId: GAME_ID,
     createInfoPanel: (props) => {
+      refreshFunc = props.refresh;
       return infoComponent(context, props);
     },
     gameArtURL: `${__dirname}/gameart.jpg`,
@@ -713,6 +715,10 @@ function main(context) {
       const sorted = tSort(modIds, true);
 
       const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
+      if (!!refreshFunc) {
+        refreshFunc();
+      }
+
       return refreshGameParams(context, loadOrder);
     });
 
