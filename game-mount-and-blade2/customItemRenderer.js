@@ -13,7 +13,7 @@ class CustomItemRenderer extends React.Component {
   }
 
   // TODO: move all style configuration into a stylesheet
-  renderNativeEntry(item) {
+  renderOfficialEntry(item) {
     return React.createElement('div', { style: { display: 'flex', alignItems: 'center' } }, 
       React.createElement('img', {
       src: TWLOGO,
@@ -78,12 +78,13 @@ class CustomItemRenderer extends React.Component {
           alignItems: 'center',
           height: '20px',
           overflow: 'hidden',
-          whiteSpace: 'nowrap'
+          whiteSpace: 'nowrap',
+          textOverflow: 'ellipsis',
         }
       }, (this.isItemInvalid(item))
         ? this.renderInvalidEntry(item)
-        : (item.locked)
-          ? this.renderNativeEntry(item)
+        : (item.official)
+          ? this.renderOfficialEntry(item)
           : managedModKeys.includes(item.id)
             ? this.renderManagedEntry(item, order[item.id].enabled)
             : this.renderExternalEntry(item, order[item.id].enabled)

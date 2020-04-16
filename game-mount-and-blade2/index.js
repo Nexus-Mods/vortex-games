@@ -3,7 +3,7 @@ const BS = require('react-bootstrap');
 const { app, remote } = require('electron');
 const Promise = require('bluebird');
 const path = require('path');
-const { actions, fs, log, selectors, FlexLayout, types, util } = require('vortex-api');
+const { actions, fs, log, selectors, FlexLayout, util } = require('vortex-api');
 const { parseXmlString } = require('libxmljs');
 const CustomItemRenderer = require('./customItemRenderer');
 
@@ -34,7 +34,8 @@ const XML_EL_MULTIPLAYER = 'MultiplayerModule';
 const ROOT_FOLDERS = new Set(['bin', 'data', 'gui', 'icons', 'modules',
   'music', 'shaders', 'sounds', 'xmlschemas']);
 
-const NATIVE_MODULES = new Set(['Native', 'CustomBattle', 'SandBoxCore', 'Sandbox', 'StoryMode']);
+const OFFICIAL_MODULES = new Set(['Native', 'CustomBattle', 'SandBoxCore', 'Sandbox', 'StoryMode']);
+const LOCKED_MODULES = new Set(['Native']);
 
 // Used for the "custom launcher" tools.
 //  gameMode: singleplayer or multiplayer
@@ -101,7 +102,8 @@ async function getDeployedModData(context, subModuleFilePaths) {
         subModName,
         subModFile,
         vortexId: !!managedEntry ? managedEntry.vortexId : subModId,
-        isNative: NATIVE_MODULES.has(subModId),
+        isOfficial: OFFICIAL_MODULES.has(subModId),
+        isLocked: LOCKED_MODULES.has(subModId),
         isMultiplayer,
         dependencies,
         invalid: {
@@ -420,7 +422,7 @@ function getValidationInfo(modVortexId) {
   }
 }
 
-function tSort(subModIds, allowNatives = false) {
+function tSort(subModIds, allowLocked = false) {
   // Topological sort - we need to:
   //  - Identify cyclic dependencies.
   //  - Identify missing dependencies.
@@ -441,9 +443,9 @@ function tSort(subModIds, allowNatives = false) {
 
   const topSort = (node) => {
     processing[node] = true;
-    const dependencies = (!!allowNatives)
+    const dependencies = (!!allowLocked)
       ? graph[node]
-      : graph[node].filter(element => !NATIVE_MODULES.has(element));
+      : graph[node].filter(element => !LOCKED_MODULES.has(element));
 
     for (let i = 0; i < dependencies.length; i++) {
       const dep = dependencies[i];
@@ -486,62 +488,77 @@ function tSort(subModIds, allowNatives = false) {
 
 async function preSort(context, items, direction) {
   const modIds = Object.keys(CACHE);
-  let nativeIds = modIds
-    .filter(id => CACHE[id].isNative);
-  
+
+  // Locked ids are always at the top of the list as all
+  //  other modules depend on these.
+  let lockedIds = modIds.filter(id => CACHE[id].isLocked);
+
   try {
-    nativeIds = tSort(nativeIds, true);  
+    // Sort the locked ids amongst themselves to ensure
+    //  that the game receives these in the right order.
+    lockedIds = tSort(lockedIds, true);
   } catch (err) {
     return Promise.reject(err);
   }
-  
-  const externalIds = modIds.filter(id => (!CACHE[id].isNative) && (CACHE[id].vortexId === id));
-  const nativeItems = nativeIds.map(id => ({
+
+  // Create the locked entries.
+  const lockedItems = lockedIds.map(id => ({
     id: CACHE[id].vortexId,
     name: CACHE[id].subModName,
     imgUrl: `${__dirname}/gameart.jpg`,
     locked: true,
+    official: OFFICIAL_MODULES.has(id),
   }));
+  
+  // External ids will include official modules as well but not locked entries.
+  const externalIds = modIds.filter(id => (!CACHE[id].isLocked) && (CACHE[id].vortexId === id));
 
   const state = context.api.store.getState();
   const activeProfile = selectors.activeProfile(state);
   const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
   const LOkeys = ((Object.keys(loadOrder).length > 0)
     ? Object.keys(loadOrder)
-    : LAUNCHER_DATA.singlePlayerSubMods
-        .map(mod => mod.subModId))
+    : LAUNCHER_DATA.singlePlayerSubMods.map(mod => mod.subModId));
 
   const knownExt = externalIds.filter(id => LOkeys.includes(id)) || [];
   const unknownExt = externalIds.filter(id => !LOkeys.includes(id)) || [];
   items = items.filter(item => {
-    // Remove any nativeIds, but also ensure that the
+    // Remove any lockedIds, but also ensure that the
     //  entry can be found in the cache. If it's not in the
     //  cache, this may mean that the submod xml file failed
     //  parse-ing and therefore should not be displayed.
-    const isNativeModule = nativeIds.includes(item.id);
+    const isLocked = lockedIds.includes(item.id);
     const hasCacheEntry = Object.keys(CACHE).find(key =>
       CACHE[key].vortexId === item.id) !== undefined;
-    return !isNativeModule && hasCacheEntry;
+    return !isLocked && hasCacheEntry;
   });
     knownExt.map(key => ({
       id: CACHE[key].vortexId,
       name: CACHE[key].subModName,
       imgUrl: `${__dirname}/gameart.jpg`,
       external: true,
+      official: OFFICIAL_MODULES.has(key),
     })).forEach(known => {
-      const idx = LOkeys.indexOf(known);
-      items = [].concat(items.slice(0, idx) || [], known, items.slice(idx) || []);
+      // If this a known external module and is NOT in the item list already
+      //  we need to re-insert in the correct index as all known external modules
+      //  at this point are actually deployed inside the mods folder and should
+      //  be in the items list!
+      if (items.find(item => item.id === known.id) === undefined) {
+        const idx = LOkeys.indexOf(known);
+        items = [].concat(items.slice(0, idx) || [], known, items.slice(idx) || []);
+      }
   });
-  
+
   const unknownItems = unknownExt
     .map(key => ({
       id: key,
       name: key,
       imgUrl: `${__dirname}/gameart.jpg`,
       external: true,
+      official: OFFICIAL_MODULES.has(key),
     }));
 
-  const preSorted = [].concat(nativeItems, items, unknownItems);
+  const preSorted = [].concat(lockedItems, items, unknownItems);
   return (direction === 'descending')
     ? Promise.resolve(preSorted.reverse())
     : Promise.resolve(preSorted);
@@ -646,29 +663,33 @@ function main(context) {
         context.api.showErrorNotification('Failed to resolve submodule file data', err);
       }
 
-      const state = context.api.store.getState();
-      const activeProfile = selectors.activeProfile(state);
-      const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
-
       const modIds = Object.keys(CACHE);
-      const nativeIds = modIds.filter(id => CACHE[id].isNative);
-      const subModIds = modIds.filter(id => !CACHE[id].isNative);
+      const lockedIds = modIds.filter(id => CACHE[id].isLocked);
+      const subModIds = modIds.filter(id => !CACHE[id].isLocked);
 
-      let sortedNatives = [];
+      let sortedLocked = [];
       let sortedSubMods = [];
 
       try {
-        sortedNatives = tSort(nativeIds, true);
+        sortedLocked = tSort(lockedIds, true);
         sortedSubMods = tSort(subModIds);
       } catch (err) {
         context.api.showErrorNotification('Failed to sort mods', err);
         return;
       }
-      const newOrder = [].concat(sortedNatives, sortedSubMods).reduce((accum, id, idx) => {
+
+      const state = context.api.store.getState();
+      const activeProfile = selectors.activeProfile(state);
+      const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
+      const newOrder = [].concat(sortedLocked, sortedSubMods).reduce((accum, id, idx) => {
         const vortexId = CACHE[id].vortexId;
         const newEntry = {
           pos: idx,
-          enabled: (!!loadOrder[vortexId]) ? loadOrder[vortexId].enabled : true,
+          enabled: CACHE[id].isOfficial
+            ? true
+            : (!!loadOrder[vortexId])
+              ? loadOrder[vortexId].enabled
+              : true,
         }
 
         accum[vortexId] = newEntry;
