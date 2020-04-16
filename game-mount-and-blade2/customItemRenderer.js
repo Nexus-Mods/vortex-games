@@ -142,13 +142,14 @@ class CustomItemRenderer extends React.Component {
   }
 
   onStatusChange(evt, props) {
-    const { profile, order, item, onSetLoadOrderEntry } = props;
+    const { profile, order, item, onSetLoadOrderEntry, onSetDeploymentRequired } = props;
     const entry = {
       pos: order[item.id].pos,
       enabled: evt.target.checked,
     }
 
     onSetLoadOrderEntry(profile.id, item.id, entry);
+    onSetDeploymentRequired();
   }
 
   setRef (ref, props) {
@@ -175,6 +176,8 @@ function mapDispatchToProps(dispatch) {
   return {
     onSetLoadOrderEntry: (profileId, modId, entry) =>
       dispatch(actions.setLoadOrderEntry(profileId, modId, entry)),
+    onSetDeploymentRequired: () =>
+      dispatch(actions.setDeploymentNecessary('mountandblade2bannerlord', true)),
   };
 }
 

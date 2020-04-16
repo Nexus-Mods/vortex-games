@@ -591,7 +591,7 @@ function infoComponent(context, props) {
                                       + 'the Vortex load order and go by what is shown in the launcher instead.', { ns: I18N_NAMESPACE })),
         React.createElement('li', {}, t('For Bannerlord, mods sorted further towards the bottom of the list will override mods further up (if they conflict). '
                                       + 'Note: Harmony patches may be the exception to this rule.', { ns: I18N_NAMESPACE })),
-        React.createElement('li', {}, t('The native modules (“Native”, “SandBox Core” etc.) are loaded first by the game and are locked '
+        React.createElement('li', {}, t('The native module (“Native”) is loaded first by the game and is locked '
                                       + 'in place.', { ns: I18N_NAMESPACE })),
         React.createElement('li', {}, t('Auto Sort uses the SubModule.xml files (the entries under <DependedModules>) to detect '
                                       + 'dependencies to sort by. ', { ns: I18N_NAMESPACE })),
