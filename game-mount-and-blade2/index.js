@@ -538,18 +538,6 @@ async function preSort(context, items, direction) {
   // External modules which are new and have yet to be added to the LO.
   const unknownExt = externalIds.filter(id => !LOkeys.includes(id)) || [];
 
-  // Managed mod which has yet to be added to the LO - probably recently installed.
-  // const unknownManaged = modIds.reduce((accum, id) => {
-  //   const vortexId = CACHE[id].vortexId;
-  //   const isLocked = CACHE[id].isLocked;
-  //   const isExternal = CACHE[id].isExternal;
-  //   const missingFromLO = !LOkeys.includes(vortexId);
-  //   if (!isLocked && !isExternal && missingFromLO) {
-  //     accum.push(id);
-  //   }
-
-  //   return accum;
-  // }, []);
   items = items.filter(item => {
     // Remove any lockedIds, but also ensure that the
     //  entry can be found in the cache. If it's not in the
@@ -560,25 +548,25 @@ async function preSort(context, items, direction) {
       CACHE[key].vortexId === item.id) !== undefined;
     return !isLocked && hasCacheEntry;
   });
-    knownExt.map(key => ({
-      id: CACHE[key].vortexId,
-      name: CACHE[key].subModName,
-      imgUrl: `${__dirname}/gameart.jpg`,
-      external: true,
-      official: OFFICIAL_MODULES.has(key),
-    })).forEach(known => {
-       // If this a known external module and is NOT in the item list already
-      //  we need to re-insert in the correct index as all known external modules
-      //  at this point are actually deployed inside the mods folder and should
-      //  be in the items list!
-      // Add any missing known items.
-      if (items.find(item => item.id === known.id) === undefined) {
-        const idx = LOkeys.indexOf(known.id) - 1;
-        items = [].concat(items.slice(0, idx) || [], known, items.slice(idx) || []);
-      }
+
+  knownExt.map(key => ({
+    id: CACHE[key].vortexId,
+    name: CACHE[key].subModName,
+    imgUrl: `${__dirname}/gameart.jpg`,
+    external: true,
+    official: OFFICIAL_MODULES.has(key),
+  })).sort((a, b) => loadOrder[a.id].pos - loadOrder[b.id].pos).forEach(known => {
+      // If this a known external module and is NOT in the item list already
+    //  we need to re-insert in the correct index as all known external modules
+    //  at this point are actually deployed inside the mods folder and should
+    //  be in the items list!
+    const diff = (LOkeys.length) - (LOkeys.length - Array.from(LOCKED_MODULES).length);
+    if (items.find(item => item.id === known.id) === undefined) {
+      const idx = loadOrder[known.id].pos - diff;
+      items = [].concat(items.slice(0, idx) || [], known, items.slice(idx) || []);
+    }
   });
 
-  //const unknownItems = [].concat(unknownManaged, unknownExt)
   const unknownItems = [].concat(unknownExt)
     .map(key => ({
       id: CACHE[key].vortexId,
