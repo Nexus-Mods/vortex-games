@@ -532,8 +532,24 @@ async function preSort(context, items, direction) {
     ? Object.keys(loadOrder)
     : LAUNCHER_DATA.singlePlayerSubMods.map(mod => mod.subModId));
 
+  // External modules that are already in the load order.
   const knownExt = externalIds.filter(id => LOkeys.includes(id)) || [];
+
+  // External modules which are new and have yet to be added to the LO.
   const unknownExt = externalIds.filter(id => !LOkeys.includes(id)) || [];
+
+  // Managed mod which has yet to be added to the LO - probably recently installed.
+  const unknownManaged = modIds.reduce((accum, id) => {
+    const vortexId = CACHE[id].vortexId;
+    const isLocked = CACHE[id].isLocked;
+    const isExternal = CACHE[id].isExternal;
+    const missingFromLO = !LOkeys.includes(vortexId);
+    if (!isLocked && !isExternal && missingFromLO) {
+      accum.push(id);
+    }
+
+    return accum;
+  }, []);
   items = items.filter(item => {
     // Remove any lockedIds, but also ensure that the
     //  entry can be found in the cache. If it's not in the
@@ -551,22 +567,31 @@ async function preSort(context, items, direction) {
       external: true,
       official: OFFICIAL_MODULES.has(key),
     })).forEach(known => {
-      // If this a known external module and is NOT in the item list already
-      //  we need to re-insert in the correct index as all known external modules
-      //  at this point are actually deployed inside the mods folder and should
-      //  be in the items list!
+      // Add any missing known items.
       if (items.find(item => item.id === known.id) === undefined) {
-        const idx = LOkeys.indexOf(known);
-        items = [].concat(items.slice(0, idx) || [], known, items.slice(idx) || []);
+        items.push(known);
       }
   });
 
-  const unknownItems = unknownExt
+  // re-organize the items to fit the existing load order.
+  items = LOkeys.filter(key => !LOCKED_MODULES.has(key))
+                .reduce((accum, key) => {
+    const match = items.find(item => item.id === key);
+    if (match !== undefined) {
+      accum.push(match);
+    } else {
+      // This should never happen - but it's important we log it if it does.
+      log('error', 'MnB2: could not match LO key to display item', key);
+    }
+    return accum;
+  }, [])
+
+  const unknownItems = [].concat(unknownManaged, unknownExt)
     .map(key => ({
-      id: key,
-      name: key,
+      id: CACHE[key].vortexId,
+      name: CACHE[key].subModName,
       imgUrl: `${__dirname}/gameart.jpg`,
-      external: true,
+      external: unknownExt.includes(key),
       official: OFFICIAL_MODULES.has(key),
     }));
 
