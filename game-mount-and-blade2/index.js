@@ -483,7 +483,17 @@ function tSort(subModIds, allowLocked = false) {
     }
   }
 
-  return result;
+  // Proper topological sort dictates we simply return the
+  //  result at this point. But, mod authors want modules
+  //  with no dependencies to bubble up to the top of the LO.
+  //  (This will only apply to non locked entries)
+  if (allowLocked) {
+    return result;
+  }
+
+  const subModsWithNoDeps = result.filter(dep => CACHE[dep].dependencies.length === 0).sort() || [];
+  const tamperedResult = [].concat(subModsWithNoDeps, result.filter(entry => !subModsWithNoDeps.includes(entry)));
+  return tamperedResult;
 }
 
 async function preSort(context, items, direction) {
