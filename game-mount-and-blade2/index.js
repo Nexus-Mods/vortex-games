@@ -426,9 +426,10 @@ function tSort(subModIds, allowLocked = false) {
   // Topological sort - we need to:
   //  - Identify cyclic dependencies.
   //  - Identify missing dependencies.
-  const graph = subModIds.reduce((accum, entry) => {
+  const alphabetical = subModIds.sort();
+  const graph = alphabetical.reduce((accum, entry) => {
     // Create the node graph.
-    accum[entry] = CACHE[entry].dependencies;
+    accum[entry] = CACHE[entry].dependencies.sort();
     return accum;
   }, {});
 
@@ -468,7 +469,7 @@ function tSort(subModIds, allowLocked = false) {
         }
       }
     };
-    //missing.filter((item, idx) => missing.indexOf(item) === idx);
+
     processing[node] = false;
     visited[node] = true;
 
@@ -491,7 +492,8 @@ function tSort(subModIds, allowLocked = false) {
     return result;
   }
 
-  const subModsWithNoDeps = result.filter(dep => CACHE[dep].dependencies.length === 0).sort() || [];
+  const subModsWithNoDeps = result.filter(dep => (graph[dep].length === 0)
+    || (graph[dep].find(d => !LOCKED_MODULES.has(d)) === undefined)).sort() || [];
   const tamperedResult = [].concat(subModsWithNoDeps, result.filter(entry => !subModsWithNoDeps.includes(entry)));
   return tamperedResult;
 }
