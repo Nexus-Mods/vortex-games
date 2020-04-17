@@ -539,17 +539,17 @@ async function preSort(context, items, direction) {
   const unknownExt = externalIds.filter(id => !LOkeys.includes(id)) || [];
 
   // Managed mod which has yet to be added to the LO - probably recently installed.
-  const unknownManaged = modIds.reduce((accum, id) => {
-    const vortexId = CACHE[id].vortexId;
-    const isLocked = CACHE[id].isLocked;
-    const isExternal = CACHE[id].isExternal;
-    const missingFromLO = !LOkeys.includes(vortexId);
-    if (!isLocked && !isExternal && missingFromLO) {
-      accum.push(id);
-    }
+  // const unknownManaged = modIds.reduce((accum, id) => {
+  //   const vortexId = CACHE[id].vortexId;
+  //   const isLocked = CACHE[id].isLocked;
+  //   const isExternal = CACHE[id].isExternal;
+  //   const missingFromLO = !LOkeys.includes(vortexId);
+  //   if (!isLocked && !isExternal && missingFromLO) {
+  //     accum.push(id);
+  //   }
 
-    return accum;
-  }, []);
+  //   return accum;
+  // }, []);
   items = items.filter(item => {
     // Remove any lockedIds, but also ensure that the
     //  entry can be found in the cache. If it's not in the
@@ -567,26 +567,19 @@ async function preSort(context, items, direction) {
       external: true,
       official: OFFICIAL_MODULES.has(key),
     })).forEach(known => {
+       // If this a known external module and is NOT in the item list already
+      //  we need to re-insert in the correct index as all known external modules
+      //  at this point are actually deployed inside the mods folder and should
+      //  be in the items list!
       // Add any missing known items.
       if (items.find(item => item.id === known.id) === undefined) {
-        items.push(known);
+        const idx = LOkeys.indexOf(known.id) - 1;
+        items = [].concat(items.slice(0, idx) || [], known, items.slice(idx) || []);
       }
   });
 
-  // re-organize the items to fit the existing load order.
-  items = LOkeys.filter(key => !LOCKED_MODULES.has(key))
-                .reduce((accum, key) => {
-    const match = items.find(item => item.id === key);
-    if (match !== undefined) {
-      accum.push(match);
-    } else {
-      // This should never happen - but it's important we log it if it does.
-      log('error', 'MnB2: could not match LO key to display item', key);
-    }
-    return accum;
-  }, [])
-
-  const unknownItems = [].concat(unknownManaged, unknownExt)
+  //const unknownItems = [].concat(unknownManaged, unknownExt)
+  const unknownItems = [].concat(unknownExt)
     .map(key => ({
       id: CACHE[key].vortexId,
       name: CACHE[key].subModName,
@@ -694,6 +687,7 @@ function main(context) {
       _IS_SORTING = true;
 
       try {
+        CACHE = {};
         const deployedSubModules = await getDeployedSubModPaths(context);
         CACHE = await getDeployedModData(context, deployedSubModules);
       } catch (err) {
@@ -747,37 +741,46 @@ function main(context) {
     return (gameId === GAME_ID);
   });
 
+  const refreshCacheOnEvent = async (profileId) => {
+    CACHE = {};
+    const state = context.api.store.getState();
+    const activeProfile = selectors.activeProfile(state);
+    const deployProfile = selectors.profileById(state, profileId);
+    if (!!activeProfile && !!deployProfile && (deployProfile.id !== activeProfile.id)) {
+      // Deployment event seems to be executed for a profile other
+      //  than the currently active one. Not going to continue.
+      return Promise.resolve();
+    }
+
+    if (activeProfile?.gameId !== GAME_ID) {
+      // Different game
+      return Promise.resolve();
+    }
+
+    const deployedSubModules = await getDeployedSubModPaths(context);
+    CACHE = await getDeployedModData(context, deployedSubModules);
+
+    // We're going to do a quick tSort at this point - not going to
+    //  change the user's load order, but this will highlight any
+    //  cyclic or missing dependencies.
+    const modIds = Object.keys(CACHE);
+    const sorted = tSort(modIds, true);
+
+    const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
+    if (!!refreshFunc) {
+      refreshFunc();
+    }
+
+    return refreshGameParams(context, loadOrder);
+  }
+
   context.once(() => {
     context.api.onAsync('did-deploy', async (profileId, deployment) => {
-      const state = context.api.store.getState();
-      const activeProfile = selectors.activeProfile(state);
-      const deployProfile = selectors.profileById(state, profileId);
-      if (!!activeProfile && !!deployProfile && (deployProfile.id !== activeProfile.id)) {
-        // Deployment event seems to be executed for a profile other
-        //  than the currently active one. Not going to continue.
-        return Promise.resolve();
-      }
+      return refreshCacheOnEvent(profileId);
+    });
 
-      if (activeProfile?.gameId !== GAME_ID) {
-        // Different game
-        return Promise.resolve();
-      }
-
-      const deployedSubModules = await getDeployedSubModPaths(context);
-      CACHE = await getDeployedModData(context, deployedSubModules);
-
-      // We're going to do a quick tSort at this point - not going to
-      //  change the user's load order, but this will highlight any
-      //  cyclic or missing dependencies.
-      const modIds = Object.keys(CACHE);
-      const sorted = tSort(modIds, true);
-
-      const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
-      if (!!refreshFunc) {
-        refreshFunc();
-      }
-
-      return refreshGameParams(context, loadOrder);
+    context.api.onAsync('did-purge', async (profileId) => {
+      return refreshCacheOnEvent(profileId);
     });
 
     context.api.onAsync('added-files', async (profileId, files) => {
