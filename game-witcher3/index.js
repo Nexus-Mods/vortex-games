@@ -505,7 +505,7 @@ function main(context) {
       if (loadOrder === previousLO) {
         return;
       }
-
+      context.api.store.dispatch(actions.setDeploymentNecessary(GAME_ID, true));
       previousLO = loadOrder;
       setINIStruct(context, loadOrder)
         .then(() => writeToModSettings())
