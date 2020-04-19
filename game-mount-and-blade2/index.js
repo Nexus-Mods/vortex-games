@@ -787,15 +787,6 @@ function main(context) {
     context.api.onAsync('did-purge', async (profileId) =>
       refreshCacheOnEvent(profileId));
 
-    context.api.onStateChange(['persistent', 'loadOrder'], () => {
-      const state = context.api.store.getState();
-      const profile = selectors.activeProfile(state);
-      if (profile?.gameId === GAME_ID) {
-        const lo = util.getSafe(state, ['persistent', 'loadOrder', profile.id]);
-        refreshGameParams(context, lo);
-      }
-    });
-
     context.api.onAsync('added-files', async (profileId, files) => {
       const state = context.api.store.getState();
       const profile = selectors.profileById(state, profileId);
