@@ -549,20 +549,37 @@ async function preSort(context, items, direction) {
     return !isLocked && hasCacheEntry;
   });
 
+  const posMap = {};
+  let nextAvailable = LOkeys.length;
+  const getNextPos = (loId) => {
+    if (LOCKED_MODULES.has(loId)) {
+      return Array.from(LOCKED_MODULES).indexOf(loId);
+    }
+
+    if (posMap[loId] === undefined) {
+      posMap[loId] = nextAvailable;
+      return nextAvailable++;
+    } else {
+      return posMap[loId];
+    }
+  }
+
   knownExt.map(key => ({
     id: CACHE[key].vortexId,
     name: CACHE[key].subModName,
     imgUrl: `${__dirname}/gameart.jpg`,
     external: true,
     official: OFFICIAL_MODULES.has(key),
-  })).sort((a, b) => loadOrder[a.id].pos - loadOrder[b.id].pos).forEach(known => {
-      // If this a known external module and is NOT in the item list already
+  })).sort((a, b) => (loadOrder[a.id]?.pos || getNextPos(a.id)) - (loadOrder[b.id]?.pos || getNextPos(b.id)))
+  .forEach(known => {
+    // If this a known external module and is NOT in the item list already
     //  we need to re-insert in the correct index as all known external modules
     //  at this point are actually deployed inside the mods folder and should
     //  be in the items list!
     const diff = (LOkeys.length) - (LOkeys.length - Array.from(LOCKED_MODULES).length);
     if (items.find(item => item.id === known.id) === undefined) {
-      const idx = loadOrder[known.id].pos - diff;
+      const pos = loadOrder[known.id]?.pos;
+      const idx = (pos !== undefined) ? (pos - diff) : (getNextPos(known.id) - diff);
       items = [].concat(items.slice(0, idx) || [], known, items.slice(idx) || []);
     }
   });
