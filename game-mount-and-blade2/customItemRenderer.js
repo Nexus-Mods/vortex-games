@@ -149,7 +149,7 @@ class CustomItemRenderer extends React.Component {
     }
 
     onSetLoadOrderEntry(profile.id, item.id, entry);
-    onSetDeploymentRequired();
+    //onSetDeploymentRequired();
   }
 
   setRef (ref, props) {

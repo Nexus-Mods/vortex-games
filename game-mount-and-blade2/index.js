@@ -570,19 +570,20 @@ async function preSort(context, items, direction) {
     imgUrl: `${__dirname}/gameart.jpg`,
     external: true,
     official: OFFICIAL_MODULES.has(key),
-  })).sort((a, b) => (loadOrder[a.id]?.pos || getNextPos(a.id)) - (loadOrder[b.id]?.pos || getNextPos(b.id)))
-  .forEach(known => {
-    // If this a known external module and is NOT in the item list already
-    //  we need to re-insert in the correct index as all known external modules
-    //  at this point are actually deployed inside the mods folder and should
-    //  be in the items list!
-    const diff = (LOkeys.length) - (LOkeys.length - Array.from(LOCKED_MODULES).length);
-    if (items.find(item => item.id === known.id) === undefined) {
-      const pos = loadOrder[known.id]?.pos;
-      const idx = (pos !== undefined) ? (pos - diff) : (getNextPos(known.id) - diff);
-      items = [].concat(items.slice(0, idx) || [], known, items.slice(idx) || []);
-    }
-  });
+  }))
+    .sort((a, b) => (loadOrder[a.id]?.pos || getNextPos(a.id)) - (loadOrder[b.id]?.pos || getNextPos(b.id)))
+    .forEach(known => {
+      // If this a known external module and is NOT in the item list already
+      //  we need to re-insert in the correct index as all known external modules
+      //  at this point are actually deployed inside the mods folder and should
+      //  be in the items list!
+      const diff = (LOkeys.length) - (LOkeys.length - Array.from(LOCKED_MODULES).length);
+      if (items.find(item => item.id === known.id) === undefined) {
+        const pos = loadOrder[known.id]?.pos;
+        const idx = (pos !== undefined) ? (pos - diff) : (getNextPos(known.id) - diff);
+        items = [].concat(items.slice(0, idx) || [], known, items.slice(idx) || []);
+      }
+    });
 
   const unknownItems = [].concat(unknownExt)
     .map(key => ({
@@ -780,12 +781,19 @@ function main(context) {
   }
 
   context.once(() => {
-    context.api.onAsync('did-deploy', async (profileId, deployment) => {
-      return refreshCacheOnEvent(profileId);
-    });
+    context.api.onAsync('did-deploy', async (profileId, deployment) =>
+      refreshCacheOnEvent(profileId));
 
-    context.api.onAsync('did-purge', async (profileId) => {
-      return refreshCacheOnEvent(profileId);
+    context.api.onAsync('did-purge', async (profileId) =>
+      refreshCacheOnEvent(profileId));
+
+    context.api.onStateChange(['persistent', 'loadOrder'], () => {
+      const state = context.api.store.getState();
+      const profile = selectors.activeProfile(state);
+      if (profile?.gameId === GAME_ID) {
+        const lo = util.getSafe(state, ['persistent', 'loadOrder', profile.id]);
+        refreshGameParams(context, lo);
+      }
     });
 
     context.api.onAsync('added-files', async (profileId, files) => {
