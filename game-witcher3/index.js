@@ -108,7 +108,9 @@ function getElementValues(context, pattern) {
       try {
         const matchingValues = [];
         const mergeData = parseXmlString(xmlData);
-        mergeData.find(pattern).forEach(modElement => {
+        mergeData.find(pattern)
+        .filter((value, idx, self) => self.indexOf(idx) === value)
+        .forEach(modElement => {
           matchingValues.push(modElement.text());
         })
         return Promise.reduce(matchingValues, (accum, mod) => fs.statAsync(path.join(modsPath, mod))
