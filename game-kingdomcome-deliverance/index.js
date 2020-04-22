@@ -30,7 +30,8 @@ function prepareForModding(context, discovery) {
   return fs.ensureDirWritableAsync(path.join(discovery.path, 'Mods'), () => Promise.resolve())
     .then(() => getCurrentOrder(path.join(discovery.path, modsPath(), MODS_ORDER_FILENAME)))
     .catch(err => err.code === 'ENOENT' ? Promise.resolve([]) : Promise.reject(err))
-    .then(data => setNewOrder({ context, profile }, data.split('\n')))
+    .then(data => setNewOrder({ context, profile },
+      Array.isArray(data) ? data : data.split('\n')));
 }
 
 function transformId(input) {
