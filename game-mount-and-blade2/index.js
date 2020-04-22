@@ -191,7 +191,14 @@ async function refreshGameParams(context, loadOrder) {
     ? Object.keys(loadOrder)
         .filter(key => loadOrder[key].enabled)
         .sort((lhs, rhs) => loadOrder[lhs].pos - loadOrder[rhs].pos)
-        .map(key => Object.keys(CACHE).find(cacheElement => CACHE[cacheElement].vortexId === key))
+        .reduce((accum, key) => {
+          const cacheKeys = Object.keys(CACHE);
+          const entry = cacheKeys.find(cacheElement => CACHE[cacheElement].vortexId === key);
+          if (!!entry) {
+            accum.push(entry);
+          }
+          return accum;
+        }, [])
     : LAUNCHER_DATA.singlePlayerSubMods
         .filter(subMod => subMod.enabled)
         .map(subMod => subMod.subModId);
