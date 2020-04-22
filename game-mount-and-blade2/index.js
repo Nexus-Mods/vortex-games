@@ -133,7 +133,7 @@ async function getManagedIds(context) {
   const modState = util.getSafe(state, ['persistent', 'profiles', activeProfile.id, 'modState'], {});
   const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
   const enabledMods = Object.keys(modState)
-    .filter(key => modState[key].enabled)
+    .filter(key => !!mods[key] && modState[key].enabled)
     .map(key => mods[key]);
   
   const installationDir = selectors.installPathForGame(state, GAME_ID);
