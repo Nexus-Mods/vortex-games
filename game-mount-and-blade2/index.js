@@ -35,7 +35,7 @@ const ROOT_FOLDERS = new Set(['bin', 'data', 'gui', 'icons', 'modules',
   'music', 'shaders', 'sounds', 'xmlschemas']);
 
 const OFFICIAL_MODULES = new Set(['Native', 'CustomBattle', 'SandBoxCore', 'Sandbox', 'StoryMode']);
-const LOCKED_MODULES = new Set(['Native']);
+const LOCKED_MODULES = new Set([]);
 
 // Used for the "custom launcher" tools.
 //  gameMode: singleplayer or multiplayer
