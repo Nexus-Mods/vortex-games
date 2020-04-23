@@ -802,6 +802,9 @@ function main(context) {
     context.api.onAsync('did-purge', async (profileId) =>
       refreshCacheOnEvent(profileId));
 
+    context.api.events.on('profile-did-change', (profileId) =>
+      refreshCacheOnEvent(profileId));
+
     context.api.onAsync('added-files', async (profileId, files) => {
       const state = context.api.store.getState();
       const profile = selectors.profileById(state, profileId);
