@@ -170,11 +170,19 @@ async function getManagedIds(context) {
 }
 
 async function getXMLData(xmlFilePath) {
-  return fs.readFileAsync(xmlFilePath, { encoding: 'utf-8' })
+  return fs.readFileAsync(xmlFilePath)
     .then(data => {
-      data = util.deBOM(data);
+      let offset = 0;
+      let encoding = 'utf8';
+      if (data.readUInt16LE(0) === 0xFEFF) {
+        encoding = 'utf16le';
+        offset = 2;
+      } else if (data.compare(Buffer.from([0xEF, 0xBB, 0xBF]), 0, 3, 0, 3) === 0) {
+        offset = 3;
+      }
+      const xmlDoc = data.slice(offset).toString(encoding);
       try {
-        const xmlData = parseXmlString(data);
+        const xmlData = parseXmlString(xmlDoc);
         return Promise.resolve(xmlData);
       } catch (err) {
         return Promise.reject(new util.DataInvalid(err));
