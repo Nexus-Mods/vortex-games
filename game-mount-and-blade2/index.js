@@ -642,13 +642,11 @@ function infoComponent(context, props) {
                                       + 'the Vortex load order and go by what is shown in the launcher instead.', { ns: I18N_NAMESPACE })),
         React.createElement('li', {}, t('For Bannerlord, mods sorted further towards the bottom of the list will override mods further up (if they conflict). '
                                       + 'Note: Harmony patches may be the exception to this rule.', { ns: I18N_NAMESPACE })),
-        React.createElement('li', {}, t('The native module (“Native”) is loaded first by the game and is locked '
-                                      + 'in place.', { ns: I18N_NAMESPACE })),
         React.createElement('li', {}, t('Auto Sort uses the SubModule.xml files (the entries under <DependedModules>) to detect '
                                       + 'dependencies to sort by. ', { ns: I18N_NAMESPACE })),
         React.createElement('li', {}, t('If you cannot see your mod in this load order, Vortex may have been unable to find or parse its SubModule.xml file. '
                                       + 'Most - but not all mods - come with or need a SubModule.xml file.', { ns: I18N_NAMESPACE })),
-        React.createElement('li', {}, t('Hit the deploy button whenever you install and enable a new mod, or make changes to the load order.', { ns: I18N_NAMESPACE })),
+        React.createElement('li', {}, t('Hit the deploy button whenever you install and enable a new mod.', { ns: I18N_NAMESPACE })),
         React.createElement('li', {}, t('The game will not launch unless the game store (Steam, Epic, etc) is started beforehand. If you\'re getting the '
                                       + '"Unable to Initialize Steam API" error, restart Steam.', { ns: I18N_NAMESPACE })))));
 }
