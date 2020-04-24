@@ -130,6 +130,12 @@ async function getDeployedModData(context, subModuleFilePaths) {
 async function getManagedIds(context) {
   const state = context.api.store.getState();
   const activeProfile = selectors.activeProfile(state);
+  if (activeProfile === undefined) {
+    // This is a valid use case if the gamemode
+    //  has failed activation.
+    return Promise.resolve([]);
+  }
+
   const modState = util.getSafe(state, ['persistent', 'profiles', activeProfile.id, 'modState'], {});
   const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
   const enabledMods = Object.keys(modState)
@@ -378,9 +384,7 @@ async function prepareForModding(context, discovery) {
       return undefined;
     }
   };
-  const state = context.api.store.getState();
-  const activeProfile = selectors.activeProfile(state);
-  const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], undefined);
+
   // Check if we've already set the load order object for this profile
   //  and create it if we haven't.
   return getXMLData(LAUNCHER_DATA_PATH).then(launcherData => {
@@ -402,9 +406,7 @@ async function prepareForModding(context, discovery) {
         return accum;
       }, []);
     } catch (err) {
-      return (err.code === 'ENOENT')
-        ? Promise.reject(new util.NotFound('Launcher data cannot be found, please run the game launcher at least once.'))
-        : Promise.reject(err);
+      return Promise.reject(new util.DataInvalid(err));
     }
   }).then(async () => {
     const deployedSubModules = await getDeployedSubModPaths(context);
@@ -415,7 +417,23 @@ async function prepareForModding(context, discovery) {
     //  cyclic or missing dependencies.
     const modIds = Object.keys(CACHE);
     const sorted = tSort(modIds, true);
-  }).finally(() => refreshGameParams(context, loadOrder));
+  })
+  .catch(err => (err instanceof util.NotFound)
+    ? Promise.reject(new util.NotFound('Tale Worlds Launcher data is missing - '
+      + 'please run the game through the Tale Worlds launcher at least once '
+      + 'and try again.'))
+    : Promise.reject(err))
+  .finally(() => {
+    const state = context.api.store.getState();
+    const activeProfile = selectors.activeProfile(state);
+    if (activeProfile === undefined) {
+      // Valid use case when attempting to switch to
+      //  Bannerlord without any active profile.
+      refreshGameParams(context, {});
+    }
+    const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
+    refreshGameParams(context, loadOrder)
+  });
 }
 
 function isInvalid(subModId) {
