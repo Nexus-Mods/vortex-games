@@ -297,7 +297,7 @@ async function getAllMods(context) {
   const profile = selectors.activeProfile(state);
   const modState = util.getSafe(state, ['persistent', 'profiles', profile.id, 'modState'], {});
   const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
-  const enabledMods = Object.keys(modState).filter(key => modState[key].enabled);
+  const enabledMods = Object.keys(modState).filter(key => !!mods[key] && modState[key].enabled);
   const mergedModNames = await getMergedModNames(context);
   const manuallyAddedMods = await getManuallyAddedMods(context).filter(mod => !mergedModNames.includes(mod));
   const managedMods = await getManagedModNames(context, enabledMods.map(key => mods[key]));
