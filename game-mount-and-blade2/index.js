@@ -15,6 +15,7 @@ const LAUNCHER_DATA = {
   multiplayerSubMods: [],
 }
 
+let STORE_ID;
 let CACHE = {};
 
 // Nexus Mods id for the game.
@@ -247,10 +248,11 @@ async function getElementValue(subModuleFilePath, elementName) {
 }
 
 function findGame() {
-  return util.steam.findByAppId(STEAMAPP_ID.toString())
-    .then(game => game.gamePath)
-    .catch(err => util.steam.findByAppId(BETA_STEAMAPP_ID.toString())
-      .then(game => game.gamePath));
+  return util.GameStoreHelper.findByAppId(STEAMAPP_ID.toString())
+    .then(game =>{
+      STORE_ID = game.gameStoreId;
+      return Promise.resolve(game.gamePath);
+    });
 }
 
 function testRootMod(files, gameId) {
@@ -358,6 +360,9 @@ function ensureOfficialLauncher(context, discovery) {
 async function prepareForModding(context, discovery) {
   // Quickly ensure that the official Launcher is added.
   ensureOfficialLauncher(context, discovery);
+  const startSteam = () => findGame().then(() => (STORE_ID === 'steam')
+    ? util.GameStoreHelper.launchGameStore(context.api, STORE_ID, undefined, true)
+    : Promise.resolve());
 
   const idRegexp = /\<Id\>(.*?)\<\/Id\>/gm;
   const enabledRegexp = /\<IsSelected\>(.*?)\<\/IsSelected\>/gm;
@@ -378,7 +383,7 @@ async function prepareForModding(context, discovery) {
 
   // Check if we've already set the load order object for this profile
   //  and create it if we haven't.
-  return getXMLData(LAUNCHER_DATA_PATH).then(launcherData => {
+  return startSteam().then(() => getXMLData(LAUNCHER_DATA_PATH)).then(launcherData => {
     try {
       const singlePlayerMods = launcherData.get('//UserData/SingleplayerData/ModDatas').childNodes();
       const multiPlayerMods = launcherData.get('//UserData/MultiplayerData/ModDatas').childNodes();
@@ -423,7 +428,7 @@ async function prepareForModding(context, discovery) {
       refreshGameParams(context, {});
     }
     const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
-    refreshGameParams(context, loadOrder)
+    return refreshGameParams(context, loadOrder);
   });
 }
 
