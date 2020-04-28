@@ -65,6 +65,14 @@ async function walkAsync(dir, levelsDeep = 2) {
           entries.push(fullPath);
           return Promise.resolve();
         }
+      }).catch(err => {
+        // This is a valid use case, particularly if the file
+        //  is deployed by Vortex using symlinks, and the mod does
+        //  not exist within the staging folder.
+        log('error', 'MnB2: invalid symlink', err);
+        return (err.code === 'ENOENT')
+          ? Promise.resolve()
+          : Promise.reject(err);
       });
     });
   })
@@ -150,13 +158,26 @@ async function getManagedIds(context) {
   const enabledMods = Object.keys(modState)
     .filter(key => !!mods[key] && modState[key].enabled)
     .map(key => mods[key]);
-  
+
+  const invalidMods = [];
   const installationDir = selectors.installPathForGame(state, GAME_ID);
   return Promise.reduce(enabledMods, async (accum, entry) => {
     const modInstallationPath = path.join(installationDir, entry.installationPath);
-    const files = await walkAsync(modInstallationPath, 3);
+    let files;
+    try {
+      files = await walkAsync(modInstallationPath, 3);
+    } catch (err) {
+      // The mod must've been removed manually by the user from
+      //  the staging folder - good job buddy!
+      //  Going to log this, but otherwise allow it to proceed.
+      invalidMods.push(entry.id);
+      log('error', 'Mod is missing from staging folder', err);
+      return Promise.resolve(accum);
+    }
+
     const subModFile = files.find(file => path.basename(file).toLowerCase() === SUBMOD_FILE)
     if (subModFile === undefined) {
+      // No submod file - no LO
       return Promise.resolve(accum);
     }
 
@@ -182,6 +203,17 @@ async function getManagedIds(context) {
 
     return Promise.resolve(accum)
   }, [])
+  .tap((res) => {
+    if (invalidMods.length > 0) {
+      const errMessage = 'The following mods are inaccessible or are missing '
+        + 'in the staging folder:\n\n' + invalidMods.join('\n') + '\n\nPlease ensure '
+        + 'these mods and their content are not open in any other application '
+        + '(including the game itself). If the mod is missing entirely, please re-install it, '
+        + 'or remove it from your mods page.';
+      context.api.showErrorNotification('Invalid Mods in Staging', errMessage);
+    }
+    return Promise.resolve(res);
+  });
 }
 
 async function getXMLData(xmlFilePath) {
