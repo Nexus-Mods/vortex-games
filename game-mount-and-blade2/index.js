@@ -76,7 +76,16 @@ async function getDeployedSubModPaths(context) {
   const state = context.api.store.getState();
   const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
   const modulePath = path.join(discovery.path, MODULES);
-  const moduleFiles = await walkAsync(modulePath);
+  let moduleFiles;
+  try {
+    moduleFiles = await walkAsync(modulePath);
+  } catch (err) {
+    const errorMsg = (err.code === 'ENOENT')
+      ? 'Game files are missing - please re-install the game'
+      : err.message;
+    context.api.showErrorNotification(errorMsg, err);
+    return Promise.resolve([]);
+  }
   const subModules = moduleFiles.filter(file => path.basename(file).toLowerCase() === SUBMOD_FILE);
   return Promise.resolve(subModules);
 }
