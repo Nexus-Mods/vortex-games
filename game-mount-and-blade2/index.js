@@ -20,7 +20,6 @@ let CACHE = {};
 
 // Nexus Mods id for the game.
 const GAME_ID = 'mountandblade2bannerlord';
-const BETA_STEAMAPP_ID = 1059770;
 const STEAMAPP_ID = 261550;
 const MODULES = 'Modules';
 
