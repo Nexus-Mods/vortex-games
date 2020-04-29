@@ -400,9 +400,14 @@ function ensureOfficialLauncher(context, discovery) {
 async function prepareForModding(context, discovery) {
   // Quickly ensure that the official Launcher is added.
   ensureOfficialLauncher(context, discovery);
-  const startSteam = () => findGame().then(() => (STORE_ID === 'steam')
-    ? util.GameStoreHelper.launchGameStore(context.api, STORE_ID, undefined, true)
-    : Promise.resolve());
+
+  // If game store not found, location may be set manually - allow setup
+  //  function to continue.
+  const findStoreId = () => findGame().catch(err => Promise.resolve());
+  const startSteam = () => findStoreId()
+    .then(() => (STORE_ID === 'steam')
+      ? util.GameStoreHelper.launchGameStore(context.api, STORE_ID, undefined, true)
+      : Promise.resolve())
 
   const idRegexp = /\<Id\>(.*?)\<\/Id\>/gm;
   const enabledRegexp = /\<IsSelected\>(.*?)\<\/IsSelected\>/gm;
