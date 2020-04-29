@@ -87,7 +87,10 @@ async function getDeployedSubModPaths(context) {
   try {
     moduleFiles = await walkAsync(modulePath);
   } catch (err) {
-    const errorMsg = (err.code === 'ENOENT')
+    const isMissingOfficialModules = ((err.code === 'ENOENT')
+      && ([].concat([ MODULES ], Array.from(OFFICIAL_MODULES)))
+            .indexOf(path.basename(err.path)) !== -1);
+    const errorMsg = isMissingOfficialModules
       ? 'Game files are missing - please re-install the game'
       : err.message;
     context.api.showErrorNotification(errorMsg, err);
