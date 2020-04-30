@@ -437,7 +437,7 @@ function fluffyManagerTest(files, gameId) {
   const matcher = (file => FLUFFY_FILES.includes(file));
   const supported = ((gameId === GAME_ID) && (files.filter(matcher).length > 0));
 
-  return Promise.resolve({ supported, FLUFFY_FILES });
+  return Promise.resolve({ supported, requiredFiles: FLUFFY_FILES });
 }
 
 function fluffyDummyInstaller(context, files) {
