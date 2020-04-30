@@ -432,6 +432,22 @@ function invalidateFilePaths(wildCards, api, force = false) {
       .then(() => removeFilteredList()))
 }
 
+const FLUFFY_FILES = ['fmodex64.dll', 'Modmanager.exe'];
+function fluffyManagerTest(files, gameId) {
+  const matcher = (file => FLUFFY_FILES.includes(file));
+  const supported = ((gameId === GAME_ID) && (files.filter(matcher).length > 0));
+
+  return Promise.resolve({ supported, FLUFFY_FILES });
+}
+
+function fluffyDummyInstaller(context, files) {
+  context.api.showErrorNotification('Invalid Mod', 'It looks like you tried to install '
+    + 'Fluffy Manager 5000, which is a standalone mod manager and not a mod for Devil May Cry 5.\n\n'
+    + 'Fluffy Manager and Vortex cannot be used together and doing so will break your game. Please '
+    + 'use only one of these apps to manage mods for Devil May Cry 5.');
+  return Promise.reject(new util.ProcessCanceled('Invalid mod'));
+}
+
 function main(context) {
   context.requireExtension('quickbms-support');
   context.registerGame({
@@ -449,6 +465,7 @@ function main(context) {
     setup: (discovery) => prepareForModding(discovery, context.api),
   });
 
+  context.registerInstaller('dmc5fluffyquack', 20, fluffyManagerTest, (files) => fluffyDummyInstaller(context, files));
   context.registerInstaller('dmc5qbmsmod', 25, testSupportedContent, installQBMS);
 
   context.registerAction('mod-icons', 500, 'savegame', {}, 'Invalidate Paths', () => {

@@ -194,6 +194,22 @@ function getDiscoveryPath(api) {
   return discovery.path;
 }
 
+const FLUFFY_FILES = ['fmodex64.dll', 'Modmanager.exe'];
+function fluffyManagerTest(files, gameId) {
+  const matcher = (file => FLUFFY_FILES.includes(file));
+  const supported = ((gameId === GAME_ID) && (files.filter(matcher).length > 0));
+
+  return Promise.resolve({ supported, FLUFFY_FILES });
+}
+
+function fluffyDummyInstaller(context, files) {
+  context.api.showErrorNotification('Invalid Mod', 'It looks like you tried to install '
+    + 'Fluffy Manager 5000, which is a standalone mod manager and not a mod for Resident Evil 2.\n\n'
+    + 'Fluffy Manager and Vortex cannot be used together and doing so will break your game. Please '
+    + 'use only one of these apps to manage mods for Resident Evil 2.');
+  return Promise.reject(new util.ProcessCanceled('Invalid mod'));
+}
+
 function testSupportedContent(files, gameId) {
   // Make sure we're able to support this mod.
   const supported = (gameId === GAME_ID)
@@ -512,6 +528,7 @@ function main(context) {
   //  Users which have already downloaded mods need to be migrated.
   context.registerMigration(old => migrate010(context.api, old));
 
+  context.registerInstaller('re2fluffyquack', 20, fluffyManagerTest, (files) => fluffyDummyInstaller(context, files));
   context.registerInstaller('re2qbmsmod', 25, testSupportedContent, installContent);
 
   context.registerAction('mod-icons', 500, 'savegame', {}, 'Invalidate Paths', () => {
