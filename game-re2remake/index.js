@@ -46,6 +46,9 @@ const GAME_ID = 'residentevil22019';
 const STEAM_ID = 883710;
 const STEAM_ID_Z = 895950;
 
+const ACTIVITY_INVAL = 'invalidations';
+const ACTIVITY_REVAL = 'revalidations';
+
 const I18N_NAMESPACE = `game-${GAME_ID}`;
 
 function getFileListCache() {
@@ -528,7 +531,7 @@ function main(context) {
   //  Users which have already downloaded mods need to be migrated.
   context.registerMigration(old => migrate010(context.api, old));
 
-  context.registerInstaller('re2fluffyquack', 20, fluffyManagerTest, (files) => fluffyDummyInstaller(context, files));
+  //context.registerInstaller('re2fluffyquack', 20, fluffyManagerTest, (files) => fluffyDummyInstaller(context, files));
   context.registerInstaller('re2qbmsmod', 25, testSupportedContent, installContent);
 
   context.registerAction('mod-icons', 500, 'savegame', {}, 'Invalidate Paths', () => {
@@ -540,7 +543,7 @@ function main(context) {
     }
 
     const stagingFolder = selectors.installPathForGame(state, GAME_ID);
-    store.dispatch(actions.startActivity('mods', 'invalidations'));
+    store.dispatch(actions.startActivity('mods', ACTIVITY_INVAL));
     const installedMods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
     const mods = Object.keys(installedMods);
     return Promise.each(mods, mod => {
@@ -562,7 +565,7 @@ function main(context) {
           }
         });
     })
-    .finally(() => { store.dispatch(actions.stopActivity('mods', 'invalidations')); })
+    .finally(() => { store.dispatch(actions.stopActivity('mods', ACTIVITY_INVAL)); })
   }, () => {
     const state = context.api.store.getState();
     const gameMode = selectors.activeGameId(state);
@@ -593,13 +596,13 @@ function main(context) {
       const newDeployment = new Set(deployment[''].map(iter => iter.relPath));
       const removed = previousDeployment.filter(iter => !newDeployment.has(iter));
       if (removed.length > 0) {
-        store.dispatch(actions.startActivity('mods', 'revalidations'));
+        store.dispatch(actions.startActivity('mods', ACTIVITY_REVAL));
         const wildCards = removed.map(fileEntry =>
           fileEntry.replace(/\\/g, '/'));
 
         const hashes = wildCards.map(entry => murmur3.getMurmur3Hash(entry));
         return revalidateFilePaths(hashes, api)
-          .finally(() => { store.dispatch(actions.stopActivity('mods', 'invalidations')); });
+          .finally(() => { store.dispatch(actions.stopActivity('mods', ACTIVITY_REVAL)); });
       }
       return Promise.resolve();
     })
@@ -609,7 +612,7 @@ function main(context) {
         const store = context.api.store;
         const state = store.getState();
         const stagingFolder = selectors.installPathForGame(state, GAME_ID);
-        store.dispatch(actions.startActivity('mods', 'invalidations'));
+        store.dispatch(actions.startActivity('mods', ACTIVITY_INVAL));
         return Promise.each(mods, mod => {
           const modFolder = path.join(stagingFolder, mod.installationPath);
           return walkAsync(modFolder)
@@ -629,7 +632,7 @@ function main(context) {
             });
         })
         .finally(() => {
-          store.dispatch(actions.stopActivity('mods', 'invalidations'));
+          store.dispatch(actions.stopActivity('mods', ACTIVITY_INVAL));
           return Promise.resolve();
         })
       }
@@ -644,7 +647,7 @@ function main(context) {
       }
 
       const stagingFolder = selectors.installPathForGame(state, GAME_ID);
-      store.dispatch(actions.startActivity('mods', 'revalidations'));
+      store.dispatch(actions.startActivity('mods', ACTIVITY_REVAL));
       const installedMods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
       const mods = Object.keys(installedMods);
       return Promise.each(mods, mod => {
@@ -663,7 +666,7 @@ function main(context) {
           .catch(err => null);
       })
       .finally(() => {
-        store.dispatch(actions.stopActivity('mods', 'revalidations'));
+        store.dispatch(actions.stopActivity('mods', ACTIVITY_REVAL));
         return Promise.resolve();
       })
     });

@@ -43,6 +43,9 @@ const DLC_PAK_FILE = 're_dlc_000.pak';
 const GAME_ID = 'devilmaycry5';
 const STEAM_ID = 601150;
 
+const ACTIVITY_INVAL = 'invalidations';
+const ACTIVITY_REVAL = 'revalidations';
+
 function getFileListCache() {
   return (FILE_CACHE.length > 0)
     ? Promise.resolve(FILE_CACHE)
@@ -477,7 +480,7 @@ function main(context) {
     }
 
     const stagingFolder = selectors.installPathForGame(state, GAME_ID);
-    store.dispatch(actions.startActivity('mods', 'invalidations'));
+    store.dispatch(actions.startActivity('mods', ACTIVITY_INVAL));
     const installedMods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
     const mods = Object.keys(installedMods);
     return Promise.each(mods, mod => {
@@ -490,7 +493,7 @@ function main(context) {
             .then(() => store.dispatch(actions.setDeploymentNecessary(GAME_ID, true)));
         })
     })
-    .finally(() => { store.dispatch(actions.stopActivity('mods', 'invalidations')); })
+    .finally(() => { store.dispatch(actions.stopActivity('mods', ACTIVITY_INVAL)); })
   }, () => {
     const state = context.api.store.getState();
     const gameMode = selectors.activeGameId(state);
@@ -521,13 +524,13 @@ function main(context) {
       const newDeployment = new Set(deployment[''].map(iter => iter.relPath));
       const removed = previousDeployment.filter(iter => !newDeployment.has(iter));
       if (removed.length > 0) {
-        store.dispatch(actions.startActivity('mods', 'revalidations'));
+        store.dispatch(actions.startActivity('mods', ACTIVITY_REVAL));
         const wildCards = removed.map(fileEntry =>
           fileEntry.replace(/\\/g, '/'));
 
         const hashes = wildCards.map(entry => murmur3.getMurmur3Hash(entry));
         return revalidateFilePaths(hashes, api)
-          .finally(() => { store.dispatch(actions.stopActivity('mods', 'invalidations')); });
+          .finally(() => { store.dispatch(actions.stopActivity('mods', ACTIVITY_REVAL)); });
       }
       return Promise.resolve();
     });
@@ -537,7 +540,7 @@ function main(context) {
         const store = context.api.store;
         const state = store.getState();
         const stagingFolder = selectors.installPathForGame(state, GAME_ID);
-        store.dispatch(actions.startActivity('mods', 'invalidations'));
+        store.dispatch(actions.startActivity('mods', ACTIVITY_INVAL));
         return Promise.each(mods, mod => {
           const modFolder = path.join(stagingFolder, mod.installationPath);
           return walkAsync(modFolder)
@@ -548,7 +551,7 @@ function main(context) {
             })
         })
         .finally(() => {
-          store.dispatch(actions.stopActivity('mods', 'invalidations'));
+          store.dispatch(actions.stopActivity('mods', ACTIVITY_INVAL));
           return Promise.resolve();
         })
       }
@@ -564,7 +567,7 @@ function main(context) {
       }
 
       const stagingFolder = selectors.installPathForGame(state, GAME_ID);
-      store.dispatch(actions.startActivity('mods', 'revalidations'));
+      store.dispatch(actions.startActivity('mods', ACTIVITY_REVAL));
       const installedMods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
       const mods = Object.keys(installedMods);
       return Promise.each(mods, mod => {
@@ -583,7 +586,7 @@ function main(context) {
           .catch(err => null);
       })
       .finally(() => {
-        store.dispatch(actions.stopActivity('mods', 'revalidations'));
+        store.dispatch(actions.stopActivity('mods', ACTIVITY_REVAL));
         return Promise.resolve();
       })
     });
