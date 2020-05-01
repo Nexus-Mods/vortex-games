@@ -3,11 +3,14 @@ const Big = require('big.js');
 const Promise = require('bluebird');
 const { parseXmlString } = require('libxmljs');
 const path = require('path');
-const { fs, log, util } = require('vortex-api');
+const { fs, log, selectors, util } = require('vortex-api');
 const winapi = require('winapi-bindings');
+
+const semver = require('semver');
 
 const APPUNI = app || remote.app;
 const GAME_ID = 'x4foundations';
+const I18N_NAMESPACE = `game-${GAME_ID}`;
 const STEAM_ID = 392160;
 const GOG_ID = '1395669635';
 
@@ -156,6 +159,71 @@ function getDocumentsModPath() {
     : path.join(APPUNI.getPath('documents'), 'Egosoft', 'X4', 'extensions');
 }
 
+function migrate101(api, oldVersion) {
+  if (semver.gte(oldVersion, '1.0.1')) {
+    return Promise.resolve();
+  }
+
+  const state = api.store.getState();
+  const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
+  const modIds = Object.keys(mods);
+  if (modIds.length === 0) {
+    // No mods, no problem.
+    return Promise.resolve();
+  }
+
+  const reinstallNotif = (modIds) => new Promise((resolve) => {
+    const affectedMods = modIds.join('\n');
+    return api.sendNotification({
+      id: 'x4-reinstall',
+      type: 'warning',
+      message: api.translate('Mods for X4 need to be reinstalled',
+        { ns: I18N_NAMESPACE }),
+      noDismiss: true,
+      actions: [
+        {
+          title: 'Explain',
+          action: () => {
+            api.showDialog('info', 'X4: Foundations', {
+              text: 'Due to a bug in our X4 mod installer, some of your mods have been '
+                  + 'extracted into a potentially invalid mod folder, and may be causing your game '
+                  + 'to behave unexpectedly. To resolve this - please re-install the following mods:\n\n'
+                  + `${affectedMods}\n\n`
+                  + 'We are sorry for the inconvenience.',
+            }, [
+              { label: 'Close' },
+            ]);
+          },
+        },
+        {
+          title: 'Understood',
+          action: dismiss => {
+            dismiss();
+            resolve();
+          }
+        }
+      ],
+    });
+  });
+
+  const gameInstallationPath = selectors.installPathForGame(state, GAME_ID);
+  return Promise.reduce(modIds, (accum, modId) => {
+    const mod = mods[modId];
+    const modStagingPath = path.join(gameInstallationPath, mod.installationPath);
+    return fs.readdirAsync(modStagingPath)
+      .then(entries => {
+        const hasInvalidModName = entries.find(entry => entry.startsWith('ws_')) !== undefined;
+        if (hasInvalidModName) {
+          accum.push(modId);
+        }
+        return Promise.resolve(accum);
+      }).catch(err => Promise.resolve(accum))
+  }, [])
+  .then(invalidMods => (invalidMods.length > 0)
+    ? reinstallNotif(invalidMods)
+    : Promise.resolve());
+}
+
 async function prepareForModding(discovery) {
   try {
     const documentsPath = await getDocumentsModPath();
@@ -188,6 +256,8 @@ function main(context) {
   context.registerInstaller('x4foundations', 50, testSupportedContent, installContent);
   context.registerModType('x4-documents-modtype', 15, (gameId) => (gameId === GAME_ID),
     () => getDocumentsModPath(), () => Promise.resolve(false));
+
+  context.registerMigration(old => migrate101(context.api, old));
 
   return true;
 }
