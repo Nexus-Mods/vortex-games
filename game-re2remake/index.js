@@ -444,7 +444,8 @@ function invalidateFilePaths(wildCards, api, force = false) {
       + 'which were never supposed to be there.<br/><br/>'
       + 'To report this issue, please use the feedback system and make sure you attach Vortex\'s latest log file '
       + 'so we can review the missing files',
-      { isBBCode: true, allowReport: false })
+      { isBBCode: true, allowReport: false });
+    return Promise.resolve();
   };
 
   // For the invalidation logic to work correctly all
@@ -493,7 +494,9 @@ function invalidateFilePaths(wildCards, api, force = false) {
               .then(entries => cache.insertOffsets(stagingFolder, entries, arcKey))
           : Promise.reject(error));
     }))
-    .catch(util.NotFound, () => (force) ? null : reportIncompleteList())
+    .catch(util.NotFound, () => (force)
+      ? Promise.resolve()
+      : reportIncompleteList())
     .catch(util.UserCanceled, () => api.sendNotification({
       type: 'info',
       message: 'Invalidation canceled by user',

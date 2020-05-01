@@ -374,6 +374,7 @@ function invalidateFilePaths(wildCards, api, force = false) {
       + 'To report this issue, please use the feedback system and make sure you attach Vortex\'s latest log file '
       + 'so we can review the missing files',
       { isBBCode: true, allowReport: false })
+    return Promise.resolve();
   };
 
   // For the invalidation logic to work correctly all
