@@ -84,6 +84,19 @@ function installContent(files,
       return Promise.reject(
           new util.DataInvalid('invalid or unsupported content.xml'));
     }
+
+    if (outputPath.startsWith('ws_')) {
+      // The content file was pulled from Steam Workshop
+      //  and doesn't actually reflect the required mod name.
+      //  In this case we will just use whatever folder name the
+      //  mod uploader has chosen, unless the mod files are placed
+      //  directly at the root of the mod's archive, in which case we
+      //  have no choice but to use the workshop id.
+      outputPath = (contentPath.indexOf('content.xml') > 0)
+        ? path.basename(path.dirname(contentPath))
+        : outputPath;
+    }
+
     attrInstructions.push({
       type: 'attribute',
       key: 'customFileName',
