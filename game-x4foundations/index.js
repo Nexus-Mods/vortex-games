@@ -55,12 +55,57 @@ function testSupportedContent(files, gameId) {
   });
 }
 
-function installContent(files,
-                 destinationPath,
-                 gameId,
-                 progressDelegate) {
+async function parseIndexFiles(indexPath) {
+  return fs.readdirAsync(indexPath).then(files => {
+    const xmlFiles = files.filter(file => path.extname(file) === '.xml');
+    return Promise.reduce(xmlFiles, (modName, file) => {
+      return fs.readFileAsync(path.join(indexPath, file))
+      .then(data => {
+        if (modName !== '') {
+          return Promise.resolve(modName);
+        }
+
+        let parsed;
+        try {
+          parsed = parseXmlString(data);
+          const entries = parsed.find('//entry');
+          const entryValue = entries[0]?.attr('value').value();
+          if (entryValue !== undefined && entryValue.startsWith('extensions')) {
+            const segments = entryValue.split(path.sep);
+            return Promise.resolve(segments[1]);
+          }
+
+          return Promise.resolve(modName);
+        } catch (err) {
+          // This is arguably not an error as there is
+          //  no way for us to know whether the file is actually
+          //  valid for our usage.
+          log('debug', 'X4: parser error', err);
+          return Promise.resolve(modName);
+        }
+      })
+      .catch(err => {
+        log('debug', 'X4: cannot read xml file', err);
+        return Promise.resolve(modName)
+      })
+    }, '');
+  })
+  .catch(err => {
+    log('debug', 'X4: cannot read mod index path', err.code);
+    return Promise.resolve(modName)
+  });
+}
+
+async function installContent(files,
+                              destinationPath,
+                              gameId,
+                              progressDelegate) {
   const contentPath = files.find(file => path.basename(file) === 'content.xml');
   const basePath = path.dirname(contentPath);
+
+  const hasIndexFolder = await fs.statAsync(path.join(destinationPath, basePath, 'index'))
+                                  .then(() => Promise.resolve(true))
+                                  .catch(() => Promise.resolve(false));
 
   let outputPath = basePath;
 
@@ -82,23 +127,24 @@ function installContent(files,
       }
     }
 
-    outputPath = getAttr('id');
-    if (outputPath === undefined) {
+    const contentModId = getAttr('id');
+    if (contentModId === undefined) {
       return Promise.reject(
           new util.DataInvalid('invalid or unsupported content.xml'));
     }
 
-    if (outputPath.startsWith('ws_')) {
-      // The content file was pulled from Steam Workshop
-      //  and doesn't actually reflect the required mod name.
-      //  In this case we will just use whatever folder name the
-      //  mod uploader has chosen, unless the mod files are placed
-      //  directly at the root of the mod's archive, in which case we
-      //  have no choice but to use the workshop id.
-      outputPath = (contentPath.indexOf('content.xml') > 0)
-        ? path.basename(path.dirname(contentPath))
-        : outputPath;
-    }
+    // We prefer using the mod folder name included in the archive structure.
+    //  Alternatively, if the mod files are placed loosely at the archive's
+    //  root folder - there's no way for us to ascertain what the mod folder
+    //  is actually supposed to be named, in which case we _try_ to find this
+    //  using any xml files we can pinpoint in the mod's index files (if they exist)
+    //  As a final resort we just use the content.xml id attribute;
+    outputPath = (contentPath.indexOf('content.xml') > 0)
+      ? path.basename(path.dirname(contentPath))
+      : hasIndexFolder
+        ? parseIndexFiles(path.join(destinationPath, basePath, 'index'))
+            .then(res => !!res ? res : contentModId)
+        : contentModId; // Last resort.
 
     attrInstructions.push({
       type: 'attribute',
