@@ -151,26 +151,34 @@ async function installContent(files,
       key: 'customFileName',
       value: getAttr('name').trim(),
     });
-    attrInstructions.push({
-      type: 'attribute',
-      key: 'description',
-      value: getAttr('description'),
-    });
+
+    // Avoid setting the description for the mod on installation as the content
+    //  file is probably less... descriptive than what we have on the site.
+    // attrInstructions.push({
+    //   type: 'attribute',
+    //   key: 'description',
+    //   value: getAttr('description'),
+    // });
     attrInstructions.push({
       type: 'attribute',
       key: 'sticky',
       value: getAttr('save') === 'true',
     });
+
     attrInstructions.push({
       trype: 'attribute',
       key: 'author',
       value: getAttr('author'),
     });
-    attrInstructions.push({
-      type: 'attribute',
-      key: 'version',
-      value: getAttr('version'),
-    });
+    // Setting the version attribute manually during installation will
+    //  override the version we get from the website. This will cause the mod
+    //  to report that there is an update available even when the user is on
+    //  the latest version.
+    // attrInstructions.push({
+    //   type: 'attribute',
+    //   key: 'version',
+    //   value: getAttr('version'),
+    // });
     return Promise.resolve(attrInstructions);
   })
   .then(attrInstructions => {
