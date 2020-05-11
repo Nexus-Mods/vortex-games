@@ -87,7 +87,14 @@ function readModsFolder(modsFolder) {
           return Promise.resolve(accum);
         })
         .catch(err => Promise.resolve(accum))
-    }, []));
+    }, []))
+    .catch(err => {
+      if (err.code === 'ENOENT') {
+        log('warn', 'kingdom come mods directory missing');
+      } else {
+        log('error', 'failed to read kingdom come mods directory', err.message);
+      }
+    });
 }
 
 function listHasMod(modId, list) {
