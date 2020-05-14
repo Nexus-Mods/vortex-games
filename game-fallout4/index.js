@@ -47,7 +47,7 @@ let tools = [
     ],
     relative: true,
     exclusive: true,
-    isPrimary: true
+    defaultPrimary: true
   },
 ];
 
