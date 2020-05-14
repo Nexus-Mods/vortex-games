@@ -1,0 +1,232 @@
+const https = require('https');
+const path = require('path');
+const _ = require('lodash');
+const url = require('url');
+const semver = require('semver');
+const { actions, fs, util } = require('vortex-api');
+
+const RELEASE_CUTOFF = '0.6.4';
+const GITHUB_URL = 'https://api.github.com/repos/IDCs/WitcherScriptMerger';
+const MERGER_RELPATH = 'WitcherScriptMerger';
+const MERGE_INV = 'MergeInventory.xml';
+const MERGER_ID = 'W3ScriptMerger';
+
+function query(baseUrl, request) {
+  return new Promise((resolve, reject) => {
+      const relUrl = url.parse(`${baseUrl}/${request}`);
+      const options = {
+        ..._.pick(relUrl, ['port', 'hostname', 'path']),
+        headers: {
+          'User-Agent': 'Vortex',
+        },
+      };
+
+      https.get(options, res => {
+        res.setEncoding('utf-8');
+        const callsRemaining = parseInt(res.headers['x-ratelimit-remaining'], 10);
+        if ((res.statusCode === 403) && (callsRemaining === 0)) {
+          const resetDate = parseInt(res.headers['x-ratelimit-reset'], 10) * 1000;
+          log('info', 'GitHub rate limit exceeded',
+            { reset_at: (new Date(resetDate)).toString() });
+          return reject(new util.ProcessCanceled('GitHub rate limit exceeded'));
+        }
+
+        let output = '';
+        res
+          .on('data', data => output += data)
+          .on('end', () => {
+            try {
+              return resolve(JSON.parse(output));
+            } catch (parseErr) {
+              const message = output.split('\n')[0];
+              const error = new Error(message);
+              error.stack = stackErr.stack;
+              reject(error);
+            }
+          });
+      })
+        .on('error', err => {
+          reject(err);
+        })
+        .end();
+    });
+}
+
+function getRequestOptions(link) {
+  const relUrl = url.parse(link);
+  return ({
+    ..._.pick(relUrl, ['port', 'hostname', 'path']),
+    headers: {
+      'User-Agent': 'Vortex',
+    },
+  });
+}
+
+async function downloadConsent(context) {
+  const api = context.api;
+  return new Promise((resolve, reject) => {
+    api.showDialog('info', 'Witcher 3 Script Merger', {
+      bbcode: api.translate('Many Witcher 3 mods add or edit game scripts. When several mods ' 
+        + 'editing the same script are installed, these mods need to be merged using a tool ' 
+        + 'called Witcher 3 Script Merger. Vortex can attempt to download and configure the merger '
+        + 'for you automatically - before doing so - please ensure your account has full read/write permissions '
+        + 'to your game\'s directory. The script merger can be installed at a later point if you wish. [br][/br][br][/br]'
+        + '[url=https://wiki.nexusmods.com/index.php/Tool_Setup:_Witcher_3_Script_Merger]find out more about the script merger.[/url][br][/br][br][/br]' 
+        + 'Note: While script merging works well with the vast majority of mods, there is no guarantee for a satisfying outcome in every single case.', { ns: 'game-witcher3' }),
+    }, [
+      { label: 'Cancel', action: () => reject(new util.UserCanceled()) },
+      { label: 'Download', action: () => resolve() },
+    ]);
+  });
+}
+
+async function downloadScriptMerger(context) {
+  const state = context.api.store.getState();
+  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', 'witcher3'], undefined);
+  if (discovery?.path === undefined) {
+    return Promise.reject(new util.SetupError('Witcher3 is not discovered'));
+  }
+  let mostRecentVersion;
+  const currentlyInstalledVersion = discovery?.tools?.W3ScriptMerger?.mergerVersion;
+  return query(GITHUB_URL, 'releases')
+    .then((releases) => {
+      if (!Array.isArray(releases)) {
+        return Promise.reject(new util.DataInvalid('expected array of github releases'));
+      }
+      const current = releases
+        .filter(rel => semver.valid(rel.name) && semver.gte(rel.name, RELEASE_CUTOFF))
+        .sort((lhs, rhs) => semver.compare(lhs.name, rhs.name));
+
+      return Promise.resolve(current);
+    })
+    .then(async currentRelease => {
+      mostRecentVersion = currentRelease[0].name;
+      const fileName = currentRelease[0].assets[0].name;
+      const downloadLink = currentRelease[0].assets[0].browser_download_url;
+      if (!!currentlyInstalledVersion && semver.gte(currentlyInstalledVersion, currentRelease[0].name)) {
+        return Promise.reject(new util.ProcessCanceled('Already up to date'));
+      }
+
+      const download = async () => {
+        context.api.sendNotification({
+          type: 'info',
+          message: context.api.translate('Started download', { ns: 'game-witcher3' }),
+        });
+        const redirectionURL = await new Promise((resolve, reject) => {
+          const options = getRequestOptions(downloadLink);
+          https.request(options, res => {
+            return resolve(res.headers['location']);
+          })
+            .on('error', err => reject(err))
+            .end();
+        });
+        return new Promise((resolve, reject) => {
+          const options = getRequestOptions(redirectionURL);
+          https.request(options, res => {
+            res.setEncoding('binary');
+            const callsRemaining = parseInt(res.headers['x-ratelimit-remaining'], 10);
+            if ((res.statusCode === 403) && (callsRemaining === 0)) {
+              const resetDate = parseInt(res.headers['x-ratelimit-reset'], 10) * 1000;
+              log('info', 'GitHub rate limit exceeded',
+                { reset_at: (new Date(resetDate)).toString() });
+              return reject(new util.ProcessCanceled('GitHub rate limit exceeded'));
+            }
+  
+            let output = '';
+            res
+              .on('data', data => output += data)
+              .on('end', () => {
+                return fs.writeFileAsync(path.join(discovery.path, fileName), output, { encoding: 'binary' })
+                  .then(() => resolve(path.join(discovery.path, fileName)))
+                  .catch(err => reject(err));
+              });
+          })
+            .on('error', err => reject(err))
+            .end();
+        });
+      }
+
+      if (!!currentlyInstalledVersion) {
+        context.api.sendNotification({
+          id: 'merger-update',
+          type: 'info',
+          message: context.api.translate('Script Merger update available',
+            { ns: 'game-witcher3' }),
+          actions: [ { title: 'Download', action: dismiss => { download() } } ],
+        });
+
+        return Promise.reject(new util.ProcessCanceled('Update'));
+      }
+
+      return downloadConsent(context)
+        .then(() => download());
+    })
+    .then((archivePath) => extractScriptMerger(context, archivePath))
+    .then((mergerPath) => setUpMerger(context, mostRecentVersion, mergerPath))
+    .catch(err => {
+      if ((err instanceof util.ProcessCanceled) && ((err.message.startsWith('Already')) || (err.message.startsWith('Update')))) {
+        return Promise.resolve();
+      }
+      if (err instanceof util.UserCanceled) {
+        return Promise.resolve();
+      }
+      return Promise.reject(err);
+    });
+}
+
+async function extractScriptMerger(context, archivePath) {
+  const state = context.api.store.getState();
+  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', 'witcher3'], undefined);
+  const currentPath = discovery?.tools?.W3ScriptMerger?.path;
+  const destination = (!!currentPath)
+    ? path.dirname(currentPath)
+    : path.join(path.dirname(archivePath), MERGER_RELPATH);
+
+  const sZip = new util.SevenZip();
+  await sZip.extractFull(archivePath, destination);
+  context.api.sendNotification({
+    type: 'info',
+    message: context.api.translate('W3 Script Merger extracted successfully', { ns: 'game-witcher3' }),
+  });
+  return Promise.resolve(path.join(path.dirname(archivePath), MERGER_RELPATH));
+}
+
+async function migrateInventory(from, to) {
+  const fromPath = path.join(from, MERGE_INV);
+  const toPath = path.join(to, MERGE_INV)
+  return fs.statAsync(fromPath)
+    .then(() => fs.copyAsync(fromPath, toPath))
+    .catch(err => (err.code === 'ENOENT')
+      ? Promise.resolve()
+      : Promise.reject(err));
+}
+
+async function setUpMerger(context, mergerVersion, newPath) {
+  const state = context.api.store.getState();
+  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', 'witcher3'], undefined);
+  const currentDetails = discovery?.tools?.W3ScriptMerger;
+  if (!!currentDetails) {
+    await migrateInventory(path.dirname(currentDetails.path), newPath)
+  }
+
+  const newToolDetails = (!!currentDetails) 
+    ? { ...currentDetails, mergerVersion }
+    : {
+      id: MERGER_ID,
+      name: 'W3 Script Merger',
+      logo: 'WitcherScriptMerger.jpg',
+      executable: () => 'WitcherScriptMerger.exe',
+      requiredFiles: [
+        'WitcherScriptMerger.exe',
+      ],
+      mergerVersion,
+    };
+  newToolDetails.path = path.join(newPath, 'WitcherScriptMerger.exe');
+  newToolDetails.workingDirectory = newPath;
+  context.api.store.dispatch(actions.addDiscoveredTool('witcher3', MERGER_ID, newToolDetails, true));
+  return Promise.resolve();
+}
+
+module.exports = {
+  default: downloadScriptMerger,
+};

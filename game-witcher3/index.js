@@ -5,6 +5,9 @@ const { actions, fs, FlexLayout, selectors, util } = require('vortex-api');
 const { parseXmlString } = require('libxmljs');
 const { app, remote } = require('electron');
 
+const merger = require('./scriptmerger');
+const menuMod = require('./menumod');
+
 const React = require('react');
 const BS = require('react-bootstrap');
 
@@ -15,8 +18,13 @@ const appUni = app || remote.app;
 const GAME_ID = 'witcher3';
 const SCRIPT_MERGER_ID = 'W3ScriptMerger';
 const I18N_NAMESPACE = 'game-witcher3';
-const MERGE_INV_MANIFEST = 'MergeInventory.xml';1
+const MERGE_INV_MANIFEST = 'MergeInventory.xml';
 const LOAD_ORDER_FILENAME = 'mods.settings';
+const INPUT_XML_FILENAME = 'input.xml';
+const PART_SUFFIX = '.part.txt';
+
+const CONFIG_MATRIX_REL_PATH = path.join('bin', 'config', 'r4game', 'user_config_matrix', 'pc');
+
 let _INI_STRUCT = {};
 
 const tools = [
@@ -131,10 +139,6 @@ function getMergedModNames(context) {
   return getElementValues(context, '//MergedModName');
 }
 
-function getIncludedModNames(context) {
-  return getElementValues(context, '//IncludedMod');
-}
-
 function findGame() {
   try {
     const instPath = winapi.RegGetValue(
@@ -218,7 +222,69 @@ function installContent(files,
   }));
 }
 
+function installMenuMod(files,
+                        destinationPath,
+                        gameId,
+                        progressDelegate) {
+  // Input specific files need to be installed outside the mods folder while
+  //  all other mod files are to be installed as usual.
+  const filtered = files.filter(file => path.extname(path.basename(file)) !== '');
+  const inputFiles = filtered.filter(file => file.indexOf(CONFIG_MATRIX_REL_PATH) !== -1);
+  const otherFiles = filtered.filter(file => !inputFiles.includes(file));
+  const inputFileDestination = CONFIG_MATRIX_REL_PATH;
+
+  // Get the mod's root folder.
+  const idx = inputFiles[0].split(path.sep).indexOf('bin');
+
+  // We're hoping that the mod author has included the mod name in the archive's
+  //  structure - if he didn't - we're going to use the destination path instead.
+  const modRelPath = (idx > 0)
+    ? path.join('Mods', inputFiles[0].split(path.sep)[idx - 1])
+    : path.join('Mods', 'mod' + destinationPath);
+
+  const trimmedFiles = otherFiles.map(file => ({
+    source: file,
+    relPath: file.split(path.sep)
+                 .slice(idx)
+                 .join(path.sep),
+  }));
+
+  const toCopyInstruction = (source, destination) => ({
+    type: 'copy',
+    source,
+    destination,
+  });
+
+  const inputInstructions = inputFiles.map(file =>
+    toCopyInstruction(file, path.join(inputFileDestination, path.basename(file))));
+
+  const otherInstructions = trimmedFiles.map(file => toCopyInstruction(file.source,
+    path.join(modRelPath, file.relPath)));
+
+  const instructions = [].concat(inputInstructions, otherInstructions);
+  return Promise.resolve({ instructions });
+}
+
+function testMenuModRoot(instructions, gameId = undefined) {
+  const predicate = (instr) => (!!gameId)
+    ? ((GAME_ID === gameId) && (instr.indexOf(CONFIG_MATRIX_REL_PATH) !== -1))
+    : ((instr.type === 'copy') && (instr.destination.indexOf(CONFIG_MATRIX_REL_PATH) !== -1))
+
+  return (!!gameId)
+    ? Promise.resolve({
+        supported: instructions.find(predicate) !== undefined,
+        requiredFiles: []
+      })
+    : Promise.resolve(instructions.find(predicate) !== undefined);
+}
+
 function testTL(instructions) {
+  const menuModFiles = instructions.filter(instr => !!instr.destination
+    && instr.destination.indexOf(CONFIG_MATRIX_REL_PATH) !== -1);
+  if (menuModFiles.length > 0) {
+    return Promise.resolve(false);
+  }
+
   return Promise.resolve(instructions.find(
     instruction => !!instruction.destination && instruction.destination.toLowerCase().startsWith('mods' + path.sep)
   ) !== undefined);
@@ -268,8 +334,9 @@ function prepareForModding(context, discovery) {
       : missingScriptMerger();
   };
 
-  return fs.ensureDirAsync(path.join(discovery.path, 'Mods'))
-    .tap(() => findScriptMerger());
+  return Promise.all([fs.ensureDirWritableAsync(path.join(discovery.path, 'Mods')),
+    fs.ensureDirWritableAsync(path.join(discovery.path, 'WitcherScriptMerger'))])
+      .then(() => merger.default(context));
 }
 
 function getScriptMergerTool(api) {
@@ -293,11 +360,17 @@ function runScriptMerger(api) {
 }
 
 async function getAllMods(context) {
+  // Mod types we don't want to display in the LO page
+  const invalidModTypes = ['witcher3menumoddocuments'];
   const state = context.api.store.getState();
   const profile = selectors.activeProfile(state);
   const modState = util.getSafe(state, ['persistent', 'profiles', profile.id, 'modState'], {});
   const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
-  const enabledMods = Object.keys(modState).filter(key => !!mods[key] && modState[key].enabled);
+
+  // Only select mods which are enabled, and are not a menu mod.
+  const enabledMods = Object.keys(modState).filter(key =>
+    (!!mods[key] && modState[key].enabled && !invalidModTypes.includes(mods[key].type)));
+
   const mergedModNames = await getMergedModNames(context);
   const manuallyAddedMods = await getManuallyAddedMods(context).filter(mod => !mergedModNames.includes(mod));
   const managedMods = await getManagedModNames(context, enabledMods.map(key => mods[key]));
@@ -456,6 +529,92 @@ function queryScriptMerge(context, reason) {
   }
 }
 
+function canMerge(game, gameDiscovery) {
+  return ({
+    baseFiles: () => [
+      {
+        in: path.join(gameDiscovery.path, CONFIG_MATRIX_REL_PATH, INPUT_XML_FILENAME),
+        out: path.join(CONFIG_MATRIX_REL_PATH, INPUT_XML_FILENAME),
+      },
+    ],
+    filter: filePath => filePath.indexOf(INPUT_XML_FILENAME) !== -1,
+  });
+}
+
+function readInputFile(context, mergeDir) {
+  const state = context.api.store.getState();
+  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID]);
+  const gameInputFilepath = path.join(discovery.path, CONFIG_MATRIX_REL_PATH, INPUT_XML_FILENAME);
+  return (!!discovery?.path)
+    ? fs.readFileAsync(path.join(mergeDir, CONFIG_MATRIX_REL_PATH, INPUT_XML_FILENAME))
+      .catch(err => (err.code === 'ENOENT')
+        ? fs.readFileAsync(gameInputFilepath)
+        : Promise.reject(err))
+    : Promise.reject({ code: 'ENOENT', message: 'Game is not discovered' })
+}
+
+function merge(filePath, mergeDir, context) {
+  let modData;
+  return fs.readFileAsync(filePath)
+    .then(xmlData => {
+      try {
+        modData = parseXmlString(xmlData, { ignore_enc: true, noblanks: true });
+        return Promise.resolve(modData);
+      } catch (err) {
+        return Promise.reject(err);
+      }
+    })
+    .then(() => readInputFile(context, mergeDir))
+    .then(mergedData => parseXmlString(mergedData, { ignore_enc: true, noblanks: true }))
+    .then(gameIndexFile => {
+      const modVars = modData.find('//Var');
+      const gameVars = gameIndexFile.find('//Var');
+
+      modVars.forEach(modVar => {
+        const matcher = (gameVar) => {
+          let gameVarParent;
+          try {
+            gameVarParent = gameVar.parent().parent();
+          } catch (err) {
+            // This game variable must've been replaced in a previous
+            //  iteration.
+            return false;
+          }
+
+          const modVarParent = modVar.parent().parent();
+          return ((gameVarParent.attr('id').value() === modVarParent.attr('id').value())
+            && (gameVar.attr('id').value() === modVar.attr('id').value()));
+        }
+
+        const existingVar = gameVars.find(matcher);
+        if (existingVar) {
+          existingVar.replace(modVar.clone());
+        } else {
+          const parentGroup = modVar.parent().parent();
+          const groupId = parentGroup.attr('id').value();
+          const matchingIndexGroup = gameIndexFile.find('//Group')
+            .filter(group => group.attr('id').value() === groupId);
+          if (matchingIndexGroup.length > 1) {
+            // Something's wrong with the file - back off.
+            const err = new util.DataInvalid('Duplicate group entries found in game input.xml'
+              + `\n\n${path.join(mergeDir, INPUT_XML_FILENAME)}\n\n`
+              + 'file - please fix this manually before attempting to re-install the mod');
+            return Promise.reject(err);
+          } else if (matchingIndexGroup.length === 0) {
+            // Need to add the group AND the var.
+            const userConfig = gameIndexFile.get('//UserConfig');
+            userConfig.addChild(parentGroup.clone());
+          } else {
+            matchingIndexGroup[0].child(0).addChild(modVar.clone());
+          }
+        }
+      });
+
+      return fs.writeFileAsync(path.join(mergeDir, CONFIG_MATRIX_REL_PATH, INPUT_XML_FILENAME),
+        gameIndexFile, { encoding: 'utf16le' });
+    });
+}
+
 function main(context) {
   context.registerGame({
     id: GAME_ID,
@@ -490,11 +649,20 @@ function main(context) {
 
   context.registerInstaller('witcher3tl', 25, testSupportedTL, installTL);
   context.registerInstaller('witcher3content', 50, testSupportedContent, installContent);
+  context.registerInstaller('witcher3menumodroot', 20, testMenuModRoot, installMenuMod);
+
   context.registerModType('witcher3tl', 25, gameId => gameId === 'witcher3', getTLPath, testTL);
   context.registerModType('witcher3dlc', 25, gameId => gameId === 'witcher3', getDLCPath, testDLC);
+  context.registerModType('witcher3menumodroot', 20, gameId => gameId === 'witcher3', getTLPath, testMenuModRoot);
+  context.registerModType('witcher3menumoddocuments', 60, gameId => gameId === 'witcher3',
+    (game) => path.join(appUni.getPath('documents'), 'The Witcher 3'), () => Promise.resolve(false));
+
+  context.registerMerge(canMerge,
+    (filePath, mergeDir) => merge(filePath, mergeDir, context), 'witcher3menumodroot');
 
   let refreshFunc;
   let previousLO = {};
+  const invalidModTypes = ['witcher3menumoddocuments'];
   context.registerLoadOrderPage({
     gameId: GAME_ID,
     createInfoPanel: (props) => {
@@ -502,6 +670,7 @@ function main(context) {
       return infoComponent(context, props);
     },
     gameArtURL: `${__dirname}/gameart.jpg`,
+    filter: (mods) => mods.filter(mod => !invalidModTypes.includes(mod.type)),
     preSort: (items, direction) => preSort(context, items, direction),
     callback: (loadOrder) => {
       if (loadOrder === previousLO) {
@@ -520,6 +689,42 @@ function main(context) {
 
   let prevDeployment = [];
   context.once(() => {
+    context.api.onAsync('will-deploy', async (profileId, deployment) => {
+      const state = context.api.store.getState();
+      const activeProfile = selectors.activeProfile(state);
+      const deployProfile = selectors.profileById(state, profileId);
+      if ((deployProfile?.id !== activeProfile?.id)
+        || (activeProfile?.gameId !== GAME_ID)) {
+        // not the same profile or incorrect game mode
+        return Promise.resolve();
+      }
+
+      const stagingFolder = selectors.installPathForGame(state, GAME_ID);
+      let docFiles = [];
+      await require('turbowalk').default(stagingFolder, entries => {
+        const relevantEntries = entries.filter(entry => entry.filePath.endsWith(PART_SUFFIX))
+                                       .map(entry => entry.filePath);
+        docFiles = [].concat(docFiles, relevantEntries);
+      });
+
+      return new Promise(resolve => menuMod.default(context.api, activeProfile, docFiles)
+        .then(modId => {
+          if (modId === undefined) {
+            return resolve();
+          }
+
+          if ((util.getSafe(state, ['mods', modId], undefined) !== undefined)
+            && !util.getSafe(activeProfile, ['modState', modId, 'enabled'], true)) {
+            // if the data mod is known but disabled, don't update it and most importantly:
+            //  don't activate it after deployment, that's probably not what the user wants
+            return resolve();
+          }
+
+          context.api.store.dispatch(actions.setModEnabled(activeProfile.id, modId, true));
+          return resolve();
+        }));
+    });
+
     context.api.onAsync('did-deploy', (profileId, deployment) => {
       const state = context.api.store.getState();
       const activeProfile = selectors.activeProfile(state);
@@ -536,6 +741,11 @@ function main(context) {
             + 'present, or if existing merges have become unecessary. Please also note that any load order changes '
             + 'may affect the order in which your conflicting mods are meant to be merged, and may require you to '
             + 'remove the existing merge and re-apply it.');
+        }
+
+        if (deployment['witcher3menumoddocuments'].length === 0) {
+          // If there are no menu mods deployed - remove the mod.
+          //menuMod.removeMod(context.api, profile);
         }
 
         const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
@@ -556,6 +766,7 @@ function main(context) {
       const state = context.api.store.getState();
       const profile = selectors.activeProfile(state);
       if (!!profile && (profile.gameId === GAME_ID)) {
+        //menuMod.removeMod(context.api, profile);
         const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], undefined);
         return getManuallyAddedMods(context).then((manuallyAdded) => {
           if (manuallyAdded.length > 0) {
