@@ -103,9 +103,9 @@ async function downloadScriptMerger(context) {
       mostRecentVersion = currentRelease[0].name;
       const fileName = currentRelease[0].assets[0].name;
       const downloadLink = currentRelease[0].assets[0].browser_download_url;
-      // if (!!currentlyInstalledVersion && semver.gte(currentlyInstalledVersion, currentRelease[0].name)) {
-      //   return Promise.reject(new util.ProcessCanceled('Already up to date'));
-      // }
+      if (!!currentlyInstalledVersion && semver.gte(currentlyInstalledVersion, currentRelease[0].name)) {
+        return Promise.reject(new util.ProcessCanceled('Already up to date'));
+      }
 
       const downloadNotifId = 'download-script-merger-notif';
       const downloadNotif = {
