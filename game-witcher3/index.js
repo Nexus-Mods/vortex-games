@@ -308,10 +308,8 @@ function prepareForModding(context, discovery) {
         title: 'More',
         action: () => {
           api.showDialog('info', 'Witcher 3', {
-            bbcode: api.translate('Many Witcher 3 mods add or edit game scripts. When several mods ' 
-              + 'editing the same script are installed, these mods need to be merged using a tool ' 
-              + 'called Witcher 3 Script Merger. You can download the merger right now and '
-              + '[url=https://wiki.nexusmods.com/index.php/Tool_Setup:_Witcher_3_Script_Merger]find out more about how to configure it as a tool for use in Vortex.[/url][br][/br][br][/br]' 
+            bbcode: api.translate('Vortex was unable to install the script merger automatically. Unfortunately the tool needs to be downloaded and configured manually. '
+              + '[url=https://wiki.nexusmods.com/index.php/Tool_Setup:_Witcher_3_Script_Merger]find out more about how to configure it as a tool for use in Vortex.[/url][br][/br]'
               + 'Note: While script merging works well with the vast majority of mods, there is no guarantee for a satisfying outcome in every single case.', { ns: I18N_NAMESPACE }),
           }, [
             { label: 'Cancel', action: () => {
@@ -326,23 +324,26 @@ function prepareForModding(context, discovery) {
     ],
   });
 
-  const scriptMergerPath = util.getSafe(discovery, ['tools', SCRIPT_MERGER_ID, 'path'], undefined);
+  const scriptMergerPath = util.getSafe(discovery, ['tools', SCRIPT_MERGER_ID, 'path'],
+    path.join(discovery.path, 'WitcherScriptMerger', 'WitcherScriptMerger.exe'));
+
   const findScriptMerger = () => {
-    return (scriptMergerPath !== undefined)
-      ? fs.statAsync(scriptMergerPath)
-          .catch(() => missingScriptMerger())
-      : missingScriptMerger();
+    return fs.statAsync(scriptMergerPath)
+      .catch(() => missingScriptMerger())
   };
 
   return Promise.all([fs.ensureDirWritableAsync(path.join(discovery.path, 'Mods')),
-    fs.ensureDirWritableAsync(path.join(discovery.path, 'WitcherScriptMerger'))])
-      .then(() => merger.default(context));
+    fs.ensureDirWritableAsync(path.dirname(scriptMergerPath))])
+      .then(() => merger.default(context)
+        .catch(err => (err instanceof util.UserCanceled)
+          ? Promise.resolve()
+          : findScriptMerger()));
 }
 
 function getScriptMergerTool(api) {
   const state = api.store.getState();
   const scriptMerger = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID, 'tools', SCRIPT_MERGER_ID], undefined);
-  if (!!scriptMerger && !!scriptMerger.path) {
+  if (!!scriptMerger?.path) {
     return scriptMerger;
   }
 

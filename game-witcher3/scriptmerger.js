@@ -103,14 +103,20 @@ async function downloadScriptMerger(context) {
       mostRecentVersion = currentRelease[0].name;
       const fileName = currentRelease[0].assets[0].name;
       const downloadLink = currentRelease[0].assets[0].browser_download_url;
-      if (!!currentlyInstalledVersion && semver.gte(currentlyInstalledVersion, currentRelease[0].name)) {
-        return Promise.reject(new util.ProcessCanceled('Already up to date'));
-      }
+      // if (!!currentlyInstalledVersion && semver.gte(currentlyInstalledVersion, currentRelease[0].name)) {
+      //   return Promise.reject(new util.ProcessCanceled('Already up to date'));
+      // }
 
+      const downloadNotifId = 'download-script-merger-notif';
+      const downloadNotif = {
+        id: downloadNotifId,
+        type: 'activity',
+        title: 'Downloading Script Merger',
+      }
       const download = async () => {
         context.api.sendNotification({
-          type: 'info',
-          message: context.api.translate('Started download', { ns: 'game-witcher3' }),
+          ...downloadNotif,
+          progress: 0,
         });
         const redirectionURL = await new Promise((resolve, reject) => {
           const options = getRequestOptions(downloadLink);
@@ -124,6 +130,7 @@ async function downloadScriptMerger(context) {
           const options = getRequestOptions(redirectionURL);
           https.request(options, res => {
             res.setEncoding('binary');
+            const contentLength = parseInt(res.headers['content-length'], 10);
             const callsRemaining = parseInt(res.headers['x-ratelimit-remaining'], 10);
             if ((res.statusCode === 403) && (callsRemaining === 0)) {
               const resetDate = parseInt(res.headers['x-ratelimit-reset'], 10) * 1000;
@@ -134,8 +141,24 @@ async function downloadScriptMerger(context) {
   
             let output = '';
             res
-              .on('data', data => output += data)
+              .on('data', data => {
+                output += data
+                if (output.length % 500 === 0) {
+                  // Updating the notification is EXTREMELY expensive.
+                  //  the length % 500 === 0 line ensures this is not done too
+                  //  often.
+                  context.api.sendNotification({
+                    ...downloadNotif,
+                    progress: (output.length / contentLength) * 100,
+                  });
+                }
+              })
               .on('end', () => {
+                context.api.sendNotification({
+                  ...downloadNotif,
+                  progress: 100,
+                });
+                context.api.dismissNotification(downloadNotifId);
                 return fs.writeFileAsync(path.join(discovery.path, fileName), output, { encoding: 'binary' })
                   .then(() => resolve(path.join(discovery.path, fileName)))
                   .catch(err => reject(err));
@@ -146,13 +169,19 @@ async function downloadScriptMerger(context) {
         });
       }
 
-      if (!!currentlyInstalledVersion) {
+      if (!!currentlyInstalledVersion || ((currentlyInstalledVersion === undefined) && !!discovery?.tools?.W3ScriptMerger)) {
         context.api.sendNotification({
           id: 'merger-update',
-          type: 'info',
-          message: context.api.translate('Script Merger update available',
+          type: 'warning',
+          noDismiss: true,
+          message: context.api.translate('Important Script Merger update available',
             { ns: 'game-witcher3' }),
-          actions: [ { title: 'Download', action: dismiss => { download() } } ],
+          actions: [ { title: 'Download', action: dismiss => {
+            download()
+              .then((archivePath) => extractScriptMerger(context, archivePath))
+              .then((mergerPath) => setUpMerger(context, mostRecentVersion, mergerPath))
+            dismiss();
+          } } ],
         });
 
         return Promise.reject(new util.ProcessCanceled('Update'));
@@ -188,7 +217,7 @@ async function extractScriptMerger(context, archivePath) {
     type: 'info',
     message: context.api.translate('W3 Script Merger extracted successfully', { ns: 'game-witcher3' }),
   });
-  return Promise.resolve(path.join(path.dirname(archivePath), MERGER_RELPATH));
+  return Promise.resolve(destination);
 }
 
 async function migrateInventory(from, to) {
