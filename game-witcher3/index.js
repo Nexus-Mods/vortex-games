@@ -114,14 +114,19 @@ function getElementValues(context, pattern) {
   return fs.readFileAsync(path.join(path.dirname(scriptMerger.path), MERGE_INV_MANIFEST))
     .then(xmlData => {
       try {
-        const matchingValues = [];
         const mergeData = parseXmlString(xmlData);
-        mergeData.find(pattern)
-        .filter((value, idx, self) => self.indexOf(idx) === value)
-        .forEach(modElement => {
-          matchingValues.push(modElement.text());
-        })
-        return Promise.reduce(matchingValues, (accum, mod) => fs.statAsync(path.join(modsPath, mod))
+        const elements = mergeData.find(pattern)
+          .map(modEntry => {
+            try {
+              return modEntry.text()
+            } catch (err) {
+              return undefined;
+            }
+          })
+          .filter(entry => !!entry);
+        const unique = new Set(elements);
+
+        return Promise.reduce(Array.from(unique), (accum, mod) => fs.statAsync(path.join(modsPath, mod))
           .then(() => {
             accum.push(mod);
             return accum;
