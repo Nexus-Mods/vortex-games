@@ -716,57 +716,6 @@ function main(context) {
 
   let prevDeployment = [];
   context.once(() => {
-    context.api.onAsync('will-deploy', async (profileId, deployment) => {
-      const state = context.api.store.getState();
-      const activeProfile = selectors.activeProfile(state);
-      const deployProfile = selectors.profileById(state, profileId);
-      if ((deployProfile?.id !== activeProfile?.id)
-        || (activeProfile?.gameId !== GAME_ID)) {
-        // not the same profile or incorrect game mode
-        return Promise.resolve();
-      }
-
-      const stagingFolder = selectors.installPathForGame(state, GAME_ID);
-      const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
-      const modState = util.getSafe(activeProfile, ['modState'], {});
-      const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
-      let nextAvailableId = Object.keys(loadOrder).length;
-      const getNextId = () => {
-        return nextAvailableId++;
-      }
-
-      const invalidModTypes = ['witcher3menumoddocuments'];
-      const enabledMods = Object.keys(mods)
-        .filter(key => !!modState[key]?.enabled && !invalidModTypes.includes(mods[key].type))
-        .sort((lhs, rhs) => (loadOrder[lhs]?.pos || getNextId()) - (loadOrder[rhs]?.pos || getNextId()))
-        .map(key => mods[key]);
-
-      return Promise.reduce(enabledMods, async (accum, mod) => {
-        await require('turbowalk').default(path.join(stagingFolder, mod.installationPath), entries => {
-          const relevantEntries = entries.filter(entry => entry.filePath.endsWith(PART_SUFFIX))
-                                         .map(entry => entry.filePath);
-          accum = [].concat(accum, relevantEntries);
-        });
-        return Promise.resolve(accum);
-      }, [])
-      .then(docFiles => new Promise(resolve => menuMod.default(context.api, activeProfile, docFiles)
-        .then(modId => {
-          if (modId === undefined) {
-            return resolve();
-          }
-
-          if ((util.getSafe(state, ['mods', modId], undefined) !== undefined)
-            && !util.getSafe(activeProfile, ['modState', modId, 'enabled'], true)) {
-            // if the data mod is known but disabled, don't update it and most importantly:
-            //  don't activate it after deployment, that's probably not what the user wants
-            return resolve();
-          }
-
-          context.api.store.dispatch(actions.setModEnabled(activeProfile.id, modId, true));
-          return resolve();
-        })));
-    });
-
     context.api.onAsync('did-deploy', (profileId, deployment) => {
       const state = context.api.store.getState();
       const activeProfile = selectors.activeProfile(state);
@@ -784,16 +733,51 @@ function main(context) {
             + 'may affect the order in which your conflicting mods are meant to be merged, and may require you to '
             + 'remove the existing merge and re-apply it.');
         }
-
+        const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
         const docFiles = deployment['witcher3menumodroot'].filter(file => file.relPath.endsWith(PART_SUFFIX));
-        if (docFiles.length === 0) {
-          // If there are no menu mods deployed - remove the mod.
-          menuMod.removeMod(context.api, activeProfile);
+        const menuModPromise = () => {
+          if (docFiles.length === 0) {
+            // If there are no menu mods deployed - remove the mod.
+            return menuMod.removeMod(context.api, activeProfile);
+          } else {
+            const stagingFolder = selectors.installPathForGame(state, GAME_ID);
+            const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
+            const modState = util.getSafe(activeProfile, ['modState'], {});
+            let nextAvailableId = Object.keys(loadOrder).length;
+            const getNextId = () => {
+              return nextAvailableId++;
+            }
+
+            const invalidModTypes = ['witcher3menumoddocuments'];
+            const enabledMods = Object.keys(mods)
+              .filter(key => !!modState[key]?.enabled && !invalidModTypes.includes(mods[key].type))
+              .sort((lhs, rhs) => (loadOrder[lhs]?.pos || getNextId()) - (loadOrder[rhs]?.pos || getNextId()))
+              .map(key => mods[key]);
+
+            return Promise.reduce(enabledMods, async (accum, mod) => {
+              await require('turbowalk').default(path.join(stagingFolder, mod.installationPath), entries => {
+                const relevantEntries = entries.filter(entry => entry.filePath.endsWith(PART_SUFFIX))
+                                              .map(entry => entry.filePath);
+                accum = [].concat(accum, relevantEntries);
+              });
+              return Promise.resolve(accum);
+            }, [])
+            .then(docFiles => new Promise(resolve => menuMod.default(context.api, activeProfile, docFiles)
+              .then(async modId => {
+                if (modId === undefined) {
+                  return resolve();
+                }
+
+                context.api.store.dispatch(actions.setModEnabled(activeProfile.id, modId, true));
+                await context.api.emitAndAwait('deploy-single-mod', GAME_ID, modId);
+                return resolve();
+              })));
+          }
         }
 
-        const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
         prevLoadOrder = loadOrder;
-        return setINIStruct(context, loadOrder)
+        return menuModPromise()
+          .then(() => setINIStruct(context, loadOrder))
           .then(() => writeToModSettings())
           .then(() => {
             (!!refreshFunc) ? refreshFunc() : null;
@@ -809,7 +793,6 @@ function main(context) {
       const state = context.api.store.getState();
       const profile = selectors.activeProfile(state);
       if (!!profile && (profile.gameId === GAME_ID)) {
-        menuMod.removeMod(context.api, profile);
         const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], undefined);
         return getManuallyAddedMods(context).then((manuallyAdded) => {
           if (manuallyAdded.length > 0) {

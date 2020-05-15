@@ -60,7 +60,6 @@ async function writeModFiles(api, modName, docFiles, profile) {
   const discovery = selectors.discoveryByGame(state, profile.gameId);
   const modPaths = game.getModPaths(discovery.path);
   const docModPath = modPaths['witcher3menumoddocuments'];
-  await cleanModDir(destinationFolder);
 
   const reduced = docFiles.reduce((accum, file) => {
     if (file.indexOf(INPUT_SETTINGS_FILENAME) !== -1) {
@@ -104,7 +103,8 @@ async function writeModFiles(api, modName, docFiles, profile) {
                   })
                 }
               })
-            })).then(() => parser.write(path.join(destinationFolder, key), initialData))
+            }))
+            .then(() => parser.write(path.join(destinationFolder, key), initialData));
         })
     }))
 }
@@ -113,6 +113,9 @@ async function removeMenuMod(api, profile) {
   const state = api.store.getState();
   const modName = menuMod(profile.name);
   const mod = util.getSafe(state, ['persistent', 'mods', profile.gameId, modName], undefined);
+  if (mod === undefined) {
+    return Promise.resolve();
+  }
   return new Promise((resolve, reject) => {
     api.events.emit('remove-mod', profile.gameId, mod.id, async (error) => {
       if (error !== null) {
@@ -128,7 +131,7 @@ async function ensureMenuMod(api, profile, docFiles) {
   const modName = menuMod(profile.name);
   const mod = util.getSafe(state, ['persistent', 'mods', profile.gameId, modName], undefined);
   if (docFiles.length === 0 && !!mod) {
-    return undefined;
+    return Promise.resolve(undefined);
   }
 
   if (mod === undefined) {
@@ -152,10 +155,11 @@ async function ensureMenuMod(api, profile, docFiles) {
                                                sanitizeProfileName(profile.name)));
     await writeModFiles(api, modName, docFiles, profile);
   }
-  return modName;
+  return Promise.resolve(modName);
 }
 
 module.exports = {
   default: ensureMenuMod,
   removeMod: removeMenuMod,
+  getModId: menuMod,
 };
