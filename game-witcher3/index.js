@@ -420,7 +420,13 @@ async function preSort(context, items, direction) {
     return items || [];
   }
 
-  const mergedEntries = mergedModNames
+  // These are mods starting with the mod0000__ prefix
+  //  which are clearly intended to load BEFORE merged entries.
+  //  we're going to load those in and lock them in place above any
+  //  merged mods.
+  const lockedManualMods = manuallyAddedMods.filter(entry => entry.startsWith('mod0000__'));
+
+  const lockedEntries = [].concat(lockedManualMods, mergedModNames)
     .filter(modName =>items.find(item => item.id === modName) === undefined)
     .map(modName => ({
       id: modName,
@@ -431,7 +437,7 @@ async function preSort(context, items, direction) {
 
   const manualEntries = manuallyAddedMods
     .filter(key => (items.find(item => item.id === key) === undefined)
-                && (mergedEntries.find(entry => entry.id === key) === undefined))
+                && (lockedEntries.find(entry => entry.id === key) === undefined))
     .map(key => ({
       id: key,
       name: key,
@@ -458,7 +464,7 @@ async function preSort(context, items, direction) {
     items = [].concat(items.slice(0, pos) || [], known, items.slice(pos) || []);
   });
 
-  const preSorted = [].concat(...mergedEntries, ...items, ...unknownManuallyAdded);
+  const preSorted = [].concat(...lockedEntries, ...items, ...unknownManuallyAdded);
   return (direction === 'descending')
     ? Promise.resolve(preSorted.reverse())
     : Promise.resolve(preSorted);
