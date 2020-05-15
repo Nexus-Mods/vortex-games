@@ -716,14 +716,29 @@ function main(context) {
       }
 
       const stagingFolder = selectors.installPathForGame(state, GAME_ID);
-      let docFiles = [];
-      await require('turbowalk').default(stagingFolder, entries => {
-        const relevantEntries = entries.filter(entry => entry.filePath.endsWith(PART_SUFFIX))
-                                       .map(entry => entry.filePath);
-        docFiles = [].concat(docFiles, relevantEntries);
-      });
+      const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
+      const modState = util.getSafe(activeProfile, ['modState'], {});
+      const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
+      let nextAvailableId = Object.keys(loadOrder).length;
+      const getNextId = () => {
+        return nextAvailableId++;
+      }
 
-      return new Promise(resolve => menuMod.default(context.api, activeProfile, docFiles)
+      const invalidModTypes = ['witcher3menumoddocuments'];
+      const enabledMods = Object.keys(mods)
+        .filter(key => !!modState[key]?.enabled && !invalidModTypes.includes(mods[key].type))
+        .sort((lhs, rhs) => (loadOrder[lhs]?.pos || getNextId()) - (loadOrder[rhs]?.pos || getNextId()))
+        .map(key => mods[key]);
+
+      return Promise.reduce(enabledMods, async (accum, mod) => {
+        await require('turbowalk').default(path.join(stagingFolder, mod.installationPath), entries => {
+          const relevantEntries = entries.filter(entry => entry.filePath.endsWith(PART_SUFFIX))
+                                         .map(entry => entry.filePath);
+          accum = [].concat(accum, relevantEntries);
+        });
+        return Promise.resolve(accum);
+      }, [])
+      .then(docFiles => new Promise(resolve => menuMod.default(context.api, activeProfile, docFiles)
         .then(modId => {
           if (modId === undefined) {
             return resolve();
@@ -738,7 +753,7 @@ function main(context) {
 
           context.api.store.dispatch(actions.setModEnabled(activeProfile.id, modId, true));
           return resolve();
-        }));
+        })));
     });
 
     context.api.onAsync('did-deploy', (profileId, deployment) => {
@@ -759,9 +774,10 @@ function main(context) {
             + 'remove the existing merge and re-apply it.');
         }
 
-        if (deployment['witcher3menumoddocuments'].length === 0) {
+        const docFiles = deployment['witcher3menumodroot'].filter(file => file.relPath.endsWith(PART_SUFFIX));
+        if (docFiles.length === 0) {
           // If there are no menu mods deployed - remove the mod.
-          //menuMod.removeMod(context.api, profile);
+          menuMod.removeMod(context.api, activeProfile);
         }
 
         const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
@@ -782,7 +798,7 @@ function main(context) {
       const state = context.api.store.getState();
       const profile = selectors.activeProfile(state);
       if (!!profile && (profile.gameId === GAME_ID)) {
-        //menuMod.removeMod(context.api, profile);
+        menuMod.removeMod(context.api, profile);
         const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], undefined);
         return getManuallyAddedMods(context).then((manuallyAdded) => {
           if (manuallyAdded.length > 0) {

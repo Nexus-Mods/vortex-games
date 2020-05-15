@@ -114,7 +114,7 @@ async function removeMenuMod(api, profile) {
   const modName = menuMod(profile.name);
   const mod = util.getSafe(state, ['persistent', 'mods', profile.gameId, modName], undefined);
   return new Promise((resolve, reject) => {
-    api.events.emit('remove-mod', profile.gameId, mod, async (error) => {
+    api.events.emit('remove-mod', profile.gameId, mod.id, async (error) => {
       if (error !== null) {
         return reject(error);
       }
@@ -128,14 +128,6 @@ async function ensureMenuMod(api, profile, docFiles) {
   const modName = menuMod(profile.name);
   const mod = util.getSafe(state, ['persistent', 'mods', profile.gameId, modName], undefined);
   if (docFiles.length === 0 && !!mod) {
-    // await new Promise((resolve, reject) => {
-    //   api.events.emit('remove-mod', profile.gameId, mod, async (error) => {
-    //     if (error !== null) {
-    //       return reject(error);
-    //     }
-    //     return resolve();
-    //   });
-    // });
     return undefined;
   }
 
