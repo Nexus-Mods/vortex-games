@@ -459,13 +459,28 @@ async function preSort(context, items, direction) {
     : Promise.resolve(preSorted);
 }
 
+function findModFolder(installationPath, mod) {
+  const expectedModNameLocation = (mod.type !== 'witcher3menumodroot')
+    ? path.join(installationPath, mod.installationPath)
+    : path.join(installationPath, mod.installationPath, 'Mods');
+  return fs.readdirAsync(expectedModNameLocation)
+    .then(entries => Promise.resolve(entries[0]));
+}
+
 function getManagedModNames(context, mods) {
   const installationPath = selectors.installPathForGame(context.api.store.getState(), GAME_ID);
-  return Promise.map(mods, mod => fs.readdirAsync(path.join(installationPath, mod.installationPath))
-    .then(entries => ({
-      id: mod.id,
-      name: entries[0],
-    })))
+  return Promise.reduce(mods, (accum, mod) => findModFolder(installationPath, mod)
+    .then(modName => {
+      accum.push({
+        id: mod.id,
+        name: modName,
+      })
+      return Promise.resolve(accum);
+    })
+    .catch(err => {
+      log('error', 'unable to resolve mod name', err);
+      return Promise.resolve(accum);
+    }), []);
 }
 
 let prevLoadOrder;
