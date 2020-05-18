@@ -50,7 +50,7 @@ function writeToModSettings() {
     .then(() => parser.read(filePath)).then(ini => {
       return Promise.each(Object.keys(_INI_STRUCT), (key) => {
         ini.data[key] = {
-          Enabled: '1',
+          Enabled: _INI_STRUCT[key].Enabled,
           Priority: _INI_STRUCT[key].Priority,
           VK: _INI_STRUCT[key].VK,
         }
@@ -408,11 +408,11 @@ async function setINIStruct(context, loadOrder) {
         key = mod;
       }
 
+      const LOEntry = util.getSafe(loadOrder, [key], undefined);
       _INI_STRUCT[name] = {
-        Enabled: '1',
-        Priority: util.getSafe(loadOrder, [key], undefined) !== undefined
-          ? loadOrder[key].pos + 1
-          : getNextIdx(),
+        // The INI file's enabled attribute expects 1 or 0
+        Enabled: (LOEntry !== undefined) ? LOEntry.enabled ? 1 : 0 : 1,
+        Priority: (LOEntry !== undefined) ? LOEntry.pos + 1 : getNextIdx(),
         VK: key,
       };
     });
