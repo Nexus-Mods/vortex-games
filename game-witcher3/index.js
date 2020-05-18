@@ -243,16 +243,23 @@ function installMenuMod(files,
 
   // We're hoping that the mod author has included the mod name in the archive's
   //  structure - if he didn't - we're going to use the destination path instead.
-  const modRelPath = (idx > 0)
-    ? path.join('Mods', inputFiles[0].split(path.sep)[idx - 1])
-    : path.join('Mods', 'mod' + destinationPath);
+  const modName = (idx > 0)
+    ? inputFiles[0].split(path.sep)[idx - 1]
+    : ('mod' + path.basename(destinationPath, '.installing')).replace(/\s/g, '');
 
-  const trimmedFiles = otherFiles.map(file => ({
-    source: file,
-    relPath: file.split(path.sep)
-                 .slice(idx)
-                 .join(path.sep),
-  }));
+  const trimmedFiles = otherFiles.map(file => {
+    const source = file;
+    let relPath = file.split(path.sep)
+                      .slice(idx);
+    if (relPath[0].toLowerCase() === 'content') {
+      relPath = [].concat(['Mods', modName], relPath)
+    }
+
+    return {
+      source,
+      relPath: relPath.join(path.sep),
+    }
+  });
 
   const toCopyInstruction = (source, destination) => ({
     type: 'copy',
@@ -263,8 +270,8 @@ function installMenuMod(files,
   const inputInstructions = inputFiles.map(file =>
     toCopyInstruction(file, path.join(inputFileDestination, path.basename(file))));
 
-  const otherInstructions = trimmedFiles.map(file => toCopyInstruction(file.source,
-    path.join(modRelPath, file.relPath)));
+  const otherInstructions = trimmedFiles.map(file =>
+    toCopyInstruction(file.source, file.relPath));
 
   const instructions = [].concat(inputInstructions, otherInstructions);
   return Promise.resolve({ instructions });
