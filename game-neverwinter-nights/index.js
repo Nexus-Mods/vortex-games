@@ -182,7 +182,7 @@ function testSupportedContent(files, gameId) {
 function hasCorrectFolderStructure(files) {
   const matcher = (segment) => _MOD_DIRECTORIES.indexOf(segment) !== -1;
   const filtered = files.filter(file => {
-    const segments = file.split(path.sep).filter(seg => !!seg);
+    const segments = file.toLowerCase().split(path.sep).filter(seg => !!seg);
     return ((path.extname(segments[segments.length - 1]) === '')
       && (segments.find(matcher) !== undefined));
   });
