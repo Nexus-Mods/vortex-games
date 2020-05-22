@@ -22,6 +22,7 @@ const MERGE_INV_MANIFEST = 'MergeInventory.xml';
 const LOAD_ORDER_FILENAME = 'mods.settings';
 const INPUT_XML_FILENAME = 'input.xml';
 const PART_SUFFIX = '.part.txt';
+const UNI_PATCH = 'mod0000____CompilationTrigger';
 
 const CONFIG_MATRIX_REL_PATH = path.join('bin', 'config', 'r4game', 'user_config_matrix', 'pc');
 
@@ -80,12 +81,13 @@ function getManuallyAddedMods(context) {
     const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], []);
     const modKeys = Object.keys(mods);
     const iniEntries = Object.keys(ini.data);
-    const manualCandidates = iniEntries.filter(entry => {
+    const manualCandidates = [].concat(iniEntries, [UNI_PATCH]).filter(entry => {
       const hasVortexKey = util.getSafe(ini.data[entry], ['VK'], undefined) !== undefined;
       return ((!hasVortexKey) || (ini.data[entry].VK === entry) && !modKeys.includes(entry))
-    }) || [];
+    }) || [UNI_PATCH];
+    const uniqueCandidates = new Set(manualCandidates);
     const modsPath = path.join(discovery.path, 'Mods');
-    return Promise.reduce(manualCandidates, (accum, mod) => {
+    return Promise.reduce(Array.from(uniqueCandidates), (accum, mod) => {
       return fs.statAsync(path.join(modsPath, mod))
         .then(() => {
           accum.push(mod);
@@ -138,6 +140,16 @@ function getElementValues(context, pattern) {
     .catch(err => (err.code === 'ENOENT') // No merge file? - no problem.
       ? Promise.resolve([])
       : Promise.reject(new util.DataInvalid(`Failed to parse ${MERGE_INV_MANIFEST}: ${err}`)))
+}
+
+function getUnificationPatch(context) {
+  const state = context.api.store.getState();
+  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID]);
+  const uniPatchPath = path.join(discovery.path, 'Mods', UNI_PATCH);
+  return fs.statAsync(uniPatchPath)
+    .then(() => Promise.resolve(UNI_PATCH))
+    .catch(() => Promise.resolve(undefined));
+
 }
 
 function getMergedModNames(context) {
@@ -433,12 +445,14 @@ async function preSort(context, items, direction) {
   //  we're going to load those in and lock them in place above any
   //  merged mods.
   const lockedManualMods = manuallyAddedMods.filter(entry => entry.startsWith('mod0000__'));
-
+  const readableNames = {
+    'mod0000____CompilationTrigger': 'Unification/Community Patch',
+  };
   const lockedEntries = [].concat(lockedManualMods, mergedModNames)
     .filter(modName =>items.find(item => item.id === modName) === undefined)
     .map(modName => ({
       id: modName,
-      name: modName,
+      name: !!readableNames[modName] ? readableNames[modName] : modName,
       imgUrl: `${__dirname}/gameart.jpg`,
       locked: true,
   }))
