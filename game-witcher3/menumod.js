@@ -107,6 +107,19 @@ async function writeModFiles(api, modName, docFiles, profile) {
             .then(() => parser.write(path.join(destinationFolder, key), initialData));
         })
     }))
+    .catch(err => {
+      if (err.code === 'ENOENT') {
+        const paths = [path.join(docModPath, INPUT_SETTINGS_FILENAME),
+          path.join(docModPath, USER_SETTINGS_FILENAME)];
+
+        if (paths.includes(err.path)) {
+          const error = new util.DataInvalid('Required setting files are missing - please run the game at least once and try again.');
+          api.showErrorNotification('Failed to install menu mod', error);
+          return Promise.resolve();
+        }
+        return Promise.reject(err);
+      }
+    });
 }
 
 async function removeMenuMod(api, profile) {

@@ -1,7 +1,7 @@
 const Promise = require('bluebird');
 const path = require('path');
 const winapi = require('winapi-bindings');
-const { actions, fs, FlexLayout, selectors, util } = require('vortex-api');
+const { actions, fs, FlexLayout, log, selectors, util } = require('vortex-api');
 const { parseXmlString } = require('libxmljs');
 const { app, remote } = require('electron');
 
