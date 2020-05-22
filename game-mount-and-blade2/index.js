@@ -499,11 +499,22 @@ function getValidationInfo(modVortexId) {
   }
 }
 
-function tSort(subModIds, allowLocked = false) {
+function tSort(subModIds, allowLocked = false, loadOrder = undefined) {
   // Topological sort - we need to:
   //  - Identify cyclic dependencies.
   //  - Identify missing dependencies.
-  const alphabetical = subModIds.sort();
+
+  // These are manually locked mod entries.
+  const lockedSubMods = (!!loadOrder)
+    ? subModIds.filter(subModId => {
+      const entry = CACHE[subModId];
+      return (!!entry)
+        ? !!loadOrder[entry.vortexId]?.locked
+        : false;
+    })
+    : [];
+  const alphabetical = subModIds.filter(subMod => !lockedSubMods.includes(subMod))
+                                .sort();
   const graph = alphabetical.reduce((accum, entry) => {
     // Create the node graph.
     accum[entry] = CACHE[entry].dependencies.sort();
@@ -571,7 +582,11 @@ function tSort(subModIds, allowLocked = false) {
 
   const subModsWithNoDeps = result.filter(dep => (graph[dep].length === 0)
     || (graph[dep].find(d => !LOCKED_MODULES.has(d)) === undefined)).sort() || [];
-  const tamperedResult = [].concat(subModsWithNoDeps, result.filter(entry => !subModsWithNoDeps.includes(entry)));
+  let tamperedResult = [].concat(subModsWithNoDeps, result.filter(entry => !subModsWithNoDeps.includes(entry)));
+  lockedSubMods.forEach(subModId => {
+    const pos = loadOrder[CACHE[subModId].vortexId].pos;
+    tamperedResult.splice(pos, 0, [subModId]);
+  });
   return tamperedResult;
 }
 
@@ -658,7 +673,8 @@ async function preSort(context, items, direction) {
       if (items.find(item => item.id === known.id) === undefined) {
         const pos = loadOrder[known.id]?.pos;
         const idx = (pos !== undefined) ? (pos - diff) : (getNextPos(known.id) - diff);
-        items = [].concat(items.slice(0, idx) || [], known, items.slice(idx) || []);
+        items.splice(idx, 0, known);
+        //items = [].concat(items.slice(0, idx) || [], known, items.slice(idx) || []);
       }
     });
 
@@ -710,7 +726,8 @@ function infoComponent(context, props) {
                                       + 'Most - but not all mods - come with or need a SubModule.xml file.', { ns: I18N_NAMESPACE })),
         React.createElement('li', {}, t('Hit the deploy button whenever you install and enable a new mod.', { ns: I18N_NAMESPACE })),
         React.createElement('li', {}, t('The game will not launch unless the game store (Steam, Epic, etc) is started beforehand. If you\'re getting the '
-                                      + '"Unable to Initialize Steam API" error, restart Steam.', { ns: I18N_NAMESPACE })))));
+                                      + '"Unable to Initialize Steam API" error, restart Steam.', { ns: I18N_NAMESPACE })),
+        React.createElement('li', {}, t('Right clicking a checkbox will lock that LO entry into position, even when auto-sorting.', { ns: I18N_NAMESPACE })))));
 }
 
 let _IS_SORTING = false;
@@ -782,17 +799,18 @@ function main(context) {
       let sortedLocked = [];
       let sortedSubMods = [];
 
+      const state = context.api.store.getState();
+      const activeProfile = selectors.activeProfile(state);
+      const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
+
       try {
         sortedLocked = tSort(lockedIds, true);
-        sortedSubMods = tSort(subModIds);
+        sortedSubMods = tSort(subModIds, false, loadOrder);
       } catch (err) {
         context.api.showErrorNotification('Failed to sort mods', err);
         return;
       }
 
-      const state = context.api.store.getState();
-      const activeProfile = selectors.activeProfile(state);
-      const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
       const newOrder = [].concat(sortedLocked, sortedSubMods).reduce((accum, id, idx) => {
         const vortexId = CACHE[id].vortexId;
         const newEntry = {
@@ -843,13 +861,14 @@ function main(context) {
     const deployedSubModules = await getDeployedSubModPaths(context);
     CACHE = await getDeployedModData(context, deployedSubModules);
 
+    const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
+
     // We're going to do a quick tSort at this point - not going to
     //  change the user's load order, but this will highlight any
     //  cyclic or missing dependencies.
     const modIds = Object.keys(CACHE);
-    const sorted = tSort(modIds, true);
+    const sorted = tSort(modIds, true, loadOrder);
 
-    const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
     if (!!refreshFunc) {
       refreshFunc();
     }
