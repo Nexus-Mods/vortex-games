@@ -3,13 +3,37 @@ const BS = require('react-bootstrap');
 const { connect } = require('react-redux');
 const path = require('path');
 const mnb2extension = require('./index');
-const { actions, FlexLayout, tooltip, selectors, util } = require('vortex-api');
+const { actions, TriStateCheckbox, FlexLayout, tooltip, selectors, util } = require('vortex-api');
 
 const TWLOGO = path.join(__dirname, 'TWLogo.png');
 
 class CustomItemRenderer extends React.Component {
   constructor(props) {
     super(props);
+  }
+
+  renderAddendum(props) {
+    // Extra stuff we want to add to the LO entry.
+    //  Currently renders the open directory button for
+    const { item, order, mods } = props;
+    const managedModKeys = Object.keys(mods);
+    const isLocked = !!order[item.id]?.locked;
+
+    const renderLock = () => {
+      return React.createElement(tooltip.Icon, { name: 'locked', tooltip: 'Entry is locked in position' });
+    }
+
+    const renderInfo = () => {
+      return React.createElement(tooltip.Icon, { name: 'dialog-info', tooltip: 'Not managed by Vortex' });
+    }
+
+    return (this.isItemInvalid(item))
+      ? this.renderOpenDirButton(props)
+      : (isLocked)
+        ? renderLock()
+        : !managedModKeys.includes(item.id)
+          ? renderInfo()
+          : null
   }
 
   // TODO: move all style configuration into a stylesheet
@@ -27,18 +51,15 @@ class CustomItemRenderer extends React.Component {
     React.createElement('p', {}, item.name));
   }
 
-  renderExternalEntry(item, enabled) {
-    return React.createElement(BS.Checkbox, {
-      checked: enabled,
-      disabled: item.locked,
-      onChange: (evt) => this.onStatusChange(evt, this.props)}, item.name);
-  }
-
-  renderManagedEntry(item, enabled) {
-    return React.createElement(BS.Checkbox, {
-      checked: enabled,
-      disabled: item.locked,
-      onChange: (evt) => this.onStatusChange(evt, this.props)}, item.name);
+  renderEntry(props) {
+    const { item, order } = props;
+    const isEnabled = !!order[item.id]?.locked || order[item.id].enabled;
+    return React.createElement(TriStateCheckbox, {
+      checked: isEnabled,
+      disabled: !!item?.locked,
+      indeterminate: !!order[item.id]?.locked,
+      onContextMenu: (chkStat) => this.onRighClick(chkStat, props),
+      onChangeCB: (evt) => this.onStatusChange(evt, props)}, item.name);
   }
 
   renderInvalidEntry(item) {
@@ -46,14 +67,14 @@ class CustomItemRenderer extends React.Component {
     const reasonElement = () => (invalidReason !== undefined) 
       ? React.createElement(tooltip.Icon, { style: {color: 'red'}, name: 'feedback-error', tooltip: invalidReason })
       : null;
-    return React.createElement(BS.Checkbox, {
+    return React.createElement(TriStateCheckbox, {
       checked: false,
+      inditerminate: false,
       disabled: true }, item.name, ' ', reasonElement());
   }
 
   render() {
-    const { order, className, item, mods } = this.props;
-    const managedModKeys = Object.keys(mods);
+    const { order, className, item } = this.props;
     const position = (item.prefix !== undefined)
       ? item.prefix
       : order[item.id].pos + 1;
@@ -85,22 +106,14 @@ class CustomItemRenderer extends React.Component {
         ? this.renderInvalidEntry(item)
         : (item.official)
           ? this.renderOfficialEntry(item)
-          : managedModKeys.includes(item.id)
-            ? this.renderManagedEntry(item, order[item.id].enabled)
-            : this.renderExternalEntry(item, order[item.id].enabled)
+          : this.renderEntry(this.props)
         ),
       React.createElement(FlexLayout.Flex, {
         style: {
           display: 'flex',
           justifyContent: 'flex-end',
         }
-      }, (this.isItemInvalid(item))
-          ? this.renderOpenDirButton(this.props)
-          : (item.locked) 
-            ? React.createElement(tooltip.Icon, { name: 'locked', tooltip: 'Cannot be dragged' })
-            : !managedModKeys.includes(item.id) 
-              ? React.createElement(tooltip.Icon, { name: 'dialog-info', tooltip: 'Not managed by Vortex' })
-              : null)));
+      }, this.renderAddendum(this.props))));
   }
 
   isItemInvalid(item) {
@@ -141,15 +154,27 @@ class CustomItemRenderer extends React.Component {
       onClick: () => util.opn(itemPath).catch(err => null) });
   }
 
-  onStatusChange(evt, props) {
-    const { profile, order, item, onSetLoadOrderEntry, onSetDeploymentRequired } = props;
+  onRighClick(checkBoxStatus, props) {
+    const { profile, order, item, onSetLoadOrderEntry } = props;
+    const isLockState = (checkBoxStatus === 'locked');
     const entry = {
       pos: order[item.id].pos,
-      enabled: evt.target.checked,
+      enabled: (!!isLockState) ? true : order[item.id].enabled,
+      locked: isLockState,
     }
 
     onSetLoadOrderEntry(profile.id, item.id, entry);
-    //onSetDeploymentRequired();
+  }
+
+  onStatusChange(evt, props) {
+    const { profile, order, item, onSetLoadOrderEntry } = props;
+    const entry = {
+      pos: order[item.id].pos,
+      enabled: evt.target.checked,
+      locked: false,
+    }
+
+    onSetLoadOrderEntry(profile.id, item.id, entry);
   }
 
   setRef (ref, props) {

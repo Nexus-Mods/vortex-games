@@ -802,6 +802,8 @@ function main(context) {
             : (!!loadOrder[vortexId])
               ? loadOrder[vortexId].enabled
               : true,
+          locked: (!!loadOrder[vortexId]?.locked)
+            ? loadOrder[vortexId].locked : false,
         }
 
         accum[vortexId] = newEntry;
