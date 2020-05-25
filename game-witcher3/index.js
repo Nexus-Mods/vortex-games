@@ -440,15 +440,11 @@ async function preSort(context, items, direction) {
     return items || [];
   }
 
-  // These are mods starting with the mod0000__ prefix
-  //  which are clearly intended to load BEFORE merged entries.
-  //  we're going to load those in and lock them in place above any
-  //  merged mods.
   const lockedManualMods = manuallyAddedMods.filter(entry => entry.startsWith('mod0000__'));
   const readableNames = {
     'mod0000____CompilationTrigger': 'Unification/Community Patch',
   };
-  const lockedEntries = [].concat(lockedManualMods, mergedModNames)
+  const lockedEntries = [].concat(mergedModNames, lockedManualMods)
     .filter(modName =>items.find(item => item.id === modName) === undefined)
     .map(modName => ({
       id: modName,
@@ -702,7 +698,7 @@ function main(context) {
 
   context.registerModType('witcher3tl', 25, gameId => gameId === 'witcher3', getTLPath, testTL);
   context.registerModType('witcher3dlc', 25, gameId => gameId === 'witcher3', getDLCPath, testDLC);
-  context.registerModType('witcher3menumodroot', 20, gameId => gameId === 'witcher3', getTLPath, testMenuModRoot);
+  context.registerModType('witcher3root', 20, gameId => gameId === 'witcher3', getTLPath, testMenuModRoot);
   context.registerModType('witcher3menumoddocuments', 60, gameId => gameId === 'witcher3',
     (game) => path.join(appUni.getPath('documents'), 'The Witcher 3'), () => Promise.resolve(false));
 
