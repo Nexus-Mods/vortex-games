@@ -74,10 +74,9 @@ function ensureModSettings() {
       : Promise.reject(err));
 }
 
-function getManuallyAddedMods(context) {
+async function getManuallyAddedMods(context) {
   return ensureModSettings().then(ini => {
     const state = context.api.store.getState();
-    const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
     const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], []);
     const modKeys = Object.keys(mods);
     const iniEntries = Object.keys(ini.data);
@@ -85,20 +84,46 @@ function getManuallyAddedMods(context) {
       const hasVortexKey = util.getSafe(ini.data[entry], ['VK'], undefined) !== undefined;
       return ((!hasVortexKey) || (ini.data[entry].VK === entry) && !modKeys.includes(entry))
     }) || [UNI_PATCH];
-    const uniqueCandidates = new Set(manualCandidates);
+    return Promise.resolve(new Set(manualCandidates));
+  })
+  .then(uniqueCandidates => {
+    const state = context.api.store.getState();
+    const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
     const modsPath = path.join(discovery.path, 'Mods');
     return Promise.reduce(Array.from(uniqueCandidates), (accum, mod) => {
-      return fs.statAsync(path.join(modsPath, mod))
-        .then(() => {
-          accum.push(mod);
-          return accum;
+      const modFolder = path.join(modsPath, mod);
+      return fs.statAsync(path.join(modFolder))
+        .then(() => new Promise(async (resolve) => {
+          // Ok, we know the folder is there - lets ensure that
+          //  it actually contains files.
+          let candidates = [];
+          await require('turbowalk').default(path.join(modsPath, mod), entries => {
+            candidates = [].concat(candidates, entries.filter(entry => (!entry.isDirectory)
+                                 && (path.extname(path.basename(entry.filePath)) !== '')
+                                 && (entry?.linkCount === undefined || entry.linkCount <= 1)));
+          });
+
+          const mapped = await Promise.map(candidates, cand => fs.statAsync(cand.filePath)
+                                                    .then(stats => stats.isSymbolicLink()
+                                                      ? Promise.resolve(undefined)
+                                                      : Promise.resolve(cand.filePath))
+                                                    .catch(err => Promise.resolve(undefined)));
+          return resolve(mapped);
+        }))
+        .then((files) => {
+          if (files.filter(file => !!file).length > 0) {
+            accum.push(mod);
+          }
+          return Promise.resolve(accum);
         })
-        .catch(err => accum)
-    }, []);
-  })
-  .catch(err => {
-    context.api.showErrorNotification('Failed to lookup manually added mods', err)
-    return Promise.resolve([]);
+        .catch(err => ((err.code === 'ENOENT') && (err.path === modFolder))
+          ? Promise.resolve(accum)
+          : Promise.reject(err));
+    }, [])
+    .catch(err => {
+      context.api.showErrorNotification('Failed to lookup manually added mods', err)
+      return Promise.resolve([]);
+    });
   });
 }
 
@@ -398,9 +423,9 @@ async function getAllMods(context) {
     (!!mods[key] && modState[key].enabled && !invalidModTypes.includes(mods[key].type)));
 
   const mergedModNames = await getMergedModNames(context);
-  const manuallyAddedMods = await getManuallyAddedMods(context).filter(mod => !mergedModNames.includes(mod));
+  const manuallyAddedMods = await getManuallyAddedMods(context);
   const managedMods = await getManagedModNames(context, enabledMods.map(key => mods[key]));
-  return Promise.resolve([].concat(mergedModNames, managedMods, manuallyAddedMods));
+  return Promise.resolve([].concat(mergedModNames, managedMods, manuallyAddedMods.filter(mod => !mergedModNames.includes(mod))));
 }
 
 async function setINIStruct(context, loadOrder) {
@@ -698,7 +723,7 @@ function main(context) {
 
   context.registerModType('witcher3tl', 25, gameId => gameId === 'witcher3', getTLPath, testTL);
   context.registerModType('witcher3dlc', 25, gameId => gameId === 'witcher3', getDLCPath, testDLC);
-  context.registerModType('witcher3root', 20, gameId => gameId === 'witcher3', getTLPath, testMenuModRoot);
+  context.registerModType('witcher3menumodroot', 20, gameId => gameId === 'witcher3', getTLPath, testMenuModRoot);
   context.registerModType('witcher3menumoddocuments', 60, gameId => gameId === 'witcher3',
     (game) => path.join(appUni.getPath('documents'), 'The Witcher 3'), () => Promise.resolve(false));
 
