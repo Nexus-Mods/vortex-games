@@ -3,13 +3,17 @@ const BS = require('react-bootstrap');
 const { connect } = require('react-redux');
 const path = require('path');
 const mnb2extension = require('./index');
-const { actions, TriStateCheckbox, FlexLayout, tooltip, selectors, util } = require('vortex-api');
+const { actions, ContextMenu, FlexLayout, tooltip, selectors, util } = require('vortex-api');
 
 const TWLOGO = path.join(__dirname, 'TWLogo.png');
 
 class CustomItemRenderer extends React.Component {
   constructor(props) {
     super(props);
+    this.state = {
+      contextMenuVisible: false,
+      offset: { x: 0, y: 0 },
+    }
   }
 
   renderAddendum(props) {
@@ -54,12 +58,10 @@ class CustomItemRenderer extends React.Component {
   renderEntry(props) {
     const { item, order } = props;
     const isEnabled = !!order[item.id]?.locked || order[item.id].enabled;
-    return React.createElement(TriStateCheckbox, {
+    return React.createElement(BS.Checkbox, {
       checked: isEnabled,
       disabled: !!item?.locked,
-      indeterminate: !!order[item.id]?.locked,
-      onContextMenu: (chkStat) => this.onRighClick(chkStat, props),
-      onChangeCB: (evt) => this.onStatusChange(evt, props)}, item.name);
+      onChange: (evt) => this.onStatusChange(evt, props)}, item.name);
   }
 
   renderInvalidEntry(item) {
@@ -67,10 +69,36 @@ class CustomItemRenderer extends React.Component {
     const reasonElement = () => (invalidReason !== undefined) 
       ? React.createElement(tooltip.Icon, { style: {color: 'red'}, name: 'feedback-error', tooltip: invalidReason })
       : null;
-    return React.createElement(TriStateCheckbox, {
+    return React.createElement(BS.Checkbox, {
       checked: false,
-      inditerminate: false,
       disabled: true }, item.name, ' ', reasonElement());
+  }
+
+  onLock(props, lock) {
+    const { profile, order, item, onSetLoadOrderEntry } = props;
+    const entry = {
+      pos: order[item.id].pos,
+      enabled: order[item.id].enabled,
+      locked: lock,
+    }
+
+    onSetLoadOrderEntry(profile.id, item.id, entry);
+  }
+
+  renderContextMenu(state, props) {
+    const { order, item } = props;
+    const { contextMenuVisible, offset } = state;
+    return React.createElement(ContextMenu, {
+      key: 'mnb2-context-menu',
+      position: offset,
+      visible: !!contextMenuVisible,
+      onHide: () => this.setState({ contextMenuVisible: false }),
+      instanceId: '42',
+      actions: [
+        { title: 'Lock', show: order[item.id]?.locked === false, action: () => this.onLock(props, true) },
+        { title: 'Unlock', show: !!order[item.id]?.locked, action: () => this.onLock(props, false) },
+      ],
+    })
   }
 
   render() {
@@ -85,11 +113,15 @@ class CustomItemRenderer extends React.Component {
     }
 
     const key = `${item.name}-${position}`;
-    return React.createElement(BS.ListGroupItem, {
+    const result = React.createElement(BS.ListGroupItem, {
       className: 'load-order-entry',
       ref: (ref) => this.setRef(ref, this.props),
       key,
       style: { height: '48px' },
+      onContextMenu: (evt) => this.setState({
+        contextMenuVisible: true,
+        offset: { x: evt.clientX, y: evt.clientY },
+      }),
     },
     React.createElement(FlexLayout, { type: 'row', height: '20px' },
       React.createElement(FlexLayout.Flex, {
@@ -113,7 +145,8 @@ class CustomItemRenderer extends React.Component {
           display: 'flex',
           justifyContent: 'flex-end',
         }
-      }, this.renderAddendum(this.props))));
+      }, this.renderAddendum(this.props)), this.renderContextMenu(this.state, this.props)));
+    return result;
   }
 
   isItemInvalid(item) {
@@ -154,24 +187,12 @@ class CustomItemRenderer extends React.Component {
       onClick: () => util.opn(itemPath).catch(err => null) });
   }
 
-  onRighClick(checkBoxStatus, props) {
-    const { profile, order, item, onSetLoadOrderEntry } = props;
-    const isLockState = (checkBoxStatus === 'locked');
-    const entry = {
-      pos: order[item.id].pos,
-      enabled: (!!isLockState) ? true : order[item.id].enabled,
-      locked: isLockState,
-    }
-
-    onSetLoadOrderEntry(profile.id, item.id, entry);
-  }
-
   onStatusChange(evt, props) {
     const { profile, order, item, onSetLoadOrderEntry } = props;
     const entry = {
       pos: order[item.id].pos,
       enabled: evt.target.checked,
-      locked: false,
+      locked: order[item.id]?.locked,
     }
 
     onSetLoadOrderEntry(profile.id, item.id, entry);
