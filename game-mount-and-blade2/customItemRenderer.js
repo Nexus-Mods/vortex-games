@@ -95,7 +95,7 @@ class CustomItemRenderer extends React.Component {
       onHide: () => this.setState({ contextMenuVisible: false }),
       instanceId: '42',
       actions: [
-        { title: 'Lock', show: order[item.id]?.locked === false, action: () => this.onLock(props, true) },
+        { title: 'Lock', show: (order[item.id]?.locked === false), action: () => this.onLock(props, true) },
         { title: 'Unlock', show: !!order[item.id]?.locked, action: () => this.onLock(props, false) },
       ],
     })
@@ -192,7 +192,7 @@ class CustomItemRenderer extends React.Component {
     const entry = {
       pos: order[item.id].pos,
       enabled: evt.target.checked,
-      locked: order[item.id]?.locked,
+      locked: order[item.id]?.locked !== undefined ? order[item.id].locked : false,
     }
 
     onSetLoadOrderEntry(profile.id, item.id, entry);

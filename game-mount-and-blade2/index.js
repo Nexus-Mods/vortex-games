@@ -727,7 +727,8 @@ function infoComponent(context, props) {
         React.createElement('li', {}, t('Hit the deploy button whenever you install and enable a new mod.', { ns: I18N_NAMESPACE })),
         React.createElement('li', {}, t('The game will not launch unless the game store (Steam, Epic, etc) is started beforehand. If you\'re getting the '
                                       + '"Unable to Initialize Steam API" error, restart Steam.', { ns: I18N_NAMESPACE })),
-        React.createElement('li', {}, t('Right clicking a checkbox will lock that LO entry into position, even when auto-sorting.', { ns: I18N_NAMESPACE })))));
+        React.createElement('li', {}, t('Right clicking an entry will open the context menu which can be used to lock LO entries into position; entry will '
+                                      + 'be ignored by auto-sort maintaining its locked position.', { ns: I18N_NAMESPACE })))));
 }
 
 let _IS_SORTING = false;
@@ -820,8 +821,7 @@ function main(context) {
             : (!!loadOrder[vortexId])
               ? loadOrder[vortexId].enabled
               : true,
-          locked: (!!loadOrder[vortexId]?.locked)
-            ? loadOrder[vortexId].locked : false,
+          locked: (loadOrder[vortexId]?.locked === true),
         }
 
         accum[vortexId] = newEntry;
