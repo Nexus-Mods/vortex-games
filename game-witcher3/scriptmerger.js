@@ -3,6 +3,7 @@ const path = require('path');
 const _ = require('lodash');
 const url = require('url');
 const semver = require('semver');
+const getVersion = require('exe-version').default;
 const { actions, fs, util } = require('vortex-api');
 
 const RELEASE_CUTOFF = '0.6.4';
@@ -80,6 +81,38 @@ async function downloadConsent(context) {
   });
 }
 
+async function getMergerVersion(context) {
+  const state = context.api.store.getState();
+  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', 'witcher3'], undefined);
+  if (discovery?.path === undefined) {
+    return Promise.reject(new util.SetupError('Witcher3 is not discovered'));
+  }
+  const merger = discovery?.tools?.W3ScriptMerger;
+  if (merger === undefined) {
+    return Promise.resolve(undefined);
+  }
+
+  if (merger?.mergerVersion !== undefined) {
+    return Promise.resolve(merger.mergerVersion);
+  }
+
+  if (!!merger?.path) {
+    return fs.statAsync(merger.path)
+      .then(() => {
+        const execVersion = getVersion(merger.path);
+        if (!!execVersion) {
+          const trimmedVersion = execVersion.split('.').slice(0, 3).join('.');
+          const newToolDetails = { ...merger, mergerVersion: trimmedVersion };
+          context.api.store.dispatch(actions.addDiscoveredTool('witcher3', MERGER_ID, newToolDetails, true));
+          return Promise.resolve(trimmedVersion);
+        }
+      })
+      .catch(err => Promise.resolve(undefined));
+  } else {
+    return Promise.resolve(undefined);
+  }
+}
+
 async function downloadScriptMerger(context) {
   const state = context.api.store.getState();
   const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', 'witcher3'], undefined);
@@ -87,7 +120,8 @@ async function downloadScriptMerger(context) {
     return Promise.reject(new util.SetupError('Witcher3 is not discovered'));
   }
   let mostRecentVersion;
-  const currentlyInstalledVersion = discovery?.tools?.W3ScriptMerger?.mergerVersion;
+  const currentlyInstalledVersion = await getMergerVersion(context);
+
   return query(GITHUB_URL, 'releases')
     .then((releases) => {
       if (!Array.isArray(releases)) {
@@ -238,7 +272,7 @@ async function setUpMerger(context, mergerVersion, newPath) {
     await migrateInventory(path.dirname(currentDetails.path), newPath)
   }
 
-  const newToolDetails = (!!currentDetails) 
+  const newToolDetails = (!!currentDetails)
     ? { ...currentDetails, mergerVersion }
     : {
       id: MERGER_ID,
