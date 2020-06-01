@@ -14,6 +14,15 @@ class CustomItemRenderer extends React.Component {
       contextMenuVisible: false,
       offset: { x: 0, y: 0 },
     }
+    this.mMounted = false;
+  }
+
+  componentDidMount() {
+    this.mMounted = true;
+  }
+
+  componentWillUnmount() {
+    this.mMounted = false;
   }
 
   renderAddendum(props) {
@@ -92,8 +101,12 @@ class CustomItemRenderer extends React.Component {
       key: 'mnb2-context-menu',
       position: offset,
       visible: !!contextMenuVisible,
-      onHide: () => this.setState({ contextMenuVisible: false }),
-      instanceId: '42',
+      onHide: () => {
+        if (this.mMounted) {
+          this.setState({ contextMenuVisible: false });
+        }
+      },
+      instanceId: item.id,
       actions: [
         { title: 'Lock', show: (order[item.id]?.locked === false), action: () => this.onLock(props, true) },
         { title: 'Unlock', show: !!order[item.id]?.locked, action: () => this.onLock(props, false) },
@@ -119,7 +132,7 @@ class CustomItemRenderer extends React.Component {
       key,
       style: { height: '48px' },
       onContextMenu: (evt) => this.setState({
-        contextMenuVisible: true,
+        contextMenuVisible: !this.state.contextMenuVisible,
         offset: { x: evt.clientX, y: evt.clientY },
       }),
     },
