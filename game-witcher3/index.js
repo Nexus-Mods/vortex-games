@@ -24,6 +24,10 @@ const INPUT_XML_FILENAME = 'input.xml';
 const PART_SUFFIX = '.part.txt';
 const UNI_PATCH = 'mod0000____CompilationTrigger';
 
+const GOG_ID = '1207664663';
+const GOG_ID_GOTY = '1640424747';
+const STEAM_ID = '499450';
+
 const CONFIG_MATRIX_REL_PATH = path.join('bin', 'config', 'r4game', 'user_config_matrix', 'pc');
 
 let _INI_STRUCT = {};
@@ -192,8 +196,7 @@ function findGame() {
     }
     return Promise.resolve(instPath.value);
   } catch (err) {
-    return util.steam.findByName('The Witcher 3: Wild Hunt')
-      .catch(() => util.steam.findByAppId('499450'))
+    return util.GameStoreHelper.findByAppId(GOG_ID_GOTY, GOG_ID, STEAM_ID)
       .then(game => game.gamePath);
   }
 }
