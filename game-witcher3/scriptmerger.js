@@ -254,23 +254,10 @@ async function extractScriptMerger(context, archivePath) {
   return Promise.resolve(destination);
 }
 
-async function migrateInventory(from, to) {
-  const fromPath = path.join(from, MERGE_INV);
-  const toPath = path.join(to, MERGE_INV)
-  return fs.statAsync(fromPath)
-    .then(() => fs.copyAsync(fromPath, toPath))
-    .catch(err => (err.code === 'ENOENT')
-      ? Promise.resolve()
-      : Promise.reject(err));
-}
-
 async function setUpMerger(context, mergerVersion, newPath) {
   const state = context.api.store.getState();
   const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', 'witcher3'], undefined);
   const currentDetails = discovery?.tools?.W3ScriptMerger;
-  if (!!currentDetails) {
-    await migrateInventory(path.dirname(currentDetails.path), newPath)
-  }
 
   const newToolDetails = (!!currentDetails)
     ? { ...currentDetails, mergerVersion }
