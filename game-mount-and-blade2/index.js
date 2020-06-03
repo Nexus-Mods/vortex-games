@@ -844,6 +844,9 @@ function main(context) {
 
   const refreshCacheOnEvent = async (profileId) => {
     CACHE = {};
+    if (profileId === undefined) {
+      return Promise.resolve();
+    }
     const state = context.api.store.getState();
     const activeProfile = selectors.activeProfile(state);
     const deployProfile = selectors.profileById(state, profileId);
