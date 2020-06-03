@@ -13,40 +13,40 @@ const MERGER_ID = 'W3ScriptMerger';
 
 function query(baseUrl, request) {
   return new Promise((resolve, reject) => {
-      const relUrl = url.parse(`${baseUrl}/${request}`);
-      const options = {
-        ..._.pick(relUrl, ['port', 'hostname', 'path']),
-        headers: {
-          'User-Agent': 'Vortex',
-        },
-      };
+    const relUrl = url.parse(`${baseUrl}/${request}`);
+    const options = {
+      ..._.pick(relUrl, ['port', 'hostname', 'path']),
+      headers: {
+        'User-Agent': 'Vortex',
+      },
+    };
 
-      https.get(options, res => {
-        res.setEncoding('utf-8');
-        const callsRemaining = parseInt(res.headers['x-ratelimit-remaining'], 10);
-        if ((res.statusCode === 403) && (callsRemaining === 0)) {
-          const resetDate = parseInt(res.headers['x-ratelimit-reset'], 10) * 1000;
-          log('info', 'GitHub rate limit exceeded',
-            { reset_at: (new Date(resetDate)).toString() });
-          return reject(new util.ProcessCanceled('GitHub rate limit exceeded'));
-        }
+    https.get(options, res => {
+      res.setEncoding('utf-8');
+      const callsRemaining = parseInt(res.headers['x-ratelimit-remaining'], 10);
+      if ((res.statusCode === 403) && (callsRemaining === 0)) {
+        const resetDate = parseInt(res.headers['x-ratelimit-reset'], 10) * 1000;
+        log('info', 'GitHub rate limit exceeded',
+          { reset_at: (new Date(resetDate)).toString() });
+        return reject(new util.ProcessCanceled('GitHub rate limit exceeded'));
+      }
 
-        let output = '';
-        res
-          .on('data', data => output += data)
-          .on('end', () => {
-            try {
-              return resolve(JSON.parse(output));
-            } catch (parseErr) {
-              return reject(parseErr);
-            }
-          });
+      let output = '';
+      res
+        .on('data', data => output += data)
+        .on('end', () => {
+          try {
+            return resolve(JSON.parse(output));
+          } catch (parseErr) {
+            return reject(parseErr);
+          }
+        });
+    })
+      .on('error', err => {
+        return reject(err);
       })
-        .on('error', err => {
-          return reject(err);
-        })
-        .end();
-    });
+      .end();
+  });
 }
 
 function getRequestOptions(link) {
