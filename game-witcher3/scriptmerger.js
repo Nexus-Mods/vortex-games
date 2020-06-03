@@ -4,7 +4,7 @@ const _ = require('lodash');
 const url = require('url');
 const semver = require('semver');
 const getVersion = require('exe-version').default;
-const { actions, fs, util } = require('vortex-api');
+const { actions, fs, log, util } = require('vortex-api');
 
 const RELEASE_CUTOFF = '0.6.4';
 const GITHUB_URL = 'https://api.github.com/repos/IDCs/WitcherScriptMerger';
