@@ -9,7 +9,6 @@ const { actions, fs, util } = require('vortex-api');
 const RELEASE_CUTOFF = '0.6.4';
 const GITHUB_URL = 'https://api.github.com/repos/IDCs/WitcherScriptMerger';
 const MERGER_RELPATH = 'WitcherScriptMerger';
-const MERGE_INV = 'MergeInventory.xml';
 const MERGER_ID = 'W3ScriptMerger';
 
 function query(baseUrl, request) {
@@ -39,15 +38,12 @@ function query(baseUrl, request) {
             try {
               return resolve(JSON.parse(output));
             } catch (parseErr) {
-              const message = output.split('\n')[0];
-              const error = new Error(message);
-              error.stack = stackErr.stack;
-              reject(error);
+              return reject(parseErr);
             }
           });
       })
         .on('error', err => {
-          reject(err);
+          return reject(err);
         })
         .end();
     });
