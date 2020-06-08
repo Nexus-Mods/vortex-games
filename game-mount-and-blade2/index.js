@@ -213,7 +213,7 @@ async function getManagedIds(context) {
         + 'these mods and their content are not open in any other application '
         + '(including the game itself). If the mod is missing entirely, please re-install it, '
         + 'or remove it from your mods page.';
-      context.api.showErrorNotification('Invalid Mods in Staging', errMessage);
+      context.api.showErrorNotification('Invalid Mods in Staging', errMessage, { allowReport: false });
     }
     return Promise.resolve(res);
   });
