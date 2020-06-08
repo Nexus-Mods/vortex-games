@@ -462,11 +462,16 @@ async function prepareForModding(context, discovery) {
     const modIds = Object.keys(CACHE);
     const sorted = tSort(modIds, true);
   })
-  .catch(err => (err instanceof util.NotFound)
-    ? Promise.reject(new util.NotFound('Tale Worlds Launcher data is missing - '
-      + 'please run the game through the Tale Worlds launcher at least once '
-      + 'and try again.'))
-    : Promise.reject(err))
+  .catch(err => {
+    if (err instanceof util.NotFound) {
+      context.api.showErrorNotification('Failed to find game launcher data',
+        'Please run the game at least once through the official game launcher and '
+      + 'try again', { allowReport: false });
+      return Promise.resolve();
+    }
+
+    return Promise.reject(err);
+  })
   .finally(() => {
     const state = context.api.store.getState();
     const activeProfile = selectors.activeProfile(state);
