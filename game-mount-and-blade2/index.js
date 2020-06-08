@@ -139,7 +139,7 @@ async function getDeployedModData(context, subModuleFilePaths) {
       //  to the parent node of the actual problem and in this case nearly
       //  always will point to the root of the XML file (Module) which is completely useless.
       //  We're going to provide a human readable error to the user.
-      context.api.showErrorNotification('Unable to parse submodule file', errorMessage);
+      context.api.showErrorNotification('Unable to parse submodule file', errorMessage, { allowReport: false });
       log('error', 'MNB2: parsing error', err);
     }
     
