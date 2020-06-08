@@ -688,6 +688,23 @@ function merge(filePath, mergeDir, context) {
     });
 }
 
+const SCRIPT_MERGER_FILES = ['WitcherScriptMerger.exe'];
+function scriptMergerTest(files, gameId) {
+  const matcher = (file => SCRIPT_MERGER_FILES.includes(file));
+  const supported = ((gameId === GAME_ID) && (files.filter(matcher).length > 0));
+
+  return Promise.resolve({ supported, requiredFiles: SCRIPT_MERGER_FILES });
+}
+
+function scriptMergerDummyInstaller(context, files) {
+  context.api.showErrorNotification('Invalid Mod', 'It looks like you tried to install '
+    + 'The Witcher 3 Script Merger, which is a tool and not a mod for The Witcher 3.\n\n'
+    + 'The script merger should\'ve been installed automatically by Vortex as soon as you activated this extension. '
+    + 'If the download or installation has failed for any reason - please let us know why, by reporting the error through '
+    + 'our feedback system and make sure to include vortex logs.', { allowReport: false });
+  return Promise.reject(new util.ProcessCanceled('Invalid mod'));
+}
+
 function main(context) {
   context.registerGame({
     id: GAME_ID,
@@ -723,6 +740,7 @@ function main(context) {
   context.registerInstaller('witcher3tl', 25, testSupportedTL, installTL);
   context.registerInstaller('witcher3content', 50, testSupportedContent, installContent);
   context.registerInstaller('witcher3menumodroot', 20, testMenuModRoot, installMenuMod);
+  context.registerInstaller('scriptmergerdummy', 15, scriptMergerTest, (files) => scriptMergerDummyInstaller(context, files));
 
   context.registerModType('witcher3tl', 25, gameId => gameId === 'witcher3', getTLPath, testTL);
   context.registerModType('witcher3dlc', 25, gameId => gameId === 'witcher3', getDLCPath, testDLC);
