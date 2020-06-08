@@ -481,8 +481,17 @@ module.exports = {
             // copy the new file back into the corresponding mod, then delete it. That way, vortex will
             // create a link to it with the correct deployment method and not ask the user any questions
             await fs.ensureDirAsync(path.dirname(targetPath));
-            await fs.copyAsync(entry.filePath, targetPath);
-            await fs.removeAsync(entry.filePath);
+            try {
+              await fs.copyAsync(entry.filePath, targetPath);
+              await fs.removeAsync(entry.filePath);
+            } catch (err) {
+              if (!err.message.includes('are the same file')) {
+                // should we be reporting this to the user? This is a completely
+                // automated process and if it fails more often than not the
+                // user probably doesn't care
+                log('error', 'failed to re-import added file to mod', err.message);
+              }
+            }
           }
         });
       });
