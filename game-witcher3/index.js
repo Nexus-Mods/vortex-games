@@ -410,7 +410,8 @@ function runScriptMerger(api) {
     api.showErrorNotification('Failed to run tool', error);
   }
 
-  return api.runExecutable(tool.path, [], { suggestDeploy: true });
+  return api.runExecutable(tool.path, [], { suggestDeploy: true })
+    .catch(err => api.showErrorNotification('Failed to run tool', err));
 }
 
 async function getAllMods(context) {
