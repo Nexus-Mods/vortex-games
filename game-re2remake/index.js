@@ -534,7 +534,7 @@ function main(context) {
   //  Users which have already downloaded mods need to be migrated.
   context.registerMigration(old => migrate010(context.api, old));
 
-  //context.registerInstaller('re2fluffyquack', 20, fluffyManagerTest, (files) => fluffyDummyInstaller(context, files));
+  context.registerInstaller('re2fluffyquack', 20, fluffyManagerTest, (files) => fluffyDummyInstaller(context, files));
   context.registerInstaller('re2qbmsmod', 25, testSupportedContent, installContent);
 
   context.registerAction('mod-icons', 500, 'savegame', {}, 'Invalidate Paths', () => {
