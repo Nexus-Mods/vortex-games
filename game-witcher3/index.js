@@ -407,11 +407,12 @@ function runScriptMerger(api) {
   const tool = getScriptMergerTool(api);
   if (tool === undefined) {
     const error = new util.SetupError('Witcher Script Merger is not configured correctly');
-    api.showErrorNotification('Failed to run tool', error);
+    api.showErrorNotification('Failed to run tool', error, { allowReport: false });
   }
 
   return api.runExecutable(tool.path, [], { suggestDeploy: true })
-    .catch(err => api.showErrorNotification('Failed to run tool', err));
+    .catch(err => api.showErrorNotification('Failed to run tool', err,
+      { allowReport: ['EPERM', 'EACCESS', 'ENOENT'].indexOf(err.code) !== -1 }));
 }
 
 async function getAllMods(context) {
