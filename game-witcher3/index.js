@@ -380,7 +380,8 @@ function prepareForModding(context, discovery) {
   const scriptMergerPath = util.getSafe(discovery, ['tools', SCRIPT_MERGER_ID, 'path'],
     path.join(discovery.path, 'WitcherScriptMerger', 'WitcherScriptMerger.exe'));
 
-  const findScriptMerger = () => {
+  const findScriptMerger = (error) => {
+    log('error', 'failed to download/install script merger', error);
     return fs.statAsync(scriptMergerPath)
       .catch(() => missingScriptMerger())
   };
@@ -390,7 +391,7 @@ function prepareForModding(context, discovery) {
       .then(() => merger.default(context)
         .catch(err => (err instanceof util.UserCanceled)
           ? Promise.resolve()
-          : findScriptMerger()));
+          : findScriptMerger(err)));
 }
 
 function getScriptMergerTool(api) {
