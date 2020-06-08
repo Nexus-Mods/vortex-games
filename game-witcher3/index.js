@@ -387,7 +387,8 @@ function prepareForModding(context, discovery) {
   };
 
   return Promise.all([fs.ensureDirWritableAsync(path.join(discovery.path, 'Mods')),
-    fs.ensureDirWritableAsync(path.dirname(scriptMergerPath))])
+    fs.ensureDirWritableAsync(path.dirname(scriptMergerPath)),
+    fs.ensureDirWritableAsync(path.dirname(getLoadOrderFilePath()))])
       .then(() => merger.default(context)
         .catch(err => (err instanceof util.UserCanceled)
           ? Promise.resolve()
