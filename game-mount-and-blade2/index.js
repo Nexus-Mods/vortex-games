@@ -196,7 +196,7 @@ async function getManagedIds(context) {
       //  or a 3rd party application has tampered with the file...
       //  We simply log this here as the parse-ing failure will be highlighted
       //  by the CACHE logic.
-      log('error', err);
+      log('error', '[MnB2] Unable to parse submodule file', err);
       //context.api.showErrorNotification('Unable to parse submodule file', err);
       return Promise.resolve(accum);
     }
