@@ -448,7 +448,7 @@ function fluffyDummyInstaller(context, files) {
   context.api.showErrorNotification('Invalid Mod', 'It looks like you tried to install '
     + 'Fluffy Manager 5000, which is a standalone mod manager and not a mod for Devil May Cry 5.\n\n'
     + 'Fluffy Manager and Vortex cannot be used together and doing so will break your game. Please '
-    + 'use only one of these apps to manage mods for Devil May Cry 5.');
+    + 'use only one of these apps to manage mods for Devil May Cry 5.', { allowReport: false });
   return Promise.reject(new util.ProcessCanceled('Invalid mod'));
 }
 
