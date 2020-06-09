@@ -107,7 +107,7 @@ async function getManuallyAddedMods(context) {
                                  && (entry?.linkCount === undefined || entry.linkCount <= 1)));
           })
           .catch(err => (['ENOENT', 'ENOTFOUND'].indexOf(err.code) !== -1)
-            ? Promise.resolve()
+            ? null // do nothing
             : Promise.reject(err));
 
           const mapped = await Promise.map(candidates, cand => fs.statAsync(cand.filePath)
@@ -500,6 +500,13 @@ async function preSort(context, items, direction) {
 
   const state = context.api.store.getState();
   const activeProfile = selectors.activeProfile(state);
+  if (activeProfile?.id === undefined) {
+    // What an odd use case - perhaps the user had switched gameModes or
+    //  even deleted his profile during the pre-sort functionality ?
+    //  Odd but plausible I suppose ?
+    log('warn', '[W3] unable to presort due to no active profile');
+    return Promise.resolve([]);
+  }
   const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
   const keys = Object.keys(loadOrder);
   const knownManuallyAdded = manualEntries.filter(entry => keys.includes(entry.id)) || [];
