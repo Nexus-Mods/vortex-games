@@ -105,7 +105,10 @@ async function getManuallyAddedMods(context) {
             candidates = [].concat(candidates, entries.filter(entry => (!entry.isDirectory)
                                  && (path.extname(path.basename(entry.filePath)) !== '')
                                  && (entry?.linkCount === undefined || entry.linkCount <= 1)));
-          });
+          })
+          .catch(err => (['ENOENT', 'ENOTFOUND'].indexOf(err.code) !== -1)
+            ? Promise.resolve()
+            : Promise.reject(err));
 
           const mapped = await Promise.map(candidates, cand => fs.statAsync(cand.filePath)
                                                     .then(stats => stats.isSymbolicLink()
@@ -827,7 +830,10 @@ function main(context) {
                 const relevantEntries = entries.filter(entry => entry.filePath.endsWith(PART_SUFFIX))
                                               .map(entry => entry.filePath);
                 accum = [].concat(accum, relevantEntries);
-              });
+              })
+              .catch(err => (['ENOENT', 'ENOTFOUND'].indexOf(err.code) !== -1)
+                ? Promise.resolve(accum)
+                : Promise.reject(err));
               return Promise.resolve(accum);
             }, [])
             .then(docFiles => new Promise(resolve => menuMod.default(context.api, activeProfile, docFiles)
