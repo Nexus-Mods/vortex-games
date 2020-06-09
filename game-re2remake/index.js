@@ -52,9 +52,10 @@ const ACTIVITY_REVAL = 'revalidations';
 const I18N_NAMESPACE = `game-${GAME_ID}`;
 
 function getFileListCache() {
+  const state = _API.store.getState();
   return (FILE_CACHE.length > 0)
     ? Promise.resolve(FILE_CACHE)
-    : fs.readFileAsync(_FILE_LIST, { encoding: 'utf-8' })
+    : ensureListBackup(state).then(() => fs.readFileAsync(_FILE_LIST, { encoding: 'utf-8' }))
       .then(data => {
         FILE_CACHE = data.split('\n');
         return Promise.resolve(FILE_CACHE);
@@ -509,7 +510,9 @@ function invalidateFilePaths(wildCards, api, force = false) {
       .then(() => removeFilteredList()));
 }
 
+let _API;
 function main(context) {
+  _API = context.api;
   context.requireExtension('quickbms-support');
   context.registerGame({
     id: GAME_ID,
