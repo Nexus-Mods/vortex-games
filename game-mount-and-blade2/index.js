@@ -87,6 +87,9 @@ async function getDeployedSubModPaths(context) {
   try {
     moduleFiles = await walkAsync(modulePath);
   } catch (err) {
+    if (err instanceof util.UserCanceled) {
+      return Promise.resolve([]);
+    }
     const isMissingOfficialModules = ((err.code === 'ENOENT')
       && ([].concat([ MODULES ], Array.from(OFFICIAL_MODULES)))
             .indexOf(path.basename(err.path)) !== -1);
