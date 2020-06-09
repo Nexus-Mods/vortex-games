@@ -70,7 +70,7 @@ function walkAsync(dir) {
 }
 
 
-function readModsFolder(modsFolder) {
+function readModsFolder(modsFolder, api) {
   const extL = input => path.extname(input).toLowerCase();
   const isValidMod = modFile => ['.pak', '.cfg', '.manifest'].indexOf(extL(modFile)) !== -1;
 
@@ -89,23 +89,24 @@ function readModsFolder(modsFolder) {
         .catch(err => Promise.resolve(accum))
     }, []))
     .catch(err => {
-      if (err.code === 'ENOENT') {
-        log('warn', 'kingdom come mods directory missing');
-      } else {
-        log('error', 'failed to read kingdom come mods directory', err.message);
-      }
+      const allowReport = ['ENOENT', 'EPERM', 'EACCESS'].indexOf(err.code) === -1;
+      api.showErrorNotification('failed to read kingdom come mods directory',
+        err.message, { allowReport });
+      return Promise.resolve([]);
     });
 }
 
 function listHasMod(modId, list) {
-  return list.map(mod =>
-    transformId(mod).toLowerCase()).includes(modId.toLowerCase());
+  return (!!list)
+    ? list.map(mod =>
+        transformId(mod).toLowerCase()).includes(modId.toLowerCase())
+    : false;
 }
 
-function getManuallyAddedMods(disabledMods, enabledMods, modOrderFilepath) {
+function getManuallyAddedMods(disabledMods, enabledMods, modOrderFilepath, api) {
   const modsPath = path.dirname(modOrderFilepath);
 
-  return readModsFolder(modsPath).then(deployedMods =>
+  return readModsFolder(modsPath, api).then(deployedMods =>
     getCurrentOrder(modOrderFilepath)
       .catch(err => (err.code === 'ENOENT') ? Promise.resolve('') : Promise.reject(err))
       .then(data => {
@@ -138,7 +139,8 @@ function refreshModList(context, discoveryPath) {
         ? accum.concat(mod)
         : accum);
   }, []).then(managedMods => {
-    return getManuallyAddedMods(disabled, enabled, path.join(discoveryPath, modsPath(), MODS_ORDER_FILENAME))
+    return getManuallyAddedMods(disabled, enabled, path.join(discoveryPath, modsPath(),
+      MODS_ORDER_FILENAME), context.api)
       .then(manuallyAdded => {
         _MODS_STATE.enabled = [].concat(managedMods
           .map(mod => transformId(mod)), manuallyAdded);
@@ -339,7 +341,7 @@ function main(context) {
       const modState = util.getSafe(profile, ['modState'], {});
       const enabled = modKeys.filter(mod => !!modState[mod] && modState[mod].enabled);
       const disabled = modKeys.filter(dis => !enabled.includes(dis));
-      getManuallyAddedMods(disabled, enabled, modsOrderFilePath)
+      getManuallyAddedMods(disabled, enabled, modsOrderFilePath, context.api)
         .then(manuallyAdded => {
           writeOrderFile(modsOrderFilePath, manuallyAdded)
             .then(() => setNewOrder({ context, profile }, manuallyAdded));
