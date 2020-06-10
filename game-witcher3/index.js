@@ -185,7 +185,15 @@ function getUnificationPatch(context) {
 }
 
 function getMergedModNames(context) {
-  return getElementValues(context, '//MergedModName');
+  return getElementValues(context, '//MergedModName')
+    .catch(err => {
+      // We failed to parse the merge inventory for whatever reason.
+      //  Rather than blocking the user from modding his game we're
+      //  we simply return an empty array; but before we do that,
+      //  we need to tell him we were unable to parse the merged inventory.
+      context.api.showErrorNotification('Invalid MergeInventory.xml file', err);
+      return Promise.resolve([]);
+    });
 }
 
 function findGame() {
