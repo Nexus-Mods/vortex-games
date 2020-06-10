@@ -302,6 +302,12 @@ function installMenuMod(files,
     const source = file;
     let relPath = file.split(path.sep)
                       .slice(idx);
+    if (relPath === undefined) {
+      // This file must've been inside the root of the archive;
+      //  deploy as is.
+      relPath = file;
+    }
+
     const firstSeg = relPath[0].toLowerCase();
     if (firstSeg === 'content' || firstSeg.endsWith(PART_SUFFIX)) {
       relPath = [].concat(['Mods', modName], relPath)
