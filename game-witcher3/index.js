@@ -191,7 +191,7 @@ function getMergedModNames(context) {
       //  Rather than blocking the user from modding his game we're
       //  we simply return an empty array; but before we do that,
       //  we need to tell him we were unable to parse the merged inventory.
-      context.api.showErrorNotification('Invalid MergeInventory.xml file', err);
+      context.api.showErrorNotification('Invalid MergeInventory.xml file', err, { allowReport: false });
       return Promise.resolve([]);
     });
 }
