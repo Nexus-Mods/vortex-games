@@ -601,8 +601,8 @@ function tSort(subModIds, allowLocked = false, loadOrder = undefined) {
 async function preSort(context, items, direction) {
   const state = context.api.store.getState();
   const activeProfile = selectors.activeProfile(state);
-  if (activeProfile?.id === undefined) {
-    // No active profile... Race condition ?
+  if (activeProfile?.id === undefined || activeProfile?.gameId !== GAME_ID) {
+    // Race condition ?
     return items;
   }
 
