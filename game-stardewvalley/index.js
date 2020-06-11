@@ -476,6 +476,9 @@ module.exports = {
           // only act if we definitively know which mod owns the file
           if (entry.candidates.length === 1) {
             const mod = util.getSafe(state.persistent.mods, [GAME_ID, entry.candidates[0]], undefined);
+            if (mod === undefined) {
+              return Promise.resolve();
+            }
             const relPath = path.relative(modPaths[mod.type], entry.filePath);
             const targetPath = path.join(installPath, mod.id, relPath);
             // copy the new file back into the corresponding mod, then delete it. That way, vortex will
