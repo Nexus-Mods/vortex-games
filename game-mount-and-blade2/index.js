@@ -52,7 +52,8 @@ const SUBMOD_FILE = "submodule.xml";
 async function walkAsync(dir, levelsDeep = 2) {
   let entries = [];
   return fs.readdirAsync(dir).then(files => {
-    return Promise.each(files, file => {
+    const filtered = files.filter(file => !file.endsWith('.vortex_backup'));
+    return Promise.each(filtered, file => {
       const fullPath = path.join(dir, file);
       return fs.statAsync(fullPath).then(stats => {
         if (stats.isDirectory() && levelsDeep > 0) {
