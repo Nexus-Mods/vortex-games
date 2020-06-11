@@ -599,6 +599,13 @@ function tSort(subModIds, allowLocked = false, loadOrder = undefined) {
 }
 
 async function preSort(context, items, direction) {
+  const state = context.api.store.getState();
+  const activeProfile = selectors.activeProfile(state);
+  if (activeProfile?.id === undefined) {
+    // No active profile... Race condition ?
+    return items;
+  }
+
   const modIds = Object.keys(CACHE);
 
   // Locked ids are always at the top of the list as all
@@ -624,9 +631,6 @@ async function preSort(context, items, direction) {
   
   // External ids will include official modules as well but not locked entries.
   const externalIds = modIds.filter(id => (!CACHE[id].isLocked) && (CACHE[id].vortexId === id));
-
-  const state = context.api.store.getState();
-  const activeProfile = selectors.activeProfile(state);
   const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
   const LOkeys = ((Object.keys(loadOrder).length > 0)
     ? Object.keys(loadOrder)
