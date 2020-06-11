@@ -662,11 +662,23 @@ function merge(filePath, mergeDir, context) {
         modData = parseXmlString(xmlData, { ignore_enc: true, noblanks: true });
         return Promise.resolve(modData);
       } catch (err) {
-        return Promise.reject(err);
+        // The mod itself has invalid xml data.
+        context.api.showErrorNotification('Invalid mod XML data - inform mod author', err, { allowReport: false });
+        return Promise.reject(new util.DataInvalid('Invalid mod XML data - inform mod author'));
       }
     })
     .then(() => readInputFile(context, mergeDir))
-    .then(mergedData => parseXmlString(mergedData, { ignore_enc: true, noblanks: true }))
+    .then(mergedData => {
+      try {
+        const merged = parseXmlString(mergedData, { ignore_enc: true, noblanks: true });
+        return Promise.resolve(merged);
+      } catch (err) {
+        // This is the merged file - if it's invalid chances are we messed up
+        //  somehow, reason why we're going to allow this error to get reported.
+        context.api.showErrorNotification('Invalid merged XML data', err, { allowReport: true });
+        return Promise.reject(new util.DataInvalid('Invalid merged XML data'));
+      }
+    })
     .then(gameIndexFile => {
       const modVars = modData.find('//Var');
       const gameVars = gameIndexFile.find('//Var');
