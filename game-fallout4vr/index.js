@@ -28,6 +28,15 @@ let tools = [
       'FO4VREdit.exe',
     ],
   },
+  {
+    id: 'F4SEVR',
+    name: 'F4SE VR',
+    executable: () => 'f4sevr_loader.exe',
+    requiredFiles: [
+      'f4sevr_loader.exe',
+    ],
+    defaultPrimary: true
+  },
 ];
 
 function main(context) {
