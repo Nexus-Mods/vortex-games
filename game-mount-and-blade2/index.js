@@ -917,14 +917,23 @@ function main(context) {
         // only act if we definitively know which mod owns the file
         if (entry.candidates.length === 1) {
           const mod = util.getSafe(state.persistent.mods, [GAME_ID, entry.candidates[0]], undefined);
+          if (mod === undefined) {
+            return Promise.resolve();
+          }
           const relPath = path.relative(modPaths[mod.type], entry.filePath);
           const targetPath = path.join(installPath, mod.id, relPath);
           // copy the new file back into the corresponding mod, then delete it. That way, vortex will
           // create a link to it with the correct deployment method and not ask the user any questions
           await fs.ensureDirAsync(path.dirname(targetPath));
-          await fs.copyAsync(entry.filePath, targetPath);
-          await fs.removeAsync(entry.filePath);
-        } // number of the beast - this lockdown is getting to me...
+          const result = Promise.all([
+            fs.statAsync(entry.filePath),
+            fs.statAsync(targetPath).catch(err => Promise.resolve(undefined))
+          ]);
+          if ((result[1] === undefined) || (result[0].ino !== result[1].ino)) {
+            await fs.copyAsync(entry.filePath, targetPath);
+            await fs.removeAsync(entry.filePath);
+          }
+        }
       });
     });
   })
