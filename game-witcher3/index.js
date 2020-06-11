@@ -859,14 +859,18 @@ function main(context) {
               .map(key => mods[key]);
 
             return Promise.reduce(enabledMods, async (accum, mod) => {
-              await require('turbowalk').default(path.join(stagingFolder, mod.installationPath), entries => {
-                const relevantEntries = entries.filter(entry => entry.filePath.endsWith(PART_SUFFIX))
-                                              .map(entry => entry.filePath);
-                accum = [].concat(accum, relevantEntries);
-              })
-              .catch(err => (['ENOENT', 'ENOTFOUND'].indexOf(err.code) !== -1)
-                ? Promise.resolve(accum)
-                : Promise.reject(err));
+              try {
+                await require('turbowalk').default(path.join(stagingFolder, mod.installationPath), entries => {
+                  const relevantEntries = entries.filter(entry => entry.filePath.endsWith(PART_SUFFIX))
+                                                .map(entry => entry.filePath);
+                  accum = [].concat(accum, relevantEntries);
+                });
+              } catch (err) {
+                if  (['ENOENT', 'ENOTFOUND'].indexOf(err.code) === -1) {
+                  log('error', 'Failed to lookup menu mod files',
+                    { path: path.join(stagingFolder, mod.installationPath), error: err.message });
+                }
+              };
               return Promise.resolve(accum);
             }, [])
             .then(docFiles => new Promise(resolve => menuMod.default(context.api, activeProfile, docFiles)
