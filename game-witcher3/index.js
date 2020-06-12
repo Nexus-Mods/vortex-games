@@ -664,7 +664,8 @@ function merge(filePath, mergeDir, context) {
         return Promise.resolve();
       } catch (err) {
         // The mod itself has invalid xml data.
-        context.api.showErrorNotification('Invalid mod XML data - inform mod author', err, { allowReport: false });
+        context.api.showErrorNotification('Invalid mod XML data - inform mod author',
+        { path: filePath, error: err.message }, { allowReport: false });
         modData = emptyXml;
         return Promise.resolve();
       }
