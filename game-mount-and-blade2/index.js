@@ -482,7 +482,7 @@ async function prepareForModding(context, discovery) {
     if (activeProfile === undefined) {
       // Valid use case when attempting to switch to
       //  Bannerlord without any active profile.
-      refreshGameParams(context, {});
+      return refreshGameParams(context, {});
     }
     const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
     return refreshGameParams(context, loadOrder);
