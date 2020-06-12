@@ -654,17 +654,19 @@ function readInputFile(context, mergeDir) {
     : Promise.reject({ code: 'ENOENT', message: 'Game is not discovered' })
 }
 
+const emptyXml = '<?xml version="1.0" ?><metadata></metadata>';
 function merge(filePath, mergeDir, context) {
   let modData;
   return fs.readFileAsync(filePath)
     .then(xmlData => {
       try {
         modData = parseXmlString(xmlData, { ignore_enc: true, noblanks: true });
-        return Promise.resolve(modData);
+        return Promise.resolve();
       } catch (err) {
         // The mod itself has invalid xml data.
         context.api.showErrorNotification('Invalid mod XML data - inform mod author', err, { allowReport: false });
-        return Promise.reject(new util.DataInvalid('Invalid mod XML data - inform mod author'));
+        modData = emptyXml;
+        return Promise.resolve();
       }
     })
     .then(() => readInputFile(context, mergeDir))
