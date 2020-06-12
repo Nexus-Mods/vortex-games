@@ -114,7 +114,7 @@ async function writeModFiles(api, modName, docFiles, profile) {
 
         if (paths.includes(err.path)) {
           const error = new util.DataInvalid('Required setting files are missing - please run the game at least once and try again.');
-          api.showErrorNotification('Failed to install menu mod', error);
+          api.showErrorNotification('Failed to install menu mod', error, { allowReport: false });
           return Promise.resolve();
         }
         return Promise.reject(err);
