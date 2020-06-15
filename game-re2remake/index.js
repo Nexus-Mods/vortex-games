@@ -436,9 +436,12 @@ function revalidateFilePaths(hashes, api) {
     });
 }
 
+let _incompleteNotifRaised = false;
 function invalidateFilePaths(wildCards, api, force = false) {
   const reportIncompleteList = () => {
-    api.showErrorNotification('Missing filepaths in game archives',
+    if (!_incompleteNotifRaised) {
+      _incompleteNotifRaised = true;
+      api.showErrorNotification('Missing filepaths in game archives',
       'Unfortunately Vortex cannot install this mod correctly as it seems to include one or more '
       + 'unrecognized files.<br/><br/>'
       + 'This can happen when:<br/>'
@@ -448,6 +451,8 @@ function invalidateFilePaths(wildCards, api, force = false) {
       + 'To report this issue, please use the feedback system and make sure you attach Vortex\'s latest log file '
       + 'so we can review the missing files',
       { isBBCode: true, allowReport: false });
+    }
+
     return Promise.resolve();
   };
 
@@ -566,6 +571,7 @@ function main(context) {
         .then(entries => {
           const relFilePaths = entries.map(entry => entry.replace(modFolder + path.sep, ''));
           const wildCards = relFilePaths.map(fileEntry => fileEntry.replace(/\\/g, '/'))
+          _incompleteNotifRaised = false;
           return invalidateFilePaths(wildCards, context.api, true)
             .then(() => store.dispatch(actions.setDeploymentNecessary(GAME_ID, true)))
             .catch(err => (err instanceof util.ProcessCanceled)
@@ -591,6 +597,15 @@ function main(context) {
 
   context.once(() => {
     let previousDeployment;
+    let profileChanging = false;
+    context.api.events.on('profile-will-change', (newProfileId) => {
+      profileChanging = true;
+    });
+
+    context.api.events.on('profile-did-change', (newProfileId) => {
+      profileChanging = false;
+    });
+
     context.api.onAsync('will-deploy', (profileId, deployment) => {
       const state = context.api.store.getState();
       const profile = selectors.profileById(state, profileId);
@@ -628,11 +643,12 @@ function main(context) {
     })
 
     context.api.onAsync('bake-settings', (gameId, mods) => {
-      if (gameId === GAME_ID) {
+      if (gameId === GAME_ID && !profileChanging) {
         const store = context.api.store;
         const state = store.getState();
         const stagingFolder = selectors.installPathForGame(state, GAME_ID);
         store.dispatch(actions.startActivity('mods', ACTIVITY_INVAL));
+        _incompleteNotifRaised = false;
         return Promise.each(mods, mod => {
           const modFolder = path.join(stagingFolder, mod.installationPath);
           return walkAsync(modFolder)

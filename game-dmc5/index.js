@@ -366,8 +366,11 @@ function removeFromTemp(fileName) {
       : Promise.reject(err))
 }
 
+let _incompleteNotifRaised = false;
 function invalidateFilePaths(wildCards, api, force = false) {
   const reportIncompleteList = () => {
+    if (!_incompleteNotifRaised) {
+      _incompleteNotifRaised = true;
     api.showErrorNotification('Missing filepaths in game archives',
       'Unfortunately Vortex cannot install this mod correctly as it seems to include one or more '
       + 'unrecognized files.<br/><br/>'
@@ -377,7 +380,9 @@ function invalidateFilePaths(wildCards, api, force = false) {
       + 'which were never supposed to be there.<br/><br/>'
       + 'To report this issue, please use the feedback system and make sure you attach Vortex\'s latest log file '
       + 'so we can review the missing files',
-      { isBBCode: true, allowReport: false })
+      { isBBCode: true, allowReport: false });
+    }
+
     return Promise.resolve();
   };
 
@@ -496,6 +501,7 @@ function main(context) {
     store.dispatch(actions.startActivity('mods', ACTIVITY_INVAL));
     const installedMods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
     const mods = Object.keys(installedMods);
+    _incompleteNotifRaised = false;
     return Promise.each(mods, mod => {
       const modFolder = path.join(stagingFolder, mod);
       return walkAsync(modFolder)
@@ -518,6 +524,7 @@ function main(context) {
 
   context.once(() => {
     let previousDeployment;
+    let profileChanging = false;
     context.api.onAsync('will-deploy', (profileId, deployment) => {
       const state = context.api.store.getState();
       const profile = selectors.profileById(state, profileId);
@@ -526,6 +533,14 @@ function main(context) {
       }
       previousDeployment = deployment[''].map(iter => iter.relPath);
       return Promise.resolve();
+    });
+
+    context.api.events.on('profile-will-change', (newProfileId) => {
+      profileChanging = true;
+    });
+
+    context.api.events.on('profile-did-change', (newProfileId) => {
+      profileChanging = false;
     });
 
     context.api.onAsync('did-deploy', (profileId, deployment) => {
@@ -555,11 +570,12 @@ function main(context) {
     });
 
     context.api.onAsync('bake-settings', (gameId, mods) => {
-      if (gameId === GAME_ID) {
+      if (gameId === GAME_ID && !profileChanging) {
         const store = context.api.store;
         const state = store.getState();
         const stagingFolder = selectors.installPathForGame(state, GAME_ID);
         store.dispatch(actions.startActivity('mods', ACTIVITY_INVAL));
+        _incompleteNotifRaised = false;
         return Promise.each(mods, mod => {
           const modFolder = path.join(stagingFolder, mod.installationPath);
           return walkAsync(modFolder)
