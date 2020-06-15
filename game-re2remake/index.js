@@ -428,7 +428,9 @@ function revalidateFilePaths(hashes, api) {
           }))
           .then(() => (error === undefined)
             ? Promise.resolve()
-            : Promise.reject(new Error('Failed to re-validate filepaths')))
+            : (err instanceof util.ProcessCanceled)
+              ? Promise.reject(err)
+              : Promise.reject(new Error('Failed to re-validate filepaths')))
           .then(() => cache.removeOffsets(stagingFolder, arcMap[key], key));
       });
     });
@@ -495,6 +497,7 @@ function invalidateFilePaths(wildCards, api, force = false) {
               .then(entries => cache.insertOffsets(stagingFolder, entries, arcKey))
           : Promise.reject(error));
     }))
+    .catch(util.ProcessCanceled, () => Promise.resolve())
     .catch(util.NotFound, () => (force)
       ? Promise.resolve()
       : reportIncompleteList())
@@ -533,6 +536,11 @@ function main(context) {
       { replace: { modDir: modFolder }, allowReport: false });
   };
 
+  const reportError = (message, err) => {
+    context.api.showErrorNotification(message, err);
+    return Promise.resolve();
+  };
+
   // Pre-qbms RE2 installer was not fit for purpose and needs to be removed.
   //  Users which have already downloaded mods need to be migrated.
   context.registerMigration(old => migrate010(context.api, old));
@@ -559,7 +567,10 @@ function main(context) {
           const relFilePaths = entries.map(entry => entry.replace(modFolder + path.sep, ''));
           const wildCards = relFilePaths.map(fileEntry => fileEntry.replace(/\\/g, '/'))
           return invalidateFilePaths(wildCards, context.api, true)
-            .then(() => store.dispatch(actions.setDeploymentNecessary(GAME_ID, true)));
+            .then(() => store.dispatch(actions.setDeploymentNecessary(GAME_ID, true)))
+            .catch(err => (err instanceof util.ProcessCanceled)
+              ? Promise.resolve()
+              : Promise.reject(err));
         })
         .catch(err => {
           if (err.code === 'ENOENT') {
@@ -567,7 +578,7 @@ function main(context) {
             missingModNotification(modFolder);
             return Promise.resolve();
           } else {
-            context.api.showErrorNotification('Invalidation failed', err);
+            return reportError('Invalidation failed', err);
           }
         });
     })
@@ -608,6 +619,9 @@ function main(context) {
 
         const hashes = wildCards.map(entry => murmur3.getMurmur3Hash(entry));
         return revalidateFilePaths(hashes, api)
+          .catch(err => (err instanceof util.ProcessCanceled)
+            ? Promise.resolve()
+            : reportError('re-validation failed', err))
           .finally(() => { store.dispatch(actions.stopActivity('mods', ACTIVITY_REVAL)); });
       }
       return Promise.resolve();
@@ -625,7 +639,10 @@ function main(context) {
             .then(entries => {
               const relFilePaths = entries.map(entry => entry.replace(modFolder + path.sep, ''));
               const wildCards = relFilePaths.map(fileEntry => fileEntry.replace(/\\/g, '/'))
-              return invalidateFilePaths(wildCards, context.api);
+              return invalidateFilePaths(wildCards, context.api)
+                .catch(err => (err instanceof util.ProcessCanceled)
+                  ? Promise.resolve()
+                  : Promise.reject(err));
             })
             .catch(err => {
               if (err.code === 'ENOENT') {

@@ -343,7 +343,9 @@ function revalidateFilePaths(hashes, api) {
           }))
           .then(() => (error === undefined)
             ? Promise.resolve()
-            : Promise.reject(new Error('Failed to re-validate filepaths')))
+            : (err instanceof util.ProcessCanceled)
+              ? Promise.reject(err)
+              : Promise.reject(new Error('Failed to re-validate filepaths')))
           .then(() => cache.removeOffsets(stagingFolder, arcMap[key], key));
       });
     });
@@ -425,6 +427,7 @@ function invalidateFilePaths(wildCards, api, force = false) {
               .then(entries => cache.insertOffsets(stagingFolder, entries, arcKey))
           : Promise.reject(error));
     }))
+    .catch(util.ProcessCanceled, () => Promise.resolve())
     .catch(util.NotFound, () => reportIncompleteList())
     .catch(util.UserCanceled, () => api.sendNotification({
       type: 'info',
@@ -476,6 +479,11 @@ function main(context) {
   context.registerInstaller('dmc5fluffyquack', 20, fluffyManagerTest, (files) => fluffyDummyInstaller(context, files));
   context.registerInstaller('dmc5qbmsmod', 25, testSupportedContent, installQBMS);
 
+  const reportError = (message, err) => {
+    context.api.showErrorNotification(message, err);
+    return Promise.resolve();
+  };
+
   context.registerAction('mod-icons', 500, 'savegame', {}, 'Invalidate Paths', () => {
     const store = context.api.store;
     const state = store.getState();
@@ -495,7 +503,10 @@ function main(context) {
           const relFilePaths = entries.map(entry => entry.replace(modFolder + path.sep, ''));
           const wildCards = relFilePaths.map(fileEntry => fileEntry.replace(/\\/g, '/'))
           return invalidateFilePaths(wildCards, context.api, true)
-            .then(() => store.dispatch(actions.setDeploymentNecessary(GAME_ID, true)));
+            .then(() => store.dispatch(actions.setDeploymentNecessary(GAME_ID, true)))
+            .catch(err => (err instanceof util.ProcessCanceled)
+              ? Promise.resolve()
+              : reportError('Invalidation failed', err));
         })
     })
     .finally(() => { store.dispatch(actions.stopActivity('mods', ACTIVITY_INVAL)); })
@@ -535,6 +546,9 @@ function main(context) {
 
         const hashes = wildCards.map(entry => murmur3.getMurmur3Hash(entry));
         return revalidateFilePaths(hashes, api)
+          .catch(err => (err instanceof util.ProcessCanceled)
+            ? Promise.resolve()
+            : reportError('re-validation failed', err))
           .finally(() => { store.dispatch(actions.stopActivity('mods', ACTIVITY_REVAL)); });
       }
       return Promise.resolve();
@@ -555,6 +569,9 @@ function main(context) {
               return invalidateFilePaths(wildCards, context.api);
             })
         })
+        .catch(err => (err instanceof util.ProcessCanceled)
+          ? Promise.resolve()
+          : reportError('Invalidation failed', err))
         .finally(() => {
           store.dispatch(actions.stopActivity('mods', ACTIVITY_INVAL));
           return Promise.resolve();
