@@ -261,6 +261,7 @@ function setNewOrder(props, ordered) {
 function writeOrderFile(filePath, modList) {
   return fs.removeAsync(filePath)
     .catch(err => err.code === 'ENOENT' ? Promise.resolve() : Promise.reject(err))
+    .then(() => fs.ensureFileAsync(filePath))
     .then(() => fs.writeFileAsync(filePath, modList.join('\n'), { encoding: 'utf8' }));
 }
 
