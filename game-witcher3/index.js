@@ -638,7 +638,7 @@ function canMerge(game, gameDiscovery) {
         out: path.join(CONFIG_MATRIX_REL_PATH, INPUT_XML_FILENAME),
       },
     ],
-    filter: filePath => filePath.indexOf(INPUT_XML_FILENAME) !== -1,
+    filter: filePath => filePath.endsWith(INPUT_XML_FILENAME),
   });
 }
 
@@ -841,7 +841,8 @@ function main(context) {
             + 'remove the existing merge and re-apply it.');
         }
         const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
-        const docFiles = deployment['witcher3menumodroot'].filter(file => file.relPath.endsWith(PART_SUFFIX));
+        const docFiles = deployment['witcher3menumodroot'].filter(file => (file.relPath.endsWith(PART_SUFFIX))
+          && (file.relPath.indexOf(INPUT_XML_FILENAME) === -1));
         const menuModPromise = () => {
           if (docFiles.length === 0) {
             // If there are no menu mods deployed - remove the mod.
