@@ -403,9 +403,16 @@ function prepareForModding(context, discovery) {
       .catch(() => missingScriptMerger())
   };
 
-  return Promise.all([fs.ensureDirWritableAsync(path.join(discovery.path, 'Mods')),
-    fs.ensureDirWritableAsync(path.dirname(scriptMergerPath)),
-    fs.ensureDirWritableAsync(path.dirname(getLoadOrderFilePath()))])
+  const ensurePath = (dirpath) =>
+    fs.ensureDirWritableAsync(dirpath)
+      .catch(err => (err.code === 'EEXIST')
+        ? Promise.resolve()
+        : Promise.reject(err));
+
+  return Promise.all([
+    ensurePath(path.join(discovery.path, 'Mods')),
+    ensurePath(path.dirname(scriptMergerPath)),
+    ensurePath(path.dirname(getLoadOrderFilePath()))])
       .then(() => merger.default(context)
         .catch(err => (err instanceof util.UserCanceled)
           ? Promise.resolve()
