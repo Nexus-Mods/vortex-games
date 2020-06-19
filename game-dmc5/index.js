@@ -313,6 +313,10 @@ function filterOutInvalidated(wildCards, stagingFolder) {
 
 function revalidateFilePaths(hashes, api) {
   const discoveryPath = getDiscoveryPath(api);
+  if (discoveryPath === undefined) {
+    return Promise.reject(new Error('Game is not discovered'));
+  }
+
   const state = api.store.getState();
   const stagingFolder = selectors.installPathForGame(state, GAME_ID);
   return cache.findArcKeys(stagingFolder, hashes)
@@ -389,6 +393,10 @@ function invalidateFilePaths(wildCards, api, force = false) {
   // For the invalidation logic to work correctly all
   //  wildCards MUST belong to the same game archive/mod.
   const discoveryPath = getDiscoveryPath(api);
+  if (discoveryPath === undefined) {
+    return Promise.reject(new Error('Game is not discovered'));
+  }
+
   const state = api.store.getState();
   const stagingFolder = selectors.installPathForGame(state, GAME_ID);
   const filterPromise = (force)
