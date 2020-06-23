@@ -83,6 +83,9 @@ async function walkAsync(dir, levelsDeep = 2) {
 async function getDeployedSubModPaths(context) {
   const state = context.api.store.getState();
   const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
+  if (discovery?.path === undefined) {
+    return Promise.reject(new util.ProcessCanceled('game discovered is incomplete'));
+  }
   const modulePath = path.join(discovery.path, MODULES);
   let moduleFiles;
   try {
@@ -472,6 +475,9 @@ async function prepareForModding(context, discovery) {
         'Please run the game at least once through the official game launcher and '
       + 'try again', { allowReport: false });
       return Promise.resolve();
+    } else if (err instanceof util.ProcessCanceled) {
+      context.api.showErrorNotification('Failed to find game launcher data',
+        err, { allowReport: false });
     }
 
     return Promise.reject(err);
