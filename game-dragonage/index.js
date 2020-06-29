@@ -16,8 +16,7 @@ let _MODS_PATH = undefined;
 
 let _APPID;
 function findGame() {
-  return util.GameStoreHelper.findByAppId(STEAM_ID.toString(),
-    STEAM_ID_ULTIMATE_EDITION.toString())
+  return util.GameStoreHelper.findByAppId([STEAM_ID.toString(), STEAM_ID_ULTIMATE_EDITION.toString()])
     .then(game => {
       _APPID = game.appid;
       return Promise.resolve(game.gamePath);
