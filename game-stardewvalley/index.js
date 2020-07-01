@@ -79,18 +79,9 @@ class StardewValley {
    */
   async queryPath() {
     // check Steam
-    let game = await util.steam.findByAppId('413150');
+    let game = await util.GameStoreHelper.findByAppId(['413150', '1453375253']);
     if (game)
       return game.gamePath;
-
-    // check GOG Galaxy
-    let path =
-      await this.readRegistryKeyAsync('HKEY_LOCAL_MACHINE', 'SOFTWARE\\GOG.com\\Games\\1453375253', 'PATH')
-      || await this.readRegistryKeyAsync('HKEY_LOCAL_MACHINE', 'SOFTWARE\\GOG.com\\Games\\1453375253', 'path')
-      || await this.readRegistryKeyAsync('HKEY_LOCAL_MACHINE', 'SOFTWARE\\WOW6432Node\\GOG.com\\Games\\1453375253', 'PATH')
-      || await this.readRegistryKeyAsync('HKEY_LOCAL_MACHINE', 'SOFTWARE\\WOW6432Node\\GOG.com\\Games\\1453375253', 'path')
-    if (path && await this.getPathExistsAsync(path))
-      return path;
 
     // check default paths
     for (let defaultPath of this.defaultPaths)
