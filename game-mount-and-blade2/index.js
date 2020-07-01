@@ -932,14 +932,17 @@ function main(context) {
           // copy the new file back into the corresponding mod, then delete it. That way, vortex will
           // create a link to it with the correct deployment method and not ask the user any questions
           await fs.ensureDirAsync(path.dirname(targetPath));
-          const result = Promise.all([
-            fs.statAsync(entry.filePath),
-            fs.statAsync(targetPath).catch(err => Promise.resolve(undefined))
-          ]);
-          if ((result[1] === undefined) || (result[0].ino !== result[1].ino)) {
-            await fs.copyAsync(entry.filePath, targetPath);
-            await fs.removeAsync(entry.filePath);
-          }
+
+          // Remove the target destination file if it exists.
+          //  this is to completely avoid a scenario where we may attempt to
+          //  copy the same file onto itself.
+          return fs.removeAsync(targetPath)
+            .catch(err => (err.code === 'ENOENT')
+              ? Promise.resolve()
+              : Promise.reject(err))
+            .then(() => fs.copyAsync(entry.filePath, targetPath))
+            .then(() => fs.removeAsync(entry.filePath))
+            .catch(err => log('error', 'failed to import added file to mod', err.message));
         }
       });
     });
