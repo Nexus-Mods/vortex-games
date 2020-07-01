@@ -21,6 +21,7 @@ let CACHE = {};
 // Nexus Mods id for the game.
 const GAME_ID = 'mountandblade2bannerlord';
 const STEAMAPP_ID = 261550;
+const EPICAPP_ID = 'Chickadee';
 const MODULES = 'Modules';
 
 const I18N_NAMESPACE = 'game-mount-and-blade2';
@@ -298,7 +299,7 @@ async function getElementValue(subModuleFilePath, elementName) {
 }
 
 function findGame() {
-  return util.GameStoreHelper.findByAppId(STEAMAPP_ID.toString())
+  return util.GameStoreHelper.findByAppId([EPICAPP_ID, STEAMAPP_ID.toString()])
     .then(game =>{
       STORE_ID = game.gameStoreId;
       return Promise.resolve(game.gamePath);
@@ -771,6 +772,7 @@ function main(context) {
     },
     details: {
       steamAppId: STEAMAPP_ID,
+      epicAppId: EPICAPP_ID,
       customOpenModsPath: MODULES,
     },
   });
