@@ -251,11 +251,15 @@ function modsPath() {
 function setNewOrder(props, ordered) {
   const { context, profile, onSetOrder } = props;
 
-  _MODS_STATE.display = ordered;
+  // We filter the ordered list just in case there's an empty
+  //  entry, which is possible if the users had manually added
+  //  empty lines in the load order file.
+  const filtered = ordered.filter(entry => !!entry);
+  _MODS_STATE.display = filtered;
 
   return (!!onSetOrder)
-    ? onSetOrder(profile.id, ordered)
-    : context.api.store.dispatch(actions.setLoadOrder(profile.id, ordered));
+    ? onSetOrder(profile.id, filtered)
+    : context.api.store.dispatch(actions.setLoadOrder(profile.id, filtered));
 }
 
 function writeOrderFile(filePath, modList) {
