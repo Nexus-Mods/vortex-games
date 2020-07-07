@@ -169,6 +169,10 @@ function writeResourceCfg(resourceBasePath) {
 
 function prepareForModding() {
   return fs.ensureDirAsync(modPath())
+    // The baseModPath _should_ be created by the game, but
+    //  it appears that at least under certain scenarios it might be missing
+    //  https://github.com/Nexus-Mods/Vortex/issues/6835
+    .then(() => fs.ensureDirAsync(baseModPath()))
     .then(() => writeResourceCfg(baseModPath()));
 }
 
