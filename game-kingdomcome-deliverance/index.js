@@ -351,7 +351,10 @@ function main(context) {
           writeOrderFile(modsOrderFilePath, manuallyAdded)
             .then(() => setNewOrder({ context, profile }, manuallyAdded));
         })
-        .catch(err => context.api.showErrorNotification('Failed to re-instate manually added mods', err));
+        .catch(err => {
+          const userCanceled = (err instanceof util.userCanceled);
+          context.api.showErrorNotification('Failed to re-instate manually added mods', err, { allowReport: !userCanceled })
+        });
     });
 
     context.api.onAsync('did-deploy', (profileId, deployment) => {
@@ -400,7 +403,11 @@ function main(context) {
             : transformed;
 
           setNewOrder({ context, profile }, sorted);
-          return writeOrderFile(modOrderFile, transformed);
+          return writeOrderFile(modOrderFile, transformed)
+            .catch(err => {
+              const userCanceled = (err instanceof util.userCanceled);
+              context.api.showErrorNotification('Failed to write to load order file', err, { allowReport: !userCanceled });
+            });
         })
     });
   });
