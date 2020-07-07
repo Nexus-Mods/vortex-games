@@ -125,7 +125,7 @@ async function downloadScriptMerger(context) {
       }
       const current = releases
         .filter(rel => semver.valid(rel.name) && semver.gte(rel.name, RELEASE_CUTOFF))
-        .sort((lhs, rhs) => semver.compare(lhs.name, rhs.name));
+        .sort((lhs, rhs) => semver.compare(rhs.name, lhs.name));
 
       return Promise.resolve(current);
     })
