@@ -831,6 +831,39 @@ function main(context) {
     },
   });
 
+  const revertLOFile = (context) => {
+    const state = context.api.store.getState();
+    const profile = selectors.activeProfile(state);
+    if (!!profile && (profile.gameId === GAME_ID)) {
+      const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], undefined);
+      return getManuallyAddedMods(context).then((manuallyAdded) => {
+        if (manuallyAdded.length > 0) {
+          let newStruct = {};
+          manuallyAdded.forEach((mod, idx) => {
+            newStruct[mod] = {
+              Enabled: 1,
+              Priority: ((loadOrder !== undefined && !!loadOrder[mod]) ? loadOrder[mod].pos : idx) + 1,
+            }
+          });
+
+          _INI_STRUCT = newStruct;
+          writeToModSettings()
+            .then(() => {
+              (!!refreshFunc) ? refreshFunc() : null;
+              return Promise.resolve();
+            })
+            .catch(err => context.api.showErrorNotification('Failed to cleanup load order file', err));
+        } else {
+          const filePath = getLoadOrderFilePath();
+          fs.removeAsync(filePath)
+            .catch(err => (err.code === 'ENOENT')
+              ? Promise.resolve()
+              : context.api.showErrorNotification('Failed to cleanup load order file', err));
+        }
+      });
+    }
+  }
+
   let prevDeployment = [];
   context.once(() => {
     context.api.onAsync('did-deploy', (profileId, deployment) => {
@@ -914,37 +947,11 @@ function main(context) {
           });
       }
     });
+    context.api.events.on('profile-will-change', (newProfileId) => {
+      revertLOFile(context);
+    });
     context.api.events.on('purge-mods', () => {
-      const state = context.api.store.getState();
-      const profile = selectors.activeProfile(state);
-      if (!!profile && (profile.gameId === GAME_ID)) {
-        const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], undefined);
-        return getManuallyAddedMods(context).then((manuallyAdded) => {
-          if (manuallyAdded.length > 0) {
-            let newStruct = {};
-            manuallyAdded.forEach((mod, idx) => {
-              newStruct[mod] = {
-                Enabled: 1,
-                Priority: ((loadOrder !== undefined && !!loadOrder[mod]) ? loadOrder[mod].pos : idx) + 1,
-              }
-            });
-
-            _INI_STRUCT = newStruct;
-            writeToModSettings()
-              .then(() => {
-                (!!refreshFunc) ? refreshFunc() : null;
-                return Promise.resolve();
-              })
-              .catch(err => context.api.showErrorNotification('Failed to cleanup load order file', err));
-          } else {
-            const filePath = getLoadOrderFilePath();
-            fs.removeAsync(filePath)
-              .catch(err => (err.code === 'ENOENT')
-                ? Promise.resolve()
-                : context.api.showErrorNotification('Failed to cleanup load order file', err));
-          }
-        });
-      }
+      revertLOFile(context);
     });
   });
 
