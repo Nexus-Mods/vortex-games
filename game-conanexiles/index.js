@@ -71,8 +71,6 @@ function main(context) {
     },
   });
 
-  context.registerDeploymentMethod(new NullDeployment());
-
   context.registerLoadOrderPage({
     gameId: GAME_ID,
     createInfoPanel: (props) =>
