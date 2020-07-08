@@ -36,7 +36,6 @@ async function writeLoadOrder(api, order) {
     }
     const stagingPath = selectors.installPathForGame(state, GAME_ID);
     const paths = [];
-    console.log('write load order', order);
     await Promise.all(Object.keys(order)
       .sort((lhs, rhs) => order[lhs].pos - order[rhs].pos)
       .map(async modId => {
@@ -78,7 +77,7 @@ function main(context) {
     gameId: GAME_ID,
     createInfoPanel: (props) =>
       context.api.translate('Please refer to mod descriptions from mod authors to determine the right order. '
-        + 'If you can\'t find any suggestions, it probably doesn\'t matter.'),
+        + 'If you can\'t find any suggestions for a mod, it probably doesn\'t matter.'),
     gameArtURL: `${__dirname}/gameart.jpg`,
     callback: (loadOrder) => writeLoadOrder(context.api, loadOrder),
   });
