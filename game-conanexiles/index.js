@@ -1,7 +1,6 @@
 const Promise = require('bluebird');
 const path = require('path');
-const winapi = require('winapi-bindings');
-const { actions, fs, selectors, util } = require('vortex-api');
+const { fs, selectors, util } = require('vortex-api');
 
 const GAME_ID = 'conanexiles';
 const STEAMAPP_ID = 440900;
@@ -78,7 +77,8 @@ function main(context) {
   context.registerLoadOrderPage({
     gameId: GAME_ID,
     createInfoPanel: (props) =>
-      context.api.translate('Please refer to mod descriptions from mod authors to determine the right order.'),
+      context.api.translate('Please refer to mod descriptions from mod authors to determine the right order. '
+        + 'If you can\'t find any suggestions, it probably doesn\'t matter.'),
     gameArtURL: `${__dirname}/gameart.jpg`,
     callback: (loadOrder) => writeLoadOrder(context.api, loadOrder),
   });
