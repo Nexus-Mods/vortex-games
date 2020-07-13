@@ -148,10 +148,13 @@ async function downloadScriptMerger(context) {
           ...downloadNotif,
           progress: 0,
         });
-        const redirectionURL = await new Promise((resolve, reject) => {
+        let redirectionURL;
+        redirectionURL = await new Promise((resolve, reject) => {
           const options = getRequestOptions(downloadLink);
           https.request(options, res => {
-            return resolve(res.headers['location']);
+            return (res.headers['location'] !== undefined)
+              ? resolve(res.headers['location'])
+              : reject(new util.ProcessCanceled('Failed to resolve download location'));
           })
             .on('error', err => reject(err))
             .end();
@@ -168,7 +171,7 @@ async function downloadScriptMerger(context) {
                 { reset_at: (new Date(resetDate)).toString() });
               return reject(new util.ProcessCanceled('GitHub rate limit exceeded'));
             }
-  
+
             let output = '';
             res
               .on('data', data => {
@@ -207,10 +210,22 @@ async function downloadScriptMerger(context) {
           message: context.api.translate('Important Script Merger update available',
             { ns: 'game-witcher3' }),
           actions: [ { title: 'Download', action: dismiss => {
-            download()
+            dismiss();
+            return download()
               .then((archivePath) => extractScriptMerger(context, archivePath))
               .then((mergerPath) => setUpMerger(context, mostRecentVersion, mergerPath))
-            dismiss();
+              .catch(err => {
+                // Currently AFAIK this would only occur if github is down for any reason
+                //  and we were unable to resolve the re-direction link. Given that the user
+                //  expects a result from him clicking the download button, we let him know
+                //  to try again
+                context.api.dismissNotification(downloadNotifId);
+                context.api.sendNotification({
+                  type: 'info',
+                  message: context.api.translate('Update failed due temporary network issue - try again later', { ns: 'game-witcher3' }),
+                })
+                return Promise.resolve();
+              })
           } } ],
         });
 
@@ -223,14 +238,23 @@ async function downloadScriptMerger(context) {
     .then((archivePath) => extractScriptMerger(context, archivePath))
     .then((mergerPath) => setUpMerger(context, mostRecentVersion, mergerPath))
     .catch(err => {
-      if ((err instanceof util.ProcessCanceled) && ((err.message.startsWith('Already')) || (err.message.startsWith('Update')))) {
-        return Promise.resolve();
-      }
+      context.api.dismissNotification(downloadNotifId);
       if (err instanceof util.UserCanceled) {
         return Promise.resolve();
+      } else if (err instanceof util.ProcessCanceled) {
+        if ((err.message.startsWith('Already')) || (err.message.startsWith('Update'))) {
+          return Promise.resolve();
+        } else if (err.message.startsWith('Failed to resolve download location')) {
+          // Currently AFAIK this would only occur if github is down for any reason
+          //  and we were unable to resolve the re-direction link. Given that this
+          //  will most certainly resolve itself eventually - we log this and keep going.
+          log('info', 'failed to resolve W3 script merger re-direction link', err);
+          return Promise.resolve();
+        }
+      } else {
+        return Promise.reject(err);
       }
-      return Promise.reject(err);
-    });
+    })
 }
 
 async function extractScriptMerger(context, archivePath) {
