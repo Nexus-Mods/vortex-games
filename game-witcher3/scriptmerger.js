@@ -117,7 +117,7 @@ async function downloadScriptMerger(context) {
   }
   let mostRecentVersion;
   const currentlyInstalledVersion = await getMergerVersion(context);
-
+  const downloadNotifId = 'download-script-merger-notif';
   return query(GITHUB_URL, 'releases')
     .then((releases) => {
       if (!Array.isArray(releases)) {
@@ -137,7 +137,6 @@ async function downloadScriptMerger(context) {
         return Promise.reject(new util.ProcessCanceled('Already up to date'));
       }
 
-      const downloadNotifId = 'download-script-merger-notif';
       const downloadNotif = {
         id: downloadNotifId,
         type: 'activity',
