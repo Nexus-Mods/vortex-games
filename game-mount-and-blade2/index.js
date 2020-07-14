@@ -182,7 +182,7 @@ async function getManagedIds(context) {
       //  the staging folder - good job buddy!
       //  Going to log this, but otherwise allow it to proceed.
       invalidMods.push(entry.id);
-      log('error', 'Mod is missing from staging folder', err);
+      log('error', 'failed to read mod staging folder', { modId: entry.id, error: err.message });
       return Promise.resolve(accum);
     }
 
@@ -219,9 +219,10 @@ async function getManagedIds(context) {
       const errMessage = 'The following mods are inaccessible or are missing '
         + 'in the staging folder:\n\n' + invalidMods.join('\n') + '\n\nPlease ensure '
         + 'these mods and their content are not open in any other application '
-        + '(including the game itself). If the mod is missing entirely, please re-install it, '
-        + 'or remove it from your mods page.';
-      context.api.showErrorNotification('Invalid Mods in Staging', errMessage, { allowReport: false });
+        + '(including the game itself). If the mod is missing entirely, please re-install it '
+        + 'or remove it from your mods page. Please check your vortex log file for details.';
+      context.api.showErrorNotification('Invalid Mods in Staging',
+                                        new Error(errMessage), { allowReport: false });
     }
     return Promise.resolve(res);
   });
@@ -234,12 +235,12 @@ async function getXMLData(xmlFilePath) {
         const xmlData = parseXmlString(data);
         return Promise.resolve(xmlData);
       } catch (err) {
-        return Promise.reject(new util.DataInvalid(err));
+        return Promise.reject(new util.DataInvalid(err.message));
       }
     })
     .catch(err => (err.code === 'ENOENT')
       ? Promise.reject(new util.NotFound(xmlFilePath))
-      : Promise.reject(new util.DataInvalid(err)));
+      : Promise.reject(new util.DataInvalid(err.message)));
 }
 
 async function refreshGameParams(context, loadOrder) {
@@ -458,7 +459,7 @@ async function prepareForModding(context, discovery) {
         return accum;
       }, []);
     } catch (err) {
-      return Promise.reject(new util.DataInvalid(err));
+      return Promise.reject(new util.DataInvalid(err.message));
     }
   }).then(async () => {
     const deployedSubModules = await getDeployedSubModPaths(context);
