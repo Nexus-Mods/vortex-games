@@ -82,7 +82,7 @@ function main(context) {
     context.api.onAsync('will-deploy', (profileId, deployment) => {
       const state = context.api.store.getState();
       const profile = selectors.profileById(state, profileId);
-      if ([GAME_ID, GAME_ID_DE].indexOf(profile.gameId) === -1) {
+      if ([GAME_ID, GAME_ID_DE].indexOf(profile?.gameId) === -1) {
         return Promise.resolve();
       }
       previouslyDeployed = new Set(deployment[''].filter(isPak).map(iter => iter.relPath));
@@ -92,7 +92,7 @@ function main(context) {
       const state = context.api.store.getState();
       const profile = selectors.profileById(state, profileId);
 
-      if ([GAME_ID, GAME_ID_DE].indexOf(profile.gameId) === -1) {
+      if ([GAME_ID, GAME_ID_DE].indexOf(profile?.gameId) === -1) {
         return Promise.resolve();
       }
 
