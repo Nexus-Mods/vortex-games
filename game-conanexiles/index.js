@@ -67,8 +67,10 @@ function main(context) {
     details: {
       steamAppId: STEAMAPP_ID,
       stopPattern: STOP_PATTERNS.map(toWordExp),
-      allowNullDeployment: true,
     },
+    compatible: {
+      nulldeployment: true
+    }
   });
 
   context.registerLoadOrderPage({
