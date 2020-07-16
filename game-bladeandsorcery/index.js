@@ -1,12 +1,16 @@
 const Promise = require('bluebird');
 const path = require('path');
-const { actions, fs, log, util } = require('vortex-api');
+const { actions, fs, FlexLayout, log, selectors, util } = require('vortex-api');
 const rjson = require('relaxed-json');
 const semver = require('semver');
 const shortId = require('shortid');
 
+const React = require('react');
+const BS = require('react-bootstrap');
+
 // Nexus Mods id for the game.
 const BLADEANDSORCERY_ID = 'bladeandsorcery';
+const I18N_NAMESPACE = 'game-bladeandsorcery';
 const RESOURCES_FILE = 'resources.assets';
 const UMA_PRESETS_FOLDER = 'UMAPresets';
 
@@ -73,6 +77,9 @@ function findGame() {
 }
 
 function prepareForModding(discovery, api) {
+  const state = api.store.getState();
+  const profile = selectors.activeProfile(state);
+  //api.store.dispatch(actions.setLoadOrder(profile.id, []));
   return fs.ensureDirWritableAsync(path.join(discovery.path, streamingAssetsPath()),
     () => Promise.resolve());
 }
@@ -209,9 +216,17 @@ async function installOfficialMod(files,
           return {
             type: 'copy',
             source: file,
-            destination: path.join(modName, file.substr(idx)),
+            destination: (manifestFiles.length === 1)
+              ? file.substr(idx)
+              : path.join(modName, file.substr(idx)),
           };
         });
+
+        instructions.push({
+          type: 'attribute',
+          key: 'hasMultipleMods',
+          value: (manifestFiles.length > 1),
+        })
 
         return Promise.resolve(instructions);
       });
@@ -331,6 +346,275 @@ const getDiscoveryPath = (api) => {
   return discovery.path;
 }
 
+function migrate010(api, oldVersion) {
+  if (semver.gte(oldVersion, '0.1.0')) {
+    return Promise.resolve();
+  }
+  const state = api.store.getState();
+  const mods = util.getSafe(state, ['persistent', 'mods', BLADEANDSORCERY_ID], {});
+  const modKeys = Object.keys(mods);
+  if (modKeys.length === 0) {
+    return Promise.resolve();
+  }
+
+  const activatorId = util.getSafe(state, ['settings', 'mods', 'activator', BLADEANDSORCERY_ID], undefined);
+  const gameDiscovery =
+    util.getSafe(state, ['settings', 'gameMode', 'discovered', BLADEANDSORCERY_ID], undefined);
+
+  if ((gameDiscovery?.path === undefined)
+      || (activatorId === undefined)) {
+    // if this game is not discovered or deployed there is no need to migrate
+    log('debug', 'skipping blade and sorcery migration because no deployment set up for it');
+    return Promise.resolve();
+  }
+
+  const deployTarget = path.join(gameDiscovery.path, streamingAssetsPath());
+  const stagingFolder = selectors.installPathForGame(state, BLADEANDSORCERY_ID);
+  const officialMods = modKeys.filter(key => mods[key].type === 'bas-official-modtype')
+    .map(key => mods[key]);
+  return api.awaitUI()
+    .then(() => api.emitAndAwait('purge-mods-in-path', BLADEANDSORCERY_ID, 'bas-official-modtype', deployTarget))
+    .then(() => Promise.each(officialMods, mod => {
+      const modPath = path.join(stagingFolder, mod.installationPath);
+      let allEntries = [];
+      return util.walk(modPath, entries => {
+        allEntries = allEntries.concat(entries);
+      }).then(() => {
+        const manifestFiles = allEntries.filter(entry =>
+          path.basename(entry).toLowerCase() === OFFICIAL_MOD_MANIFEST);
+        let directories = allEntries.filter(entry => path.extname(path.basename(entry)) === '');
+        const files = allEntries.filter(entry => path.extname(path.basename(entry)) !== '');
+        api.store.dispatch(actions.setModAttribute(BLADEANDSORCERY_ID, mod.id, 'hasMultipleMods', manifestFiles.length > 1));
+        if (manifestFiles.length === 1) {
+          let newFiles = [];
+          let newDirs = [];
+          if (path.dirname(manifestFiles[0]) === modPath) {
+            // Already formatted correctly.
+            return Promise.resolve();
+          }
+          const modNameIdx = manifestFiles[0].toLowerCase()
+                                            .split(path.sep)
+                                            .indexOf(OFFICIAL_MOD_MANIFEST) - 1;
+          // We can migrate this mod
+          return Promise.each(files, (entry) => {
+            const segments = entry.split(path.sep);
+            segments.splice(modNameIdx, 1);
+            const destination = segments.join(path.sep);
+            newFiles.push(destination);
+            const newDir = path.dirname(destination);
+            if (newDir !== modPath) {
+              newDirs.push(newDir);
+            }
+            return fs.ensureDirWritableAsync(newDir)
+              .catch(err => err.code === 'EEXIST' ? Promise.resolve() : Promise.reject(err))
+              .then(() => fs.linkAsync(entry, destination).catch(err => err.code === 'EEXIST'
+                ? Promise.resolve() : Promise.reject(err)));
+          })
+          // Linking failed for some reason, remove the new links.
+          .tapCatch(err => Promise.each(newFiles, newFile => fs.unlinkAsync(newFile))
+            .then(() => Promise.each(newDirs.reverse(), newDir => fs.removeAsync(newDir))))
+          .then(() => Promise.each(files, entry => fs.removeAsync(entry)))
+          .then(() => Promise.each(directories.reverse(), dir => fs.removeAsync(dir)));
+        }
+      })
+    }))
+    .finally(() => api.store.dispatch(actions.setDeploymentNecessary(BLADEANDSORCERY_ID, true)));
+}
+
+function loadOrderPrefix(api, mod) {
+  const state = api.store.getState();
+  const profile = selectors.activeProfile(state);
+  const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], []);
+  if (loadOrder[mod.id] === undefined) {
+    return 'ZZZZ-';
+  }
+
+  const pos = loadOrder[mod.id].pos;
+
+  return makePrefix(pos) + '-';
+}
+
+function reversePrefix(prefix) {
+  prefix = prefix.split('');
+  if (prefix.length !== 3) {
+    return -1;
+  }
+
+  const pos = prefix.reduce((prev, iter) => {
+    prev = prev + iter.charCodeAt(0);
+    return prev;
+  }, -195);
+
+  return pos;
+}
+
+function makePrefix(input) {
+  let res = '';
+  let rest = input;
+  while (rest > 0) {
+    res = String.fromCharCode(65 + (rest % 25)) + res;
+    rest = Math.floor(rest / 25);
+  }
+  return util.pad(res, 'A', 3);
+}
+
+async function getManuallyAdded(context, loadOrder) {
+  const state = context.api.store.getState();
+  const loKeys = Object.keys(loadOrder).map(key => key.toLowerCase());
+  const mods = util.getSafe(state, ['persistent', 'mods', BLADEANDSORCERY_ID], {});
+  const managedModNames = Object.keys(mods)
+    .filter(key => mods[key]?.type === 'bas-official-modtype')
+    .map(key => mods[key].id.replace(/[^a-zA-Z]+/g, '').toLowerCase());
+
+  const invalidNames = [].concat(['default'], managedModNames);
+  const modsPath = selectors.modPathsForGame(state, BLADEANDSORCERY_ID)['bas-official-modtype'];
+  const modNames = {
+    known: [],
+    unknown: [],
+  };
+  const regex = new RegExp(/[A-Z][A-Z][A-Z]-/);
+  await util.walk(modsPath, async (iter, stats) => {
+    const modName = path.basename(iter);
+    if (stats.isDirectory()
+      && (!invalidNames.includes(modName.substr(4).toLowerCase()))
+      && modName.match(regex)) {
+        const hasManifest = await fs.statAsync(path.join(iter, OFFICIAL_MOD_MANIFEST))
+          .then(() => Promise.resolve(true))
+          .catch(err => Promise.resolve(false));
+        if (hasManifest) {
+          if (loKeys.includes(modName.substr(4).toLowerCase())) {
+            modNames.known.push(modName);
+          } else {
+            modNames.unknown.push(modName);
+          }
+        }
+      }
+  })
+
+  return Promise.resolve(modNames);
+}
+
+async function preSort(context, items, direction) {
+  const state = context.api.store.getState();
+  const activeProfile = selectors.activeProfile(state);
+  if (activeProfile?.id === undefined) {
+    return (direction === 'descending')
+    ? Promise.resolve(items.reverse())
+    : Promise.resolve(items);
+  }
+
+  const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
+  // let nextAvailableIdx = Object.keys(loadOrder).reduce((prev, iter) => {
+  //   prev = (loadOrder[iter].pos > prev) ? loadOrder[iter].pos : prev;
+  //   return prev;
+  // }, 0);
+  // const getNextIdx = () => ++nextAvailableIdx;
+  const manuallyAdded = await getManuallyAdded(context, loadOrder);
+  const known = manuallyAdded.known.map(modName => {
+    const trimmed = modName.substr(4);
+    const item = items.find(itm => itm.id === trimmed);
+    if (item !== undefined) {
+      item.prefix = modName.substr(0, 3);
+      item.external = true;
+      return item;
+    } else {
+      return {
+        id: trimmed,
+        name: trimmed,
+        imgUrl: path.join(__dirname, 'gameart.jpg'),
+        external: true,
+        prefix: modName.substr(0, 3),
+      }
+    }
+  });
+
+  const unknown = manuallyAdded.unknown.map(modName => {
+    const trimmedName = modName.substr(4);
+    return {
+      id: trimmedName,
+      name: trimmedName,
+      imgUrl: path.join(__dirname, 'gameart.jpg'),
+      external: true,
+      prefix: modName.substr(0, 3),
+    }
+  })
+
+  const managedMods = items.filter(item => item?.external !== true).map((item, idx) => ({
+    ...item,
+    prefix: makePrefix(idx),
+  }));
+
+  let preSorted = managedMods;
+  known.forEach(k => {
+    let idx = items.map(item => item.id).indexOf(k.id);
+    if (idx === -1) {
+      idx = loadOrder[k.id].pos;
+    }
+    preSorted.splice(idx, 0, k);
+  });
+
+  unknown.forEach(item => {
+    const idx = reversePrefix(item.prefix);
+    preSorted.splice(idx, 0, item);
+  });
+
+  preSorted = preSorted.map((item, idx) => {
+    if (item?.external === true) {
+      return item;
+    } else {
+      return { ...item, prefix: makePrefix(idx) };
+    }
+  });
+  preSorted = preSorted.sort((lhs,rhs) => {
+    const rlhs = reversePrefix(lhs.prefix);
+    const rrhs = reversePrefix(rhs.prefix);
+    if (rlhs === rrhs) {
+      if (lhs?.external === true) {
+        return 1;
+      } else {
+        return -1;
+      }
+    } else {
+      return rlhs - rrhs;
+    }
+  });
+  // (item?.external === true)
+  //   ? item : { ...item, prefix: makePrefix(idx) })
+  //   .sort((lhs, rhs) => reversePrefix(lhs.prefix) - reversePrefix(rhs.prefix));
+
+
+  return (direction === 'descending')
+    ? Promise.resolve(preSorted.reverse())
+    : Promise.resolve(preSorted);
+}
+
+let prevLoadOrder;
+function infoComponent(context, props) {
+  const t = context.api.translate;
+  return React.createElement(BS.Panel, { id: 'loadorderinfo' },
+    React.createElement('h2', {}, t('Managing your load order', { ns: I18N_NAMESPACE })),
+    React.createElement(FlexLayout.Flex, {},
+    React.createElement('div', {},
+    React.createElement('p', {}, t('You can adjust the load order for Blade and Sorcery by dragging and dropping '
+    + 'mods up or down on this page. As the game loads its mods alphabetically - the AAA-ZZZ prefix will be added ' 
+    + 'to the mod\'s folder name on every deployment event to guarantee that the game loads the mods in the order set inside Vortex.', { ns: I18N_NAMESPACE })))),
+    React.createElement('div', {},
+      React.createElement('p', {}, t('Please note:', { ns: I18N_NAMESPACE })),
+      React.createElement('ul', {},
+        React.createElement('li', {}, t('For the load order to be reflected correctly within the game\'s mods directory, the mods must be re-deployed once you\'ve finished changing the load order.', { ns: I18N_NAMESPACE })),
+        React.createElement('li', {}, t('If you cannot see your manually added mod in this load order, you may need to manually set the wanted prefix by renaming the mod\'s folder manually in the mods folder (see our wiki for details).', { ns: I18N_NAMESPACE })))),
+    React.createElement(BS.Button, { onClick: () => {
+      props.refresh();
+
+      const state = context.api.store.getState();
+      const profile = selectors.activeProfile(state);
+      const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], undefined);
+      if (prevLoadOrder !== loadOrder) {
+        context.api.store.dispatch(actions.setDeploymentNecessary(BLADEANDSORCERY_ID, true));
+      }
+    } }, t('Refresh')));
+}
+
 function main(context) {
   const getUMADestination = () => {
     return path.join(getDiscoveryPath(context.api), 'BladeAndSorcery_Data');
@@ -343,7 +627,9 @@ function main(context) {
   context.registerGame({
     id: BLADEANDSORCERY_ID,
     name: 'Blade & Sorcery',
-    mergeMods: true,
+    mergeMods: mod => (mod.type === 'bas-official-modtype')
+      ? loadOrderPrefix(context.api, mod) + mod.id.replace(/[^a-zA-Z]+/g, '')
+      : true,
     queryPath: findGame,
     //supportedTools: tools,
     // FOMOD installer will act as a replacer by default.
@@ -370,6 +656,8 @@ function main(context) {
     },
   });
 
+  context.registerMigration(old => migrate010(context.api, old));
+
   context.registerInstaller('bas-uma-mod', 25, testUMAPresetReplacer, installUMAPresetReplacer);
   context.registerModType('bas-uma-modtype', 15, (gameId) => (gameId === BLADEANDSORCERY_ID),
     getUMADestination, testUMAContent);
@@ -377,9 +665,6 @@ function main(context) {
   context.registerInstaller('bas-mulledk19-mod', 25,
     (files, gameId) => testModInstaller(files, gameId, MULLE_MOD_INFO),
     (files, destinationPath, gameId, progressDelegate) => installMulleMod(files, destinationPath, gameId, progressDelegate, context.api));
-
-  context.registerModType('bas-mulledk19-modtype', 15, (gameId) => (gameId === BLADEANDSORCERY_ID),
-    () => getDiscoveryPath(context.api), (instructions) => instructionsHaveFile(instructions, MULLE_MOD_INFO));
 
   context.registerInstaller('bas-official-mod', 25,
     (files, gameId) =>
@@ -389,6 +674,25 @@ function main(context) {
 
   context.registerModType('bas-official-modtype', 15, (gameId) => (gameId === BLADEANDSORCERY_ID),
     getOfficialDestination, (instructions) => instructionsHaveFile(instructions, OFFICIAL_MOD_MANIFEST));
+
+  context.registerLoadOrderPage({
+    gameId: BLADEANDSORCERY_ID,
+    createInfoPanel: (props) => infoComponent(context, props),
+    filter: (mods) => mods.filter(mod => (mod.type === 'bas-official-modtype') && (mod?.attributes?.hasMultipleMods === false)),
+    gameArtURL: `${__dirname}/gameart.jpg`,
+    preSort: (items, direction) => preSort(context, items, direction),
+    displayCheckboxes: false,
+    callback: (loadOrder) => {
+      if (prevLoadOrder === undefined) {
+        prevLoadOrder = loadOrder;
+      }
+
+      if (JSON.stringify(prevLoadOrder) !== JSON.stringify(loadOrder)) {
+        prevLoadOrder = loadOrder;
+        context.api.store.dispatch(actions.setDeploymentNecessary(BLADEANDSORCERY_ID, true))
+      }
+    },
+  });
 
   return true;
 }
