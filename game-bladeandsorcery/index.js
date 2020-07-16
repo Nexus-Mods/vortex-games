@@ -627,9 +627,7 @@ function main(context) {
   context.registerGame({
     id: BLADEANDSORCERY_ID,
     name: 'Blade & Sorcery',
-    mergeMods: mod => (mod.type === 'bas-official-modtype')
-      ? loadOrderPrefix(context.api, mod) + mod.id.replace(/[^a-zA-Z]+/g, '')
-      : true,
+    mergeMods: true,
     queryPath: findGame,
     //supportedTools: tools,
     // FOMOD installer will act as a replacer by default.
@@ -673,7 +671,8 @@ function main(context) {
       installOfficialMod(files, destinationPath, gameId, progressDelegate, context.api));
 
   context.registerModType('bas-official-modtype', 15, (gameId) => (gameId === BLADEANDSORCERY_ID),
-    getOfficialDestination, (instructions) => instructionsHaveFile(instructions, OFFICIAL_MOD_MANIFEST));
+    getOfficialDestination, (instructions) => instructionsHaveFile(instructions, OFFICIAL_MOD_MANIFEST),
+      { mergeMods: mod => loadOrderPrefix(context.api, mod) + mod.id.replace(/[^a-zA-Z]+/g, '') });
 
   context.registerLoadOrderPage({
     gameId: BLADEANDSORCERY_ID,
