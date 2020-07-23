@@ -63,7 +63,7 @@ async function getModName(destination, modFile, element, ext) {
   }
 
   // remove all characters except for characters and numbers.
-  modName = modName.replace(/[^a-zA-Z0-9]+/g, "")
+  modName = modName.replace(/[^a-zA-Z0-9]+/g, '');
 
   return ext !== undefined
     ? Promise.resolve(path.basename(modName, ext))
@@ -79,7 +79,7 @@ function findGame() {
 function prepareForModding(discovery, api) {
   const state = api.store.getState();
   const profile = selectors.activeProfile(state);
-  //api.store.dispatch(actions.setLoadOrder(profile.id, []));
+  api.store.dispatch(actions.setLoadOrder(profile.id, []));
   return fs.ensureDirWritableAsync(path.join(discovery.path, streamingAssetsPath()),
     () => Promise.resolve());
 }
@@ -426,9 +426,19 @@ function loadOrderPrefix(api, mod) {
   const profile = selectors.activeProfile(state);
   const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], []);
   if (loadOrder[mod.id] === undefined) {
-    return 'ZZZZ-';
+    const lastEntry = Object.keys(loadOrder).reduce((prev, key) => {
+      if (loadOrder[key].pos > prev.pos) {
+        prev = loadOrder[key];
+      }
+      return prev;
+    }, {});
+
+    return makePrefix(reversePrefix(lastEntry.prefix) + 1) + '-';
   }
 
+  if (loadOrder[mod.id].prefix !== undefined) {
+    return loadOrder[mod.id].prefix + '-';
+  }
   const pos = loadOrder[mod.id].pos;
 
   return makePrefix(pos) + '-';
@@ -497,95 +507,96 @@ async function getManuallyAdded(context, loadOrder) {
 async function preSort(context, items, direction) {
   const state = context.api.store.getState();
   const activeProfile = selectors.activeProfile(state);
-  if (activeProfile?.id === undefined) {
+  const toLOPage = (itemList) => {
     return (direction === 'descending')
-    ? Promise.resolve(items.reverse())
-    : Promise.resolve(items);
+      ? Promise.resolve(itemList.reverse())
+      : Promise.resolve(itemList);
+  }
+
+  if (activeProfile === undefined) {
+    return toLOPage(items);
   }
 
   const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
-  // let nextAvailableIdx = Object.keys(loadOrder).reduce((prev, iter) => {
-  //   prev = (loadOrder[iter].pos > prev) ? loadOrder[iter].pos : prev;
-  //   return prev;
-  // }, 0);
-  // const getNextIdx = () => ++nextAvailableIdx;
   const manuallyAdded = await getManuallyAdded(context, loadOrder);
-  const known = manuallyAdded.known.map(modName => {
-    const trimmed = modName.substr(4);
-    const item = items.find(itm => itm.id === trimmed);
-    if (item !== undefined) {
-      item.prefix = modName.substr(0, 3);
-      item.external = true;
-      return item;
-    } else {
-      return {
-        id: trimmed,
-        name: trimmed,
-        imgUrl: path.join(__dirname, 'gameart.jpg'),
-        external: true,
-        prefix: modName.substr(0, 3),
+  const allExternal = [].concat(manuallyAdded.known, manuallyAdded.unknown);
+  const prepareDisplayItems = (displayItems, condition) => {
+    // This func expects the display items to be provided
+    //  in the order we expect the LO page to display the items;
+    //  it will look at each display item and re-assign the prefixes so
+    //  that they match the order, and assign any provided condition functor
+    //  to managed mod entries.
+    let lastPrefix = makePrefix(0);
+    return displayItems.map((item, idx) => {
+      if (allExternal.includes(item.prefix + '-' + item.id)) {
+        lastPrefix = item.prefix;
+        return item;
       }
-    }
-  });
 
-  const unknown = manuallyAdded.unknown.map(modName => {
-    const trimmedName = modName.substr(4);
+      if (idx > 0) {
+        const newPrefix = makePrefix(reversePrefix(lastPrefix) + 1);
+        lastPrefix = newPrefix;
+        return { ...item, prefix: newPrefix, condition }
+      } else {
+        return { ...item, prefix: makePrefix(idx), condition }
+      }
+    })
+  }
+
+  let presorted = items;
+  const what = items.filter(item => allExternal.includes(item.prefix + '-' + item.id));
+  if (what.length > 0) {
+    presorted = prepareDisplayItems(items, undefined);
+  }
+  const externalDisplayItems = allExternal.map(modName => {
+    const trimmed = modName.substr(4);
+    const prefix = modName.substr(0, 3);
     return {
-      id: trimmedName,
-      name: trimmedName,
+      id: trimmed,
+      name: trimmed,
       imgUrl: path.join(__dirname, 'gameart.jpg'),
       external: true,
-      prefix: modName.substr(0, 3),
-    }
-  })
+      prefix,
+      condition: (lhs, rhs, predictedResult) => {
+        // There's an attempt to move this external item;
+        //  this may be the result of a potentially valid move
+        //  between two managed mods but can potentially impact
+        //  the external item - which we need to control.
+        const item = predictedResult.find(item => item.id === trimmed);
+        if (item === undefined) {
+          // this shouldn't happen.
+          return { success: false };
+        }
 
-  const managedMods = items.filter(item => item?.external !== true).map((item, idx) => ({
-    ...item,
-    prefix: makePrefix(idx),
-  }));
-
-  let preSorted = managedMods;
-  known.forEach(k => {
-    let idx = items.map(item => item.id).indexOf(k.id);
-    if (idx === -1) {
-      idx = loadOrder[k.id].pos;
-    }
-    preSorted.splice(idx, 0, k);
-  });
-
-  unknown.forEach(item => {
-    const idx = reversePrefix(item.prefix);
-    preSorted.splice(idx, 0, item);
-  });
-
-  preSorted = preSorted.map((item, idx) => {
-    if (item?.external === true) {
-      return item;
-    } else {
-      return { ...item, prefix: makePrefix(idx) };
-    }
-  });
-  preSorted = preSorted.sort((lhs,rhs) => {
-    const rlhs = reversePrefix(lhs.prefix);
-    const rrhs = reversePrefix(rhs.prefix);
-    if (rlhs === rrhs) {
-      if (lhs?.external === true) {
-        return 1;
-      } else {
-        return -1;
+        const maxIdx = reversePrefix(prefix);
+        const predictedIdx = predictedResult.indexOf(item);
+        const predictedPrefix = makePrefix(predictedIdx);
+        const hasValidPosition = (predictedPrefix === prefix) || (maxIdx - predictedIdx >= 0);
+        return  { success: hasValidPosition, errMessage: `Invalid change - ${modName}'s position would be invalid` };
       }
-    } else {
-      return rlhs - rrhs;
+    };
+  }).sort((a, b) => {
+    return reversePrefix(a.prefix) - reversePrefix(b.prefix);
+  });
+  externalDisplayItems.forEach(item => {
+    if (presorted.find(prs => prs.id === item.id) === undefined) {
+      presorted.splice(reversePrefix(item.prefix), 0, item);
     }
   });
-  // (item?.external === true)
-  //   ? item : { ...item, prefix: makePrefix(idx) })
-  //   .sort((lhs, rhs) => reversePrefix(lhs.prefix) - reversePrefix(rhs.prefix));
 
+  presorted = prepareDisplayItems(presorted, (lhs, rhs, predictedResult) => {
+    // Make sure that all externally added display items, are happy with
+    //  their new position in the load order.
+    const dndResult = externalDisplayItems.reduce((prev, item) => {
+      if (prev?.success === true) {
+        prev = item.condition(lhs, rhs, predictedResult);
+      }
+      return prev;
+    }, { success: true });
+    return { success: dndResult.success, errMessage: dndResult.errMessage };
+  });
 
-  return (direction === 'descending')
-    ? Promise.resolve(preSorted.reverse())
-    : Promise.resolve(preSorted);
+  return toLOPage(presorted);
 }
 
 let prevLoadOrder;
@@ -596,13 +607,19 @@ function infoComponent(context, props) {
     React.createElement(FlexLayout.Flex, {},
     React.createElement('div', {},
     React.createElement('p', {}, t('You can adjust the load order for Blade and Sorcery by dragging and dropping '
-    + 'mods up or down on this page. As the game loads its mods alphabetically - the AAA-ZZZ prefix will be added ' 
+    + 'mods up or down on this page. As the game loads its mods alphabetically - the AAA-ZZZ prefix will be added '
     + 'to the mod\'s folder name on every deployment event to guarantee that the game loads the mods in the order set inside Vortex.', { ns: I18N_NAMESPACE })))),
     React.createElement('div', {},
       React.createElement('p', {}, t('Please note:', { ns: I18N_NAMESPACE })),
       React.createElement('ul', {},
-        React.createElement('li', {}, t('For the load order to be reflected correctly within the game\'s mods directory, the mods must be re-deployed once you\'ve finished changing the load order.', { ns: I18N_NAMESPACE })),
-        React.createElement('li', {}, t('If you cannot see your manually added mod in this load order, you may need to manually set the wanted prefix by renaming the mod\'s folder manually in the mods folder (see our wiki for details).', { ns: I18N_NAMESPACE })))),
+        React.createElement('li', {}, t('For the load order to be reflected correctly within the game\'s '
+          + 'mods directory, the mods must be re-deployed once you\'ve finished changing the load order.', { ns: I18N_NAMESPACE })),
+        React.createElement('li', {}, t('If you cannot see your manually added mod in this load order, you '
+          + 'may need to manually set the wanted prefix by renaming the mod\'s folder in the mods folder directly. '
+          + 'as an example, lets say you have installed "FakeMod" and want to add it below your AAA-UnlimitedPotions mod, '
+          + 'simply rename "FakeMod" to "AAB-FakeMod" and click the refresh button.', { ns: I18N_NAMESPACE })),
+        React.createElement('li', {}, t('Manually added mods are restricted to the prefix you set and '
+          + 'Vortex has functionality to ensure this is respected - you will not be able to move more than 1 mod above "AAB-FakeMod" for example.', { ns: I18N_NAMESPACE })))),
     React.createElement(BS.Button, { onClick: () => {
       props.refresh();
 
@@ -635,6 +652,7 @@ function main(context) {
     logo: 'gameart.jpg',
     executable: () => 'BladeAndSorcery.exe',
     requiredFiles: ['BladeAndSorcery.exe'],
+    requiresCleanup: true,
     setup: (discovery) => prepareForModding(discovery, context.api),
     details: {
       // The default queryModPath result is used for replacement mods,
