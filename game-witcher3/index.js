@@ -92,7 +92,12 @@ async function getManuallyAddedMods(context) {
   })
   .then(uniqueCandidates => {
     const state = context.api.store.getState();
-    const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
+    const discovery = util.getSafe(state,
+      ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
+    if (discovery?.path === undefined) {
+      // How/why are we even here ?
+      return Promise.reject(new util.ProcessCanceled('Game is not discovered!'));
+    }
     const modsPath = path.join(discovery.path, 'Mods');
     return Promise.reduce(Array.from(uniqueCandidates), (accum, mod) => {
       const modFolder = path.join(modsPath, mod);
@@ -126,11 +131,12 @@ async function getManuallyAddedMods(context) {
         .catch(err => ((err.code === 'ENOENT') && (err.path === modFolder))
           ? Promise.resolve(accum)
           : Promise.reject(err));
-    }, [])
-    .catch(err => {
-      context.api.showErrorNotification('Failed to lookup manually added mods', err)
-      return Promise.resolve([]);
-    });
+    }, []);
+  })
+  .catch(err => {
+    const allowReport = ((err instanceof util.ProcessCanceled) === false);
+    context.api.showErrorNotification('Failed to lookup manually added mods', err, { allowReport })
+    return Promise.resolve([]);
   });
 }
 
