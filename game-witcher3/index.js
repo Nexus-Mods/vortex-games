@@ -431,7 +431,7 @@ function getScriptMergerTool(api) {
 
 function runScriptMerger(api) {
   const tool = getScriptMergerTool(api);
-  if (tool === undefined) {
+  if (tool?.path === undefined) {
     const error = new util.SetupError('Witcher Script Merger is not configured correctly');
     api.showErrorNotification('Failed to run tool', error, { allowReport: false });
   }
