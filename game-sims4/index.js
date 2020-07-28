@@ -181,6 +181,10 @@ function enableModding() {
 
   return parser.read(filePath)
     .then(ini => {
+      // we could create the section but I don't know how the game would react
+      if (ini.data['options'] === undefined) { 
+        return;
+      }
       ini.data['options']['scriptmodsenabled'] = 1;
       ini.data['options']['modsdisabled'] = 0;
       return parser.write(filePath, ini);
