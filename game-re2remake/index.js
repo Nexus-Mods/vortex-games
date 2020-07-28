@@ -431,8 +431,8 @@ function revalidateFilePaths(hashes, api) {
           }))
           .then(() => (error === undefined)
             ? Promise.resolve()
-            : (err instanceof util.ProcessCanceled)
-              ? Promise.reject(err)
+            : (error instanceof util.ProcessCanceled)
+              ? Promise.reject(error)
               : Promise.reject(new Error('Failed to re-validate filepaths')))
           .then(() => cache.removeOffsets(stagingFolder, arcMap[key], key));
       });
