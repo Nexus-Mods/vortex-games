@@ -911,6 +911,13 @@ function main(context) {
 
   let prevDeployment = [];
   context.once(() => {
+    context.api.events.on('gamemode-activated', (gameMode) => {
+      if (gameMode !== GAME_ID) {
+        // Just in case the script merger notification is still
+        //  present.
+        context.api.dismissNotification('witcher3-merge');
+      }
+    });
     context.api.onAsync('will-deploy', (profileId, deployment) => {
       const state = context.api.store.getState();
       const activeProfile = validateProfile(profileId, state);
