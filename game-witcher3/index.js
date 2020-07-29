@@ -416,6 +416,7 @@ function prepareForModding(context, discovery) {
 
   return Promise.all([
     ensurePath(path.join(discovery.path, 'Mods')),
+    ensurePath(path.join(discovery.path, 'DLC')),
     ensurePath(path.dirname(scriptMergerPath)),
     ensurePath(path.dirname(getLoadOrderFilePath()))])
       .then(() => merger.default(context)
