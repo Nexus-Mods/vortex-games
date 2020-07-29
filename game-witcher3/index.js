@@ -706,15 +706,28 @@ function merge(filePath, mergeDir, context) {
       modVars.forEach(modVar => {
         const matcher = (gameVar) => {
           let gameVarParent;
+          let modVarParent;
           try {
             gameVarParent = gameVar.parent().parent();
+            modVarParent = modVar.parent().parent();
           } catch (err) {
             // This game variable must've been replaced in a previous
             //  iteration.
             return false;
           }
 
-          const modVarParent = modVar.parent().parent();
+          if ((typeof(gameVarParent?.attr) !== 'function')
+           || (typeof(modVarParent?.attr) !== 'function')) {
+             // This is actually quite problematic - it pretty much means
+             //  that either the mod or the game itself has game variables
+             //  located outside a group. Either the game input file is corrupted
+             //  (manual tampering?) or the mod itself is. Thankfully we will be
+             //  creating the missing group, but it leads to the question, what
+             //  other surprises are we going to encounter further down the line ?
+             log('error', 'failed to find parent group of mod variable', modVar);
+             return false;
+           }
+
           return ((gameVarParent.attr('id').value() === modVarParent.attr('id').value())
             && (gameVar.attr('id').value() === modVar.attr('id').value()));
         }
