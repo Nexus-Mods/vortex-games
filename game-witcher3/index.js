@@ -825,6 +825,16 @@ function main(context) {
   context.registerMerge(canMerge,
     (filePath, mergeDir) => merge(filePath, mergeDir, context), 'witcher3menumodroot');
 
+  context.registerAction('mod-icons', 300, 'open-ext', {},
+                         'Open TW3 Documents Folder', () => {
+    const docPath = path.join(appUni.getPath('documents'), 'The Witcher 3');
+    util.opn(docPath).catch(() => null);
+  }, () => {
+    const state = context.api.getState();
+    const gameMode = selectors.activeGameId(state);
+    return (gameMode === GAME_ID);
+  })
+
   let refreshFunc;
   let previousLO = {};
   const invalidModTypes = ['witcher3menumoddocuments'];
