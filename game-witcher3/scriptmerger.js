@@ -6,7 +6,7 @@ const semver = require('semver');
 const getVersion = require('exe-version').default;
 const { actions, fs, log, util } = require('vortex-api');
 
-const RELEASE_CUTOFF = '0.6.4';
+const RELEASE_CUTOFF = '0.6.5';
 const GITHUB_URL = 'https://api.github.com/repos/IDCs/WitcherScriptMerger';
 const MERGER_RELPATH = 'WitcherScriptMerger';
 const MERGER_ID = 'W3ScriptMerger';
