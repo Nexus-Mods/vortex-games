@@ -250,6 +250,13 @@ function modsPath() {
 
 function setNewOrder(props, ordered) {
   const { context, profile, onSetOrder } = props;
+  if (profile?.id === undefined) {
+    // Not sure how we got here without a valid profile.
+    //  possibly the user changed profile during the setup/preparation
+    //  stage ? https://github.com/Nexus-Mods/Vortex/issues/7053
+    log('error', 'failed to set new load order', 'undefined profile');
+    return;
+  }
 
   // We filter the ordered list just in case there's an empty
   //  entry, which is possible if the users had manually added
