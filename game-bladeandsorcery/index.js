@@ -608,7 +608,8 @@ function infoComponent(context, props) {
     React.createElement('div', {},
     React.createElement('p', {}, t('You can adjust the load order for Blade and Sorcery by dragging and dropping '
     + 'mods up or down on this page. As the game loads its mods alphabetically - the AAA-ZZZ prefix will be added '
-    + 'to the mod\'s folder name on every deployment event to guarantee that the game loads the mods in the order set inside Vortex.', { ns: I18N_NAMESPACE })))),
+    + 'to the mod\'s folder name on every deployment event to guarantee that the game loads the mods in the order set inside Vortex. '
+    + 'The higher prefix will win any conflicts (ZZZ > AAA)', { ns: I18N_NAMESPACE })))),
     React.createElement('div', {},
       React.createElement('p', {}, t('Please note:', { ns: I18N_NAMESPACE })),
       React.createElement('ul', {},
@@ -619,7 +620,8 @@ function infoComponent(context, props) {
           + 'as an example, lets say you have installed "FakeMod" and want to add it below your AAA-UnlimitedPotions mod, '
           + 'simply rename "FakeMod" to "AAB-FakeMod" and click the refresh button.', { ns: I18N_NAMESPACE })),
         React.createElement('li', {}, t('Manually added mods are restricted to the prefix you set and '
-          + 'Vortex has functionality to ensure this is respected - you will not be able to move more than 1 mod above "AAB-FakeMod" for example.', { ns: I18N_NAMESPACE })))),
+          + 'Vortex has functionality to ensure this is respected, e.g. AAB-MyMod, Vortex will pick up on that prefix and sort it '
+          + 'correctly in the load order (e.g. after AAA-SomeMod but before AAC-AnotherMod).', { ns: I18N_NAMESPACE })))),
     React.createElement(BS.Button, { onClick: () => {
       props.refresh();
 
