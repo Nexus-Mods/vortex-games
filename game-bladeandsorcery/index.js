@@ -79,7 +79,7 @@ function findGame() {
 function prepareForModding(discovery, api) {
   const state = api.store.getState();
   const profile = selectors.activeProfile(state);
-  api.store.dispatch(actions.setLoadOrder(profile.id, []));
+  //api.store.dispatch(actions.setLoadOrder(profile.id, []));
   return fs.ensureDirWritableAsync(path.join(discovery.path, streamingAssetsPath()),
     () => Promise.resolve());
 }
@@ -425,7 +425,18 @@ function loadOrderPrefix(api, mod) {
   const state = api.store.getState();
   const profile = selectors.activeProfile(state);
   const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], []);
+  const posToPrefix = (modId) => {
+    const pos = loadOrder[modId]?.pos;
+    if (pos === undefined) {
+      return 'ZZZZ-';
+    }
+
+    return makePrefix(pos) + '-';
+  };
+
   if (loadOrder[mod.id] === undefined) {
+    // This mod isn't inside the LO yet - we try to find
+    //  the last prefix and return its increment
     const lastEntry = Object.keys(loadOrder).reduce((prev, key) => {
       if (loadOrder[key].pos > prev.pos) {
         prev = loadOrder[key];
@@ -433,15 +444,16 @@ function loadOrderPrefix(api, mod) {
       return prev;
     }, {});
 
-    return makePrefix(reversePrefix(lastEntry.prefix) + 1) + '-';
+    return (lastEntry?.prefix !== undefined)
+      ? makePrefix(reversePrefix(lastEntry.prefix) + 1) + '-'
+      : makePrefix(lastEntry.pos + 1) + '-';
   }
 
-  if (loadOrder[mod.id].prefix !== undefined) {
+  if (loadOrder[mod.id]?.prefix !== undefined) {
     return loadOrder[mod.id].prefix + '-';
   }
-  const pos = loadOrder[mod.id].pos;
 
-  return makePrefix(pos) + '-';
+  return posToPrefix(mod.id);
 }
 
 function reversePrefix(prefix) {
