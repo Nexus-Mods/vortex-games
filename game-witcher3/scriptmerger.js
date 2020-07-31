@@ -11,6 +11,8 @@ const GITHUB_URL = 'https://api.github.com/repos/IDCs/WitcherScriptMerger';
 const MERGER_RELPATH = 'WitcherScriptMerger';
 const MERGER_ID = 'W3ScriptMerger';
 
+const { getHash, MD5ComparisonError } = require('./common');
+
 function query(baseUrl, request) {
   return new Promise((resolve, reject) => {
     const relUrl = url.parse(`${baseUrl}/${request}`);
@@ -107,6 +109,62 @@ async function getMergerVersion(context) {
   } else {
     return Promise.resolve(undefined);
   }
+}
+
+let _HASH_CACHE;
+async function getCache(api) {
+  if (_HASH_CACHE === undefined) {
+    try {
+      const data = await fs.readFileAsync(path.join(__dirname, 'MD5Cache.json'), { encoding: 'utf8' });
+      _HASH_CACHE = JSON.parse(data);
+    } catch (err) {
+      // If this ever happens - the user's machine must be screwed.
+      //  Maybe virus ? defective hardware ? did he manually manipulate
+      //  the file ?
+      api.showErrorNotification('Failed to parse MD5Cache', err);
+      return _HASH_CACHE = [];
+    }
+  }
+
+  return _HASH_CACHE;
+}
+
+async function onDownloadComplete(context, archivePath, mostRecentVersion) {
+  return new Promise(async (resolve, reject) => {
+    let archiveHash;
+    try {
+      archiveHash = await getHash(archivePath);
+    } catch (err) {
+      return Promise.reject(new MD5ComparisonError('Failed to calculate hash', archivePath));
+    }
+    const hashCache = await getCache(context.api);
+    if (hashCache.find(entry => (entry.archiveChecksum.toLowerCase() === archiveHash)
+                             && (entry.version === mostRecentVersion)) === undefined) {
+      // Not a valid hash - something may have happened during the download ?
+      return reject(new MD5ComparisonError('Corrupted archive download', archivePath));
+    }
+
+    return resolve(archivePath);
+  })
+  .then((archivePath) => extractScriptMerger(context, archivePath))
+  .then(async (mergerPath) => {
+    const mergerExec = path.join(mergerPath, 'WitcherScriptMerger.exe');
+    let execHash;
+    try {
+      execHash = await getHash(mergerExec);
+    } catch (err) {
+      return Promise.reject(new MD5ComparisonError('Failed to calculate hash', mergerExec));
+    }
+    const hashCache = await getCache(context.api);
+    if (hashCache.find(entry => (entry.execChecksum.toLowerCase() === execHash)
+                             && (entry.version === mostRecentVersion)) === undefined) {
+      // Not a valid hash - something may have happened during extraction ?
+      return Promise.reject(new MD5ComparisonError('Corrupted executable', mergerExec));
+    }
+
+    return Promise.resolve(mergerPath);
+  })
+  .then((mergerPath) => setUpMerger(context, mostRecentVersion, mergerPath))
 }
 
 async function downloadScriptMerger(context) {
@@ -211,14 +269,28 @@ async function downloadScriptMerger(context) {
           actions: [ { title: 'Download', action: dismiss => {
             dismiss();
             return download()
-              .then((archivePath) => extractScriptMerger(context, archivePath))
-              .then((mergerPath) => setUpMerger(context, mostRecentVersion, mergerPath))
+              .then((archivePath) => onDownloadComplete(context, archivePath, mostRecentVersion))
               .catch(err => {
+                context.api.dismissNotification(extractNotifId);
+                context.api.dismissNotification(downloadNotifId);
+                if (err instanceof MD5ComparisonError) {
+                  log('error', 'Failed to automatically install Script Merger', err.errorMessage);
+                  context.api.sendNotification({
+                    type: 'error',
+                    message: context.api.translate('Please install Script Merger manually', { ns: 'game-witcher3' }),
+                    actions: [
+                      { 
+                        title: 'Install Manually',
+                        action: () => util.opn('https://www.nexusmods.com/witcher3/mods/484')
+                              .catch(err => null)
+                      }],
+                  })
+                  return Promise.resolve();
+                }
                 // Currently AFAIK this would only occur if github is down for any reason
                 //  and we were unable to resolve the re-direction link. Given that the user
                 //  expects a result from him clicking the download button, we let him know
                 //  to try again
-                context.api.dismissNotification(downloadNotifId);
                 context.api.sendNotification({
                   type: 'info',
                   message: context.api.translate('Update failed due temporary network issue - try again later', { ns: 'game-witcher3' }),
@@ -234,10 +306,24 @@ async function downloadScriptMerger(context) {
       return downloadConsent(context)
         .then(() => download());
     })
-    .then((archivePath) => extractScriptMerger(context, archivePath))
-    .then((mergerPath) => setUpMerger(context, mostRecentVersion, mergerPath))
+    .then((archivePath) => onDownloadComplete(context, archivePath, mostRecentVersion))
     .catch(err => {
+      context.api.dismissNotification(extractNotifId);
       context.api.dismissNotification(downloadNotifId);
+      if (err instanceof MD5ComparisonError) {
+        log('error', 'Failed to automatically install Script Merger', err.errorMessage);
+        context.api.sendNotification({
+          type: 'error',
+          message: context.api.translate('Please install Script Merger manually', { ns: 'game-witcher3' }),
+          actions: [
+            {
+              title: 'Install Manually',
+              action: () => util.opn('https://www.nexusmods.com/witcher3/mods/484')
+                    .catch(err => null)
+            }],
+        })
+        return Promise.resolve();
+      }
       if (err instanceof util.UserCanceled) {
         return Promise.resolve();
       } else if (err instanceof util.ProcessCanceled) {
@@ -256,6 +342,12 @@ async function downloadScriptMerger(context) {
     })
 }
 
+const extractNotifId = 'extracting-script-merger';
+const extractNotif = {
+  id: extractNotifId,
+  type: 'activity',
+  title: 'Extracting Script Merger',
+}
 async function extractScriptMerger(context, archivePath) {
   const state = context.api.store.getState();
   const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', 'witcher3'], undefined);
@@ -265,11 +357,13 @@ async function extractScriptMerger(context, archivePath) {
     : path.join(path.dirname(archivePath), MERGER_RELPATH);
 
   const sZip = new util.SevenZip();
+  context.api.sendNotification(extractNotif);
   await sZip.extractFull(archivePath, destination);
   context.api.sendNotification({
     type: 'info',
     message: context.api.translate('W3 Script Merger extracted successfully', { ns: 'game-witcher3' }),
   });
+  context.api.dismissNotification(extractNotifId);
   return Promise.resolve(destination);
 }
 
