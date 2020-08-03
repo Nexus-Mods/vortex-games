@@ -15,12 +15,13 @@ const LAUNCHER_DATA = {
   multiplayerSubMods: [],
 }
 
+let STORE_ID;
 let CACHE = {};
 
 // Nexus Mods id for the game.
 const GAME_ID = 'mountandblade2bannerlord';
-const BETA_STEAMAPP_ID = 1059770;
 const STEAMAPP_ID = 261550;
+const EPICAPP_ID = 'Chickadee';
 const MODULES = 'Modules';
 
 const I18N_NAMESPACE = 'game-mount-and-blade2';
@@ -35,7 +36,7 @@ const ROOT_FOLDERS = new Set(['bin', 'data', 'gui', 'icons', 'modules',
   'music', 'shaders', 'sounds', 'xmlschemas']);
 
 const OFFICIAL_MODULES = new Set(['Native', 'CustomBattle', 'SandBoxCore', 'Sandbox', 'StoryMode']);
-const LOCKED_MODULES = new Set(['Native']);
+const LOCKED_MODULES = new Set([]);
 
 // Used for the "custom launcher" tools.
 //  gameMode: singleplayer or multiplayer
@@ -52,7 +53,8 @@ const SUBMOD_FILE = "submodule.xml";
 async function walkAsync(dir, levelsDeep = 2) {
   let entries = [];
   return fs.readdirAsync(dir).then(files => {
-    return Promise.each(files, file => {
+    const filtered = files.filter(file => !file.endsWith('.vortex_backup'));
+    return Promise.each(filtered, file => {
       const fullPath = path.join(dir, file);
       return fs.statAsync(fullPath).then(stats => {
         if (stats.isDirectory() && levelsDeep > 0) {
@@ -65,6 +67,14 @@ async function walkAsync(dir, levelsDeep = 2) {
           entries.push(fullPath);
           return Promise.resolve();
         }
+      }).catch(err => {
+        // This is a valid use case, particularly if the file
+        //  is deployed by Vortex using symlinks, and the mod does
+        //  not exist within the staging folder.
+        log('error', 'MnB2: invalid symlink', err);
+        return (err.code === 'ENOENT')
+          ? Promise.resolve()
+          : Promise.reject(err);
       });
     });
   })
@@ -74,8 +84,26 @@ async function walkAsync(dir, levelsDeep = 2) {
 async function getDeployedSubModPaths(context) {
   const state = context.api.store.getState();
   const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
+  if (discovery?.path === undefined) {
+    return Promise.reject(new util.ProcessCanceled('game discovered is incomplete'));
+  }
   const modulePath = path.join(discovery.path, MODULES);
-  const moduleFiles = await walkAsync(modulePath);
+  let moduleFiles;
+  try {
+    moduleFiles = await walkAsync(modulePath);
+  } catch (err) {
+    if (err instanceof util.UserCanceled) {
+      return Promise.resolve([]);
+    }
+    const isMissingOfficialModules = ((err.code === 'ENOENT')
+      && ([].concat([ MODULES ], Array.from(OFFICIAL_MODULES)))
+            .indexOf(path.basename(err.path)) !== -1);
+    const errorMsg = isMissingOfficialModules
+      ? 'Game files are missing - please re-install the game'
+      : err.message;
+    context.api.showErrorNotification(errorMsg, err);
+    return Promise.resolve([]);
+  }
   const subModules = moduleFiles.filter(file => path.basename(file).toLowerCase() === SUBMOD_FILE);
   return Promise.resolve(subModules);
 }
@@ -119,7 +147,7 @@ async function getDeployedModData(context, subModuleFilePaths) {
       //  to the parent node of the actual problem and in this case nearly
       //  always will point to the root of the XML file (Module) which is completely useless.
       //  We're going to provide a human readable error to the user.
-      context.api.showErrorNotification('Unable to parse submodule file', errorMessage);
+      context.api.showErrorNotification('Unable to parse submodule file', errorMessage, { allowReport: false });
       log('error', 'MNB2: parsing error', err);
     }
     
@@ -130,18 +158,37 @@ async function getDeployedModData(context, subModuleFilePaths) {
 async function getManagedIds(context) {
   const state = context.api.store.getState();
   const activeProfile = selectors.activeProfile(state);
+  if (activeProfile === undefined) {
+    // This is a valid use case if the gamemode
+    //  has failed activation.
+    return Promise.resolve([]);
+  }
+
   const modState = util.getSafe(state, ['persistent', 'profiles', activeProfile.id, 'modState'], {});
   const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
   const enabledMods = Object.keys(modState)
     .filter(key => !!mods[key] && modState[key].enabled)
     .map(key => mods[key]);
-  
+
+  const invalidMods = [];
   const installationDir = selectors.installPathForGame(state, GAME_ID);
   return Promise.reduce(enabledMods, async (accum, entry) => {
     const modInstallationPath = path.join(installationDir, entry.installationPath);
-    const files = await walkAsync(modInstallationPath, 3);
+    let files;
+    try {
+      files = await walkAsync(modInstallationPath, 3);
+    } catch (err) {
+      // The mod must've been removed manually by the user from
+      //  the staging folder - good job buddy!
+      //  Going to log this, but otherwise allow it to proceed.
+      invalidMods.push(entry.id);
+      log('error', 'failed to read mod staging folder', { modId: entry.id, error: err.message });
+      return Promise.resolve(accum);
+    }
+
     const subModFile = files.find(file => path.basename(file).toLowerCase() === SUBMOD_FILE)
     if (subModFile === undefined) {
+      // No submod file - no LO
       return Promise.resolve(accum);
     }
 
@@ -154,7 +201,7 @@ async function getManagedIds(context) {
       //  or a 3rd party application has tampered with the file...
       //  We simply log this here as the parse-ing failure will be highlighted
       //  by the CACHE logic.
-      log('error', err);
+      log('error', '[MnB2] Unable to parse submodule file', err);
       //context.api.showErrorNotification('Unable to parse submodule file', err);
       return Promise.resolve(accum);
     }
@@ -167,22 +214,33 @@ async function getManagedIds(context) {
 
     return Promise.resolve(accum)
   }, [])
+  .tap((res) => {
+    if (invalidMods.length > 0) {
+      const errMessage = 'The following mods are inaccessible or are missing '
+        + 'in the staging folder:\n\n' + invalidMods.join('\n') + '\n\nPlease ensure '
+        + 'these mods and their content are not open in any other application '
+        + '(including the game itself). If the mod is missing entirely, please re-install it '
+        + 'or remove it from your mods page. Please check your vortex log file for details.';
+      context.api.showErrorNotification('Invalid Mods in Staging',
+                                        new Error(errMessage), { allowReport: false });
+    }
+    return Promise.resolve(res);
+  });
 }
 
 async function getXMLData(xmlFilePath) {
-  return fs.readFileAsync(xmlFilePath, { encoding: 'utf-8' })
+  return fs.readFileAsync(xmlFilePath)
     .then(data => {
-      data = util.deBOM(data);
       try {
         const xmlData = parseXmlString(data);
         return Promise.resolve(xmlData);
       } catch (err) {
-        return Promise.reject(new util.DataInvalid(err));
+        return Promise.reject(new util.DataInvalid(err.message));
       }
     })
     .catch(err => (err.code === 'ENOENT')
       ? Promise.reject(new util.NotFound(xmlFilePath))
-      : Promise.reject(new util.DataInvalid(err)));
+      : Promise.reject(new util.DataInvalid(err.message)));
 }
 
 async function refreshGameParams(context, loadOrder) {
@@ -191,7 +249,14 @@ async function refreshGameParams(context, loadOrder) {
     ? Object.keys(loadOrder)
         .filter(key => loadOrder[key].enabled)
         .sort((lhs, rhs) => loadOrder[lhs].pos - loadOrder[rhs].pos)
-        .map(key => Object.keys(CACHE).find(cacheElement => CACHE[cacheElement].vortexId === key))
+        .reduce((accum, key) => {
+          const cacheKeys = Object.keys(CACHE);
+          const entry = cacheKeys.find(cacheElement => CACHE[cacheElement].vortexId === key);
+          if (!!entry) {
+            accum.push(entry);
+          }
+          return accum;
+        }, [])
     : LAUNCHER_DATA.singlePlayerSubMods
         .filter(subMod => subMod.enabled)
         .map(subMod => subMod.subModId);
@@ -235,10 +300,11 @@ async function getElementValue(subModuleFilePath, elementName) {
 }
 
 function findGame() {
-  return util.steam.findByAppId(STEAMAPP_ID.toString())
-    .then(game => game.gamePath)
-    .catch(err => util.steam.findByAppId(BETA_STEAMAPP_ID.toString())
-      .then(game => game.gamePath));
+  return util.GameStoreHelper.findByAppId([EPICAPP_ID, STEAMAPP_ID.toString()])
+    .then(game =>{
+      STORE_ID = game.gameStoreId;
+      return Promise.resolve(game.gamePath);
+    });
 }
 
 function testRootMod(files, gameId) {
@@ -347,6 +413,14 @@ async function prepareForModding(context, discovery) {
   // Quickly ensure that the official Launcher is added.
   ensureOfficialLauncher(context, discovery);
 
+  // If game store not found, location may be set manually - allow setup
+  //  function to continue.
+  const findStoreId = () => findGame().catch(err => Promise.resolve());
+  const startSteam = () => findStoreId()
+    .then(() => (STORE_ID === 'steam')
+      ? util.GameStoreHelper.launchGameStore(context.api, STORE_ID, undefined, true)
+      : Promise.resolve())
+
   const idRegexp = /\<Id\>(.*?)\<\/Id\>/gm;
   const enabledRegexp = /\<IsSelected\>(.*?)\<\/IsSelected\>/gm;
   const trimTagsRegexp = /<[^>]*>?/gm;
@@ -363,12 +437,10 @@ async function prepareForModding(context, discovery) {
       return undefined;
     }
   };
-  const state = context.api.store.getState();
-  const activeProfile = selectors.activeProfile(state);
-  const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], undefined);
+
   // Check if we've already set the load order object for this profile
   //  and create it if we haven't.
-  return getXMLData(LAUNCHER_DATA_PATH).then(launcherData => {
+  return startSteam().then(() => getXMLData(LAUNCHER_DATA_PATH)).then(launcherData => {
     try {
       const singlePlayerMods = launcherData.get('//UserData/SingleplayerData/ModDatas').childNodes();
       const multiPlayerMods = launcherData.get('//UserData/MultiplayerData/ModDatas').childNodes();
@@ -387,9 +459,7 @@ async function prepareForModding(context, discovery) {
         return accum;
       }, []);
     } catch (err) {
-      return (err.code === 'ENOENT')
-        ? Promise.reject(new util.NotFound('Launcher data cannot be found, please run the game launcher at least once.'))
-        : Promise.reject(err);
+      return Promise.reject(new util.DataInvalid(err.message));
     }
   }).then(async () => {
     const deployedSubModules = await getDeployedSubModPaths(context);
@@ -400,7 +470,31 @@ async function prepareForModding(context, discovery) {
     //  cyclic or missing dependencies.
     const modIds = Object.keys(CACHE);
     const sorted = tSort(modIds, true);
-  }).finally(() => refreshGameParams(context, loadOrder));
+  })
+  .catch(err => {
+    if (err instanceof util.NotFound) {
+      context.api.showErrorNotification('Failed to find game launcher data',
+        'Please run the game at least once through the official game launcher and '
+      + 'try again', { allowReport: false });
+      return Promise.resolve();
+    } else if (err instanceof util.ProcessCanceled) {
+      context.api.showErrorNotification('Failed to find game launcher data',
+        err, { allowReport: false });
+    }
+
+    return Promise.reject(err);
+  })
+  .finally(() => {
+    const state = context.api.store.getState();
+    const activeProfile = selectors.activeProfile(state);
+    if (activeProfile === undefined) {
+      // Valid use case when attempting to switch to
+      //  Bannerlord without any active profile.
+      return refreshGameParams(context, {});
+    }
+    const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
+    return refreshGameParams(context, loadOrder);
+  });
 }
 
 function isInvalid(subModId) {
@@ -422,11 +516,22 @@ function getValidationInfo(modVortexId) {
   }
 }
 
-function tSort(subModIds, allowLocked = false) {
+function tSort(subModIds, allowLocked = false, loadOrder = undefined) {
   // Topological sort - we need to:
   //  - Identify cyclic dependencies.
   //  - Identify missing dependencies.
-  const alphabetical = subModIds.sort();
+
+  // These are manually locked mod entries.
+  const lockedSubMods = (!!loadOrder)
+    ? subModIds.filter(subModId => {
+      const entry = CACHE[subModId];
+      return (!!entry)
+        ? !!loadOrder[entry.vortexId]?.locked
+        : false;
+    })
+    : [];
+  const alphabetical = subModIds.filter(subMod => !lockedSubMods.includes(subMod))
+                                .sort();
   const graph = alphabetical.reduce((accum, entry) => {
     // Create the node graph.
     accum[entry] = CACHE[entry].dependencies.sort();
@@ -494,11 +599,22 @@ function tSort(subModIds, allowLocked = false) {
 
   const subModsWithNoDeps = result.filter(dep => (graph[dep].length === 0)
     || (graph[dep].find(d => !LOCKED_MODULES.has(d)) === undefined)).sort() || [];
-  const tamperedResult = [].concat(subModsWithNoDeps, result.filter(entry => !subModsWithNoDeps.includes(entry)));
+  let tamperedResult = [].concat(subModsWithNoDeps, result.filter(entry => !subModsWithNoDeps.includes(entry)));
+  lockedSubMods.forEach(subModId => {
+    const pos = loadOrder[CACHE[subModId].vortexId].pos;
+    tamperedResult.splice(pos, 0, [subModId]);
+  });
   return tamperedResult;
 }
 
 async function preSort(context, items, direction) {
+  const state = context.api.store.getState();
+  const activeProfile = selectors.activeProfile(state);
+  if (activeProfile?.id === undefined || activeProfile?.gameId !== GAME_ID) {
+    // Race condition ?
+    return items;
+  }
+
   const modIds = Object.keys(CACHE);
 
   // Locked ids are always at the top of the list as all
@@ -524,9 +640,6 @@ async function preSort(context, items, direction) {
   
   // External ids will include official modules as well but not locked entries.
   const externalIds = modIds.filter(id => (!CACHE[id].isLocked) && (CACHE[id].vortexId === id));
-
-  const state = context.api.store.getState();
-  const activeProfile = selectors.activeProfile(state);
   const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
   const LOkeys = ((Object.keys(loadOrder).length > 0)
     ? Object.keys(loadOrder)
@@ -581,7 +694,8 @@ async function preSort(context, items, direction) {
       if (items.find(item => item.id === known.id) === undefined) {
         const pos = loadOrder[known.id]?.pos;
         const idx = (pos !== undefined) ? (pos - diff) : (getNextPos(known.id) - diff);
-        items = [].concat(items.slice(0, idx) || [], known, items.slice(idx) || []);
+        items.splice(idx, 0, known);
+        //items = [].concat(items.slice(0, idx) || [], known, items.slice(idx) || []);
       }
     });
 
@@ -627,15 +741,15 @@ function infoComponent(context, props) {
                                       + 'the Vortex load order and go by what is shown in the launcher instead.', { ns: I18N_NAMESPACE })),
         React.createElement('li', {}, t('For Bannerlord, mods sorted further towards the bottom of the list will override mods further up (if they conflict). '
                                       + 'Note: Harmony patches may be the exception to this rule.', { ns: I18N_NAMESPACE })),
-        React.createElement('li', {}, t('The native module (“Native”) is loaded first by the game and is locked '
-                                      + 'in place.', { ns: I18N_NAMESPACE })),
         React.createElement('li', {}, t('Auto Sort uses the SubModule.xml files (the entries under <DependedModules>) to detect '
                                       + 'dependencies to sort by. ', { ns: I18N_NAMESPACE })),
         React.createElement('li', {}, t('If you cannot see your mod in this load order, Vortex may have been unable to find or parse its SubModule.xml file. '
                                       + 'Most - but not all mods - come with or need a SubModule.xml file.', { ns: I18N_NAMESPACE })),
-        React.createElement('li', {}, t('Hit the deploy button whenever you install and enable a new mod, or make changes to the load order.', { ns: I18N_NAMESPACE })),
+        React.createElement('li', {}, t('Hit the deploy button whenever you install and enable a new mod.', { ns: I18N_NAMESPACE })),
         React.createElement('li', {}, t('The game will not launch unless the game store (Steam, Epic, etc) is started beforehand. If you\'re getting the '
-                                      + '"Unable to Initialize Steam API" error, restart Steam.', { ns: I18N_NAMESPACE })))));
+                                      + '"Unable to Initialize Steam API" error, restart Steam.', { ns: I18N_NAMESPACE })),
+        React.createElement('li', {}, t('Right clicking an entry will open the context menu which can be used to lock LO entries into position; entry will '
+                                      + 'be ignored by auto-sort maintaining its locked position.', { ns: I18N_NAMESPACE })))));
 }
 
 let _IS_SORTING = false;
@@ -659,6 +773,7 @@ function main(context) {
     },
     details: {
       steamAppId: STEAMAPP_ID,
+      epicAppId: EPICAPP_ID,
       customOpenModsPath: MODULES,
     },
   });
@@ -707,17 +822,18 @@ function main(context) {
       let sortedLocked = [];
       let sortedSubMods = [];
 
+      const state = context.api.store.getState();
+      const activeProfile = selectors.activeProfile(state);
+      const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
+
       try {
         sortedLocked = tSort(lockedIds, true);
-        sortedSubMods = tSort(subModIds);
+        sortedSubMods = tSort(subModIds, false, loadOrder);
       } catch (err) {
         context.api.showErrorNotification('Failed to sort mods', err);
         return;
       }
 
-      const state = context.api.store.getState();
-      const activeProfile = selectors.activeProfile(state);
-      const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
       const newOrder = [].concat(sortedLocked, sortedSubMods).reduce((accum, id, idx) => {
         const vortexId = CACHE[id].vortexId;
         const newEntry = {
@@ -727,6 +843,7 @@ function main(context) {
             : (!!loadOrder[vortexId])
               ? loadOrder[vortexId].enabled
               : true,
+          locked: (loadOrder[vortexId]?.locked === true),
         }
 
         accum[vortexId] = newEntry;
@@ -749,6 +866,9 @@ function main(context) {
 
   const refreshCacheOnEvent = async (profileId) => {
     CACHE = {};
+    if (profileId === undefined) {
+      return Promise.resolve();
+    }
     const state = context.api.store.getState();
     const activeProfile = selectors.activeProfile(state);
     const deployProfile = selectors.profileById(state, profileId);
@@ -766,13 +886,14 @@ function main(context) {
     const deployedSubModules = await getDeployedSubModPaths(context);
     CACHE = await getDeployedModData(context, deployedSubModules);
 
+    const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
+
     // We're going to do a quick tSort at this point - not going to
     //  change the user's load order, but this will highlight any
     //  cyclic or missing dependencies.
     const modIds = Object.keys(CACHE);
-    const sorted = tSort(modIds, true);
+    const sorted = tSort(modIds, true, loadOrder);
 
-    const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
     if (!!refreshFunc) {
       refreshFunc();
     }
@@ -785,6 +906,9 @@ function main(context) {
       refreshCacheOnEvent(profileId));
 
     context.api.onAsync('did-purge', async (profileId) =>
+      refreshCacheOnEvent(profileId));
+
+    context.api.events.on('profile-did-change', (profileId) =>
       refreshCacheOnEvent(profileId));
 
     context.api.onAsync('added-files', async (profileId, files) => {
@@ -803,14 +927,26 @@ function main(context) {
         // only act if we definitively know which mod owns the file
         if (entry.candidates.length === 1) {
           const mod = util.getSafe(state.persistent.mods, [GAME_ID, entry.candidates[0]], undefined);
+          if (mod === undefined) {
+            return Promise.resolve();
+          }
           const relPath = path.relative(modPaths[mod.type], entry.filePath);
           const targetPath = path.join(installPath, mod.id, relPath);
           // copy the new file back into the corresponding mod, then delete it. That way, vortex will
           // create a link to it with the correct deployment method and not ask the user any questions
           await fs.ensureDirAsync(path.dirname(targetPath));
-          await fs.copyAsync(entry.filePath, targetPath);
-          await fs.removeAsync(entry.filePath);
-        } // number of the beast - this lockdown is getting to me...
+
+          // Remove the target destination file if it exists.
+          //  this is to completely avoid a scenario where we may attempt to
+          //  copy the same file onto itself.
+          return fs.removeAsync(targetPath)
+            .catch(err => (err.code === 'ENOENT')
+              ? Promise.resolve()
+              : Promise.reject(err))
+            .then(() => fs.copyAsync(entry.filePath, targetPath))
+            .then(() => fs.removeAsync(entry.filePath))
+            .catch(err => log('error', 'failed to import added file to mod', err.message));
+        }
       });
     });
   })

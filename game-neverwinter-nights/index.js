@@ -19,9 +19,31 @@ const MOD_EXT_DESTINATION = {
   '.tga': 'portraits',
   '.erf': 'erf',
   '.hak': 'hak',
+  '.exe': 'hak',
+  '.hif': 'hak',
   '.tlk': 'tlk',
   '.bmu': 'music',
+  '.wav': 'ambient',
+  '.cdx': 'database',
+  '.dbf': 'database',
+  '.fpt': 'database',
+  '.nbm': 'movies',
+  '.bik': 'movies',
+  '.2da': 'override',
+  '.uti': 'override',
+  '.txi': 'override',
+  '.mdl': 'override',
+  '.ncs': 'override',
+  '.dlg': 'override',
+  '.utp': 'override',
 };
+
+// An array of moddable directories. We're going to
+//  use this to identify whether a mod's archive structure
+//  is already set-up and avoid using the per file extension custom installer.
+const _MOD_DIRECTORIES = ['ambient', 'database', 'development',
+  'dmvault', 'hak', 'localvault', 'logs', 'modules', 'movies', 'music',
+  'nwsync', 'override', 'portraits', 'servervault', 'tempclient', 'tlk'];
 
 function findGame() {
   if (process.platform !== 'win32') {
@@ -148,12 +170,24 @@ function installContent(files) {
 
 function testSupportedContent(files, gameId) {
   // Make sure we're able to support this mod.
-  const supported = ([NWN_GAME_ID, NWNEE_GAME_ID].indexOf(gameId) !== -1) &&
-    (files.find(file => path.extname(file).toLowerCase() in MOD_EXT_DESTINATION) !== undefined);
+  const supported = ([NWN_GAME_ID, NWNEE_GAME_ID].indexOf(gameId) !== -1)
+    && (files.find(file => path.extname(file).toLowerCase() in MOD_EXT_DESTINATION) !== undefined)
+    && !hasCorrectFolderStructure(files);
   return Promise.resolve({
     supported,
     requiredFiles: [],
   });
+}
+
+function hasCorrectFolderStructure(files) {
+  const matcher = (segment) => _MOD_DIRECTORIES.indexOf(segment) !== -1;
+  const filtered = files.filter(file => {
+    const segments = file.toLowerCase().split(path.sep).filter(seg => !!seg);
+    return ((path.extname(segments[segments.length - 1]) === '')
+      && (segments.find(matcher) !== undefined));
+  });
+
+  return filtered.length > 0;
 }
 
 module.exports = {

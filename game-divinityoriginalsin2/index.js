@@ -1,6 +1,6 @@
 const { app, remote } = require('electron');
 const path = require('path');
-const { selectors, util } = require('vortex-api');
+const { fs, selectors, util } = require('vortex-api');
 const winapi = require('winapi-bindings');
 
 const GAME_ID = 'divinityoriginalsin2';
@@ -36,6 +36,11 @@ function isPak(file) {
   return path.extname(file.relPath).toLowerCase() === '.pak';
 }
 
+function prepareForModding(discovery, isDefinitiveEdition) {
+  const modsPath = (isDefinitiveEdition) ? modPathDE() : modPath();
+  return fs.ensureDirWritableAsync(modsPath,() => Promise.resolve());
+}
+
 function main(context) {
   context.registerGame({
     id: GAME_ID,
@@ -46,6 +51,7 @@ function main(context) {
     queryModPath: modPath,
     logo: 'gameart.jpg',
     executable: () => 'bin/SupportTool.exe',
+    setup: (discovery) => prepareForModding(discovery, false),
     requiredFiles: [
       'bin/SupportTool.exe',
     ],
@@ -66,6 +72,7 @@ function main(context) {
     queryModPath: modPathDE,
     logo: 'gameartDE.png',
     executable: () => 'DefEd/bin/SupportTool.exe',
+    setup: (discovery) => prepareForModding(discovery, true),
     requiredFiles: [
       'DefEd/bin/SupportTool.exe',
     ],
@@ -82,7 +89,7 @@ function main(context) {
     context.api.onAsync('will-deploy', (profileId, deployment) => {
       const state = context.api.store.getState();
       const profile = selectors.profileById(state, profileId);
-      if ([GAME_ID, GAME_ID_DE].indexOf(profile.gameId) === -1) {
+      if ([GAME_ID, GAME_ID_DE].indexOf(profile?.gameId) === -1) {
         return Promise.resolve();
       }
       previouslyDeployed = new Set(deployment[''].filter(isPak).map(iter => iter.relPath));
@@ -92,7 +99,7 @@ function main(context) {
       const state = context.api.store.getState();
       const profile = selectors.profileById(state, profileId);
 
-      if ([GAME_ID, GAME_ID_DE].indexOf(profile.gameId) === -1) {
+      if ([GAME_ID, GAME_ID_DE].indexOf(profile?.gameId) === -1) {
         return Promise.resolve();
       }
 

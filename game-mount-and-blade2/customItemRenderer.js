@@ -3,13 +3,50 @@ const BS = require('react-bootstrap');
 const { connect } = require('react-redux');
 const path = require('path');
 const mnb2extension = require('./index');
-const { actions, FlexLayout, tooltip, selectors, util } = require('vortex-api');
+const { actions, ContextMenu, FlexLayout, tooltip, selectors, util } = require('vortex-api');
 
 const TWLOGO = path.join(__dirname, 'TWLogo.png');
 
 class CustomItemRenderer extends React.Component {
   constructor(props) {
     super(props);
+    this.state = {
+      contextMenuVisible: false,
+      offset: { x: 0, y: 0 },
+    }
+    this.mMounted = false;
+  }
+
+  componentDidMount() {
+    this.mMounted = true;
+  }
+
+  componentWillUnmount() {
+    this.mMounted = false;
+  }
+
+  renderAddendum(props) {
+    // Extra stuff we want to add to the LO entry.
+    //  Currently renders the open directory button for
+    const { item, order, mods } = props;
+    const managedModKeys = Object.keys(mods);
+    const isLocked = !!order[item.id]?.locked;
+
+    const renderLock = () => {
+      return React.createElement(tooltip.Icon, { name: 'locked', tooltip: 'Entry is locked in position' });
+    }
+
+    const renderInfo = () => {
+      return React.createElement(tooltip.Icon, { name: 'dialog-info', tooltip: 'Not managed by Vortex' });
+    }
+
+    return (this.isItemInvalid(item))
+      ? this.renderOpenDirButton(props)
+      : (isLocked)
+        ? renderLock()
+        : !managedModKeys.includes(item.id)
+          ? renderInfo()
+          : null
   }
 
   // TODO: move all style configuration into a stylesheet
@@ -27,18 +64,13 @@ class CustomItemRenderer extends React.Component {
     React.createElement('p', {}, item.name));
   }
 
-  renderExternalEntry(item, enabled) {
+  renderEntry(props) {
+    const { item, order } = props;
+    const isEnabled = !!order[item.id]?.locked || order[item.id].enabled;
     return React.createElement(BS.Checkbox, {
-      checked: enabled,
-      disabled: item.locked,
-      onChange: (evt) => this.onStatusChange(evt, this.props)}, item.name);
-  }
-
-  renderManagedEntry(item, enabled) {
-    return React.createElement(BS.Checkbox, {
-      checked: enabled,
-      disabled: item.locked,
-      onChange: (evt) => this.onStatusChange(evt, this.props)}, item.name);
+      checked: isEnabled,
+      disabled: !!item?.locked,
+      onChange: (evt) => this.onStatusChange(evt, props)}, item.name);
   }
 
   renderInvalidEntry(item) {
@@ -51,9 +83,39 @@ class CustomItemRenderer extends React.Component {
       disabled: true }, item.name, ' ', reasonElement());
   }
 
+  onLock(props, lock) {
+    const { profile, order, item, onSetLoadOrderEntry } = props;
+    const entry = {
+      pos: order[item.id].pos,
+      enabled: order[item.id].enabled,
+      locked: lock,
+    }
+
+    onSetLoadOrderEntry(profile.id, item.id, entry);
+  }
+
+  renderContextMenu(state, props) {
+    const { order, item } = props;
+    const { contextMenuVisible, offset } = state;
+    return React.createElement(ContextMenu, {
+      key: 'mnb2-context-menu',
+      position: offset,
+      visible: !!contextMenuVisible,
+      onHide: () => {
+        if (this.mMounted) {
+          this.setState({ contextMenuVisible: false });
+        }
+      },
+      instanceId: item.id,
+      actions: [
+        { title: 'Lock', show: (order[item.id]?.locked === false), action: () => this.onLock(props, true) },
+        { title: 'Unlock', show: !!order[item.id]?.locked, action: () => this.onLock(props, false) },
+      ],
+    })
+  }
+
   render() {
-    const { order, className, item, mods } = this.props;
-    const managedModKeys = Object.keys(mods);
+    const { order, className, item } = this.props;
     const position = (item.prefix !== undefined)
       ? item.prefix
       : order[item.id].pos + 1;
@@ -64,11 +126,15 @@ class CustomItemRenderer extends React.Component {
     }
 
     const key = `${item.name}-${position}`;
-    return React.createElement(BS.ListGroupItem, {
+    const result = React.createElement(BS.ListGroupItem, {
       className: 'load-order-entry',
       ref: (ref) => this.setRef(ref, this.props),
       key,
       style: { height: '48px' },
+      onContextMenu: (evt) => this.setState({
+        contextMenuVisible: !this.state.contextMenuVisible,
+        offset: { x: evt.clientX, y: evt.clientY },
+      }),
     },
     React.createElement(FlexLayout, { type: 'row', height: '20px' },
       React.createElement(FlexLayout.Flex, {
@@ -85,22 +151,15 @@ class CustomItemRenderer extends React.Component {
         ? this.renderInvalidEntry(item)
         : (item.official)
           ? this.renderOfficialEntry(item)
-          : managedModKeys.includes(item.id)
-            ? this.renderManagedEntry(item, order[item.id].enabled)
-            : this.renderExternalEntry(item, order[item.id].enabled)
+          : this.renderEntry(this.props)
         ),
       React.createElement(FlexLayout.Flex, {
         style: {
           display: 'flex',
           justifyContent: 'flex-end',
         }
-      }, (this.isItemInvalid(item))
-          ? this.renderOpenDirButton(this.props)
-          : (item.locked) 
-            ? React.createElement(tooltip.Icon, { name: 'locked', tooltip: 'Cannot be dragged' })
-            : !managedModKeys.includes(item.id) 
-              ? React.createElement(tooltip.Icon, { name: 'dialog-info', tooltip: 'Not managed by Vortex' })
-              : null)));
+      }, this.renderAddendum(this.props)), this.renderContextMenu(this.state, this.props)));
+    return result;
   }
 
   isItemInvalid(item) {
@@ -142,14 +201,14 @@ class CustomItemRenderer extends React.Component {
   }
 
   onStatusChange(evt, props) {
-    const { profile, order, item, onSetLoadOrderEntry, onSetDeploymentRequired } = props;
+    const { profile, order, item, onSetLoadOrderEntry } = props;
     const entry = {
       pos: order[item.id].pos,
       enabled: evt.target.checked,
+      locked: order[item.id]?.locked !== undefined ? order[item.id].locked : false,
     }
 
     onSetLoadOrderEntry(profile.id, item.id, entry);
-    //onSetDeploymentRequired();
   }
 
   setRef (ref, props) {

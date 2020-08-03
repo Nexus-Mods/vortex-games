@@ -3,11 +3,14 @@ const Big = require('big.js');
 const Promise = require('bluebird');
 const { parseXmlString } = require('libxmljs');
 const path = require('path');
-const { fs, log, util } = require('vortex-api');
+const { fs, log, selectors, util } = require('vortex-api');
 const winapi = require('winapi-bindings');
+
+const semver = require('semver');
 
 const APPUNI = app || remote.app;
 const GAME_ID = 'x4foundations';
+const I18N_NAMESPACE = `game-${GAME_ID}`;
 const STEAM_ID = 392160;
 const GOG_ID = '1395669635';
 
@@ -52,12 +55,57 @@ function testSupportedContent(files, gameId) {
   });
 }
 
-function installContent(files,
-                 destinationPath,
-                 gameId,
-                 progressDelegate) {
+async function parseIndexFiles(indexPath) {
+  return fs.readdirAsync(indexPath).then(files => {
+    const xmlFiles = files.filter(file => path.extname(file) === '.xml');
+    return Promise.reduce(xmlFiles, (modName, file) => {
+      return fs.readFileAsync(path.join(indexPath, file))
+      .then(data => {
+        if (modName !== '') {
+          return Promise.resolve(modName);
+        }
+
+        let parsed;
+        try {
+          parsed = parseXmlString(data);
+          const entries = parsed.find('//entry');
+          const entryValue = entries[0]?.attr('value').value();
+          if (entryValue !== undefined && entryValue.startsWith('extensions')) {
+            const segments = entryValue.split(path.sep);
+            return Promise.resolve(segments[1]);
+          }
+
+          return Promise.resolve(modName);
+        } catch (err) {
+          // This is arguably not an error as there is
+          //  no way for us to know whether the file is actually
+          //  valid for our usage.
+          log('debug', 'X4: parser error', err);
+          return Promise.resolve(modName);
+        }
+      })
+      .catch(err => {
+        log('debug', 'X4: cannot read xml file', err);
+        return Promise.resolve(modName)
+      })
+    }, '');
+  })
+  .catch(err => {
+    log('debug', 'X4: cannot read mod index path', err.code);
+    return Promise.resolve(modName)
+  });
+}
+
+async function installContent(files,
+                              destinationPath,
+                              gameId,
+                              progressDelegate) {
   const contentPath = files.find(file => path.basename(file) === 'content.xml');
   const basePath = path.dirname(contentPath);
+
+  const hasIndexFolder = await fs.statAsync(path.join(destinationPath, basePath, 'index'))
+                                  .then(() => Promise.resolve(true))
+                                  .catch(() => Promise.resolve(false));
 
   let outputPath = basePath;
 
@@ -79,36 +127,58 @@ function installContent(files,
       }
     }
 
-    outputPath = getAttr('id');
-    if (outputPath === undefined) {
+    const contentModId = getAttr('id');
+    if (contentModId === undefined) {
       return Promise.reject(
           new util.DataInvalid('invalid or unsupported content.xml'));
     }
+
+    // We prefer using the mod folder name included in the archive structure.
+    //  Alternatively, if the mod files are placed loosely at the archive's
+    //  root folder - there's no way for us to ascertain what the mod folder
+    //  is actually supposed to be named, in which case we _try_ to find this
+    //  using any xml files we can pinpoint in the mod's index files (if they exist)
+    //  As a final resort we just use the content.xml id attribute;
+    outputPath = (contentPath.indexOf('content.xml') > 0)
+      ? path.basename(path.dirname(contentPath))
+      : hasIndexFolder
+        ? parseIndexFiles(path.join(destinationPath, basePath, 'index'))
+            .then(res => !!res ? res : contentModId)
+        : contentModId; // Last resort.
+
     attrInstructions.push({
       type: 'attribute',
       key: 'customFileName',
       value: getAttr('name').trim(),
     });
-    attrInstructions.push({
-      type: 'attribute',
-      key: 'description',
-      value: getAttr('description'),
-    });
+
+    // Avoid setting the description for the mod on installation as the content
+    //  file is probably less... descriptive than what we have on the site.
+    // attrInstructions.push({
+    //   type: 'attribute',
+    //   key: 'description',
+    //   value: getAttr('description'),
+    // });
     attrInstructions.push({
       type: 'attribute',
       key: 'sticky',
       value: getAttr('save') === 'true',
     });
+
     attrInstructions.push({
       trype: 'attribute',
       key: 'author',
       value: getAttr('author'),
     });
-    attrInstructions.push({
-      type: 'attribute',
-      key: 'version',
-      value: getAttr('version'),
-    });
+    // Setting the version attribute manually during installation will
+    //  override the version we get from the website. This will cause the mod
+    //  to report that there is an update available even when the user is on
+    //  the latest version.
+    // attrInstructions.push({
+    //   type: 'attribute',
+    //   key: 'version',
+    //   value: getAttr('version'),
+    // });
     return Promise.resolve(attrInstructions);
   })
   .then(attrInstructions => {
@@ -143,6 +213,71 @@ function getDocumentsModPath() {
     : path.join(APPUNI.getPath('documents'), 'Egosoft', 'X4', 'extensions');
 }
 
+function migrate101(api, oldVersion) {
+  if (semver.gte(oldVersion, '1.0.1')) {
+    return Promise.resolve();
+  }
+
+  const state = api.store.getState();
+  const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
+  const modIds = Object.keys(mods);
+  if (modIds.length === 0) {
+    // No mods, no problem.
+    return Promise.resolve();
+  }
+
+  const reinstallNotif = (modIds) => new Promise((resolve) => {
+    const affectedMods = modIds.join('\n');
+    return api.sendNotification({
+      id: 'x4-reinstall',
+      type: 'warning',
+      message: api.translate('Mods for X4 need to be reinstalled',
+        { ns: I18N_NAMESPACE }),
+      noDismiss: true,
+      actions: [
+        {
+          title: 'Explain',
+          action: () => {
+            api.showDialog('info', 'X4: Foundations', {
+              text: 'Due to a bug in our X4 mod installer, some of your mods have been '
+                  + 'extracted into a potentially invalid mod folder, and may be causing your game '
+                  + 'to behave unexpectedly. To resolve this - please re-install the following mods:\n\n'
+                  + `${affectedMods}\n\n`
+                  + 'We are sorry for the inconvenience.',
+            }, [
+              { label: 'Close' },
+            ]);
+          },
+        },
+        {
+          title: 'Understood',
+          action: dismiss => {
+            dismiss();
+            resolve();
+          }
+        }
+      ],
+    });
+  });
+
+  const gameInstallationPath = selectors.installPathForGame(state, GAME_ID);
+  return Promise.reduce(modIds, (accum, modId) => {
+    const mod = mods[modId];
+    const modStagingPath = path.join(gameInstallationPath, mod.installationPath);
+    return fs.readdirAsync(modStagingPath)
+      .then(entries => {
+        const hasInvalidModName = entries.find(entry => entry.startsWith('ws_')) !== undefined;
+        if (hasInvalidModName) {
+          accum.push(modId);
+        }
+        return Promise.resolve(accum);
+      }).catch(err => Promise.resolve(accum))
+  }, [])
+  .then(invalidMods => (invalidMods.length > 0)
+    ? reinstallNotif(invalidMods)
+    : Promise.resolve());
+}
+
 async function prepareForModding(discovery) {
   try {
     const documentsPath = await getDocumentsModPath();
@@ -175,6 +310,8 @@ function main(context) {
   context.registerInstaller('x4foundations', 50, testSupportedContent, installContent);
   context.registerModType('x4-documents-modtype', 15, (gameId) => (gameId === GAME_ID),
     () => getDocumentsModPath(), () => Promise.resolve(false));
+
+  context.registerMigration(old => migrate101(context.api, old));
 
   return true;
 }

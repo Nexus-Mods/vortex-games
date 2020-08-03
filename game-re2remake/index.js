@@ -46,12 +46,16 @@ const GAME_ID = 'residentevil22019';
 const STEAM_ID = 883710;
 const STEAM_ID_Z = 895950;
 
+const ACTIVITY_INVAL = 'invalidations';
+const ACTIVITY_REVAL = 'revalidations';
+
 const I18N_NAMESPACE = `game-${GAME_ID}`;
 
 function getFileListCache() {
+  const state = _API.store.getState();
   return (FILE_CACHE.length > 0)
     ? Promise.resolve(FILE_CACHE)
-    : fs.readFileAsync(_FILE_LIST, { encoding: 'utf-8' })
+    : ensureListBackup(state).then(() => fs.readFileAsync(_FILE_LIST, { encoding: 'utf-8' }))
       .then(data => {
         FILE_CACHE = data.split('\n');
         return Promise.resolve(FILE_CACHE);
@@ -192,6 +196,22 @@ function getDiscoveryPath(api) {
   }
 
   return discovery.path;
+}
+
+const FLUFFY_FILES = ['fmodex64.dll', 'Modmanager.exe'];
+function fluffyManagerTest(files, gameId) {
+  const matcher = (file => FLUFFY_FILES.includes(file));
+  const supported = ((gameId === GAME_ID) && (files.filter(matcher).length > 0));
+
+  return Promise.resolve({ supported, requiredFiles: FLUFFY_FILES });
+}
+
+function fluffyDummyInstaller(context, files) {
+  context.api.showErrorNotification('Invalid Mod', 'It looks like you tried to install '
+    + 'Fluffy Manager 5000, which is a standalone mod manager and not a mod for Resident Evil 2.\n\n'
+    + 'Fluffy Manager and Vortex cannot be used together and doing so will break your game. Please '
+    + 'use only one of these apps to manage mods for Resident Evil 2.', { allowReport: false });
+  return Promise.reject(new util.ProcessCanceled('Invalid mod'));
 }
 
 function testSupportedContent(files, gameId) {
@@ -378,6 +398,9 @@ function filterOutInvalidated(wildCards, stagingFolder) {
 
 function revalidateFilePaths(hashes, api) {
   const discoveryPath = getDiscoveryPath(api);
+  if (discoveryPath === undefined) {
+    return Promise.reject(new Error('Game is not discovered'));
+  }
   const state = api.store.getState();
   const stagingFolder = selectors.installPathForGame(state, GAME_ID);
   return cache.findArcKeys(stagingFolder, hashes)
@@ -408,15 +431,20 @@ function revalidateFilePaths(hashes, api) {
           }))
           .then(() => (error === undefined)
             ? Promise.resolve()
-            : Promise.reject(new Error('Failed to re-validate filepaths')))
+            : (error instanceof util.ProcessCanceled)
+              ? Promise.reject(error)
+              : Promise.reject(new Error('Failed to re-validate filepaths')))
           .then(() => cache.removeOffsets(stagingFolder, arcMap[key], key));
       });
     });
 }
 
+let _incompleteNotifRaised = false;
 function invalidateFilePaths(wildCards, api, force = false) {
   const reportIncompleteList = () => {
-    api.showErrorNotification('Missing filepaths in game archives',
+    if (!_incompleteNotifRaised) {
+      _incompleteNotifRaised = true;
+      api.showErrorNotification('Missing filepaths in game archives',
       'Unfortunately Vortex cannot install this mod correctly as it seems to include one or more '
       + 'unrecognized files.<br/><br/>'
       + 'This can happen when:<br/>'
@@ -425,12 +453,19 @@ function invalidateFilePaths(wildCards, api, force = false) {
       + 'which were never supposed to be there.<br/><br/>'
       + 'To report this issue, please use the feedback system and make sure you attach Vortex\'s latest log file '
       + 'so we can review the missing files',
-      { isBBCode: true, allowReport: false })
+      { isBBCode: true, allowReport: false });
+    }
+
+    return Promise.resolve();
   };
 
   // For the invalidation logic to work correctly all
   //  wildCards MUST belong to the same game archive/mod.
   const discoveryPath = getDiscoveryPath(api);
+  if (discoveryPath === undefined) {
+    return Promise.reject(new Error('Game is not discovered'));
+  }
+
   const state = api.store.getState();
   const stagingFolder = selectors.installPathForGame(state, GAME_ID);
   const filterPromise = (force)
@@ -474,7 +509,10 @@ function invalidateFilePaths(wildCards, api, force = false) {
               .then(entries => cache.insertOffsets(stagingFolder, entries, arcKey))
           : Promise.reject(error));
     }))
-    .catch(util.NotFound, () => (force) ? null : reportIncompleteList())
+    .catch(util.ProcessCanceled, () => Promise.resolve())
+    .catch(util.NotFound, () => (force)
+      ? Promise.resolve()
+      : reportIncompleteList())
     .catch(util.UserCanceled, () => api.sendNotification({
       type: 'info',
       message: 'Invalidation canceled by user',
@@ -487,7 +525,9 @@ function invalidateFilePaths(wildCards, api, force = false) {
       .then(() => removeFilteredList()));
 }
 
+let _API;
 function main(context) {
+  _API = context.api;
   context.requireExtension('quickbms-support');
   context.registerGame({
     id: GAME_ID,
@@ -508,10 +548,16 @@ function main(context) {
       { replace: { modDir: modFolder }, allowReport: false });
   };
 
+  const reportError = (message, err) => {
+    context.api.showErrorNotification(message, err);
+    return Promise.resolve();
+  };
+
   // Pre-qbms RE2 installer was not fit for purpose and needs to be removed.
   //  Users which have already downloaded mods need to be migrated.
   context.registerMigration(old => migrate010(context.api, old));
 
+  context.registerInstaller('re2fluffyquack', 20, fluffyManagerTest, (files) => fluffyDummyInstaller(context, files));
   context.registerInstaller('re2qbmsmod', 25, testSupportedContent, installContent);
 
   context.registerAction('mod-icons', 500, 'savegame', {}, 'Invalidate Paths', () => {
@@ -523,7 +569,7 @@ function main(context) {
     }
 
     const stagingFolder = selectors.installPathForGame(state, GAME_ID);
-    store.dispatch(actions.startActivity('mods', 'invalidations'));
+    store.dispatch(actions.startActivity('mods', ACTIVITY_INVAL));
     const installedMods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
     const mods = Object.keys(installedMods);
     return Promise.each(mods, mod => {
@@ -532,8 +578,12 @@ function main(context) {
         .then(entries => {
           const relFilePaths = entries.map(entry => entry.replace(modFolder + path.sep, ''));
           const wildCards = relFilePaths.map(fileEntry => fileEntry.replace(/\\/g, '/'))
+          _incompleteNotifRaised = false;
           return invalidateFilePaths(wildCards, context.api, true)
-            .then(() => store.dispatch(actions.setDeploymentNecessary(GAME_ID, true)));
+            .then(() => store.dispatch(actions.setDeploymentNecessary(GAME_ID, true)))
+            .catch(err => (err instanceof util.ProcessCanceled)
+              ? Promise.resolve()
+              : Promise.reject(err));
         })
         .catch(err => {
           if (err.code === 'ENOENT') {
@@ -541,11 +591,11 @@ function main(context) {
             missingModNotification(modFolder);
             return Promise.resolve();
           } else {
-            context.api.showErrorNotification('Invalidation failed', err);
+            return reportError('Invalidation failed', err);
           }
         });
     })
-    .finally(() => { store.dispatch(actions.stopActivity('mods', 'invalidations')); })
+    .finally(() => { store.dispatch(actions.stopActivity('mods', ACTIVITY_INVAL)); })
   }, () => {
     const state = context.api.store.getState();
     const gameMode = selectors.activeGameId(state);
@@ -554,6 +604,15 @@ function main(context) {
 
   context.once(() => {
     let previousDeployment;
+    let profileChanging = false;
+    context.api.events.on('profile-will-change', (newProfileId) => {
+      profileChanging = true;
+    });
+
+    context.api.events.on('profile-did-change', (newProfileId) => {
+      profileChanging = false;
+    });
+
     context.api.onAsync('will-deploy', (profileId, deployment) => {
       const state = context.api.store.getState();
       const profile = selectors.profileById(state, profileId);
@@ -576,30 +635,37 @@ function main(context) {
       const newDeployment = new Set(deployment[''].map(iter => iter.relPath));
       const removed = previousDeployment.filter(iter => !newDeployment.has(iter));
       if (removed.length > 0) {
-        store.dispatch(actions.startActivity('mods', 'revalidations'));
+        store.dispatch(actions.startActivity('mods', ACTIVITY_REVAL));
         const wildCards = removed.map(fileEntry =>
           fileEntry.replace(/\\/g, '/'));
 
         const hashes = wildCards.map(entry => murmur3.getMurmur3Hash(entry));
         return revalidateFilePaths(hashes, api)
-          .finally(() => { store.dispatch(actions.stopActivity('mods', 'invalidations')); });
+          .catch(err => (err instanceof util.ProcessCanceled)
+            ? Promise.resolve()
+            : reportError('re-validation failed', err))
+          .finally(() => { store.dispatch(actions.stopActivity('mods', ACTIVITY_REVAL)); });
       }
       return Promise.resolve();
     })
 
     context.api.onAsync('bake-settings', (gameId, mods) => {
-      if (gameId === GAME_ID) {
+      if (gameId === GAME_ID && !profileChanging) {
         const store = context.api.store;
         const state = store.getState();
         const stagingFolder = selectors.installPathForGame(state, GAME_ID);
-        store.dispatch(actions.startActivity('mods', 'invalidations'));
+        store.dispatch(actions.startActivity('mods', ACTIVITY_INVAL));
+        _incompleteNotifRaised = false;
         return Promise.each(mods, mod => {
           const modFolder = path.join(stagingFolder, mod.installationPath);
           return walkAsync(modFolder)
             .then(entries => {
               const relFilePaths = entries.map(entry => entry.replace(modFolder + path.sep, ''));
               const wildCards = relFilePaths.map(fileEntry => fileEntry.replace(/\\/g, '/'))
-              return invalidateFilePaths(wildCards, context.api);
+              return invalidateFilePaths(wildCards, context.api)
+                .catch(err => (err instanceof util.ProcessCanceled)
+                  ? Promise.resolve()
+                  : Promise.reject(err));
             })
             .catch(err => {
               if (err.code === 'ENOENT') {
@@ -612,7 +678,7 @@ function main(context) {
             });
         })
         .finally(() => {
-          store.dispatch(actions.stopActivity('mods', 'invalidations'));
+          store.dispatch(actions.stopActivity('mods', ACTIVITY_INVAL));
           return Promise.resolve();
         })
       }
@@ -627,7 +693,7 @@ function main(context) {
       }
 
       const stagingFolder = selectors.installPathForGame(state, GAME_ID);
-      store.dispatch(actions.startActivity('mods', 'revalidations'));
+      store.dispatch(actions.startActivity('mods', ACTIVITY_REVAL));
       const installedMods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
       const mods = Object.keys(installedMods);
       return Promise.each(mods, mod => {
@@ -646,7 +712,7 @@ function main(context) {
           .catch(err => null);
       })
       .finally(() => {
-        store.dispatch(actions.stopActivity('mods', 'revalidations'));
+        store.dispatch(actions.stopActivity('mods', ACTIVITY_REVAL));
         return Promise.resolve();
       })
     });

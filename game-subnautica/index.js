@@ -44,7 +44,7 @@ class Subnautica {
   }
 
   async queryPath() {
-    return util.steam.findByAppId('264710')
+    return util.GameStoreHelper.findByAppId(['264710', 'Jaguar'])
         .then(game => game.gamePath);
   }
   

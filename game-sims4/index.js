@@ -5,6 +5,7 @@ const { remote, app } = require('electron');
 const path = require('path');
 const semver = require('semver');
 const { actions, fs, log, util } = require('vortex-api');
+const IniParser = require('vortex-parse-ini');
 
 const appUni = app || remote.app;
 
@@ -44,7 +45,7 @@ function findGame() {
 
 let cachedModPath;
 
-function findModPath() {
+function getLocale(eaPath) {
   let locale;
   // check registry for the locale
   try {
@@ -60,8 +61,6 @@ function findModPath() {
   if ((locale !== undefined) && (LOCALE_MODS_FOLDER[locale] === undefined)) {
     locale = undefined;
   }
-
-  const eaPath = path.join(appUni.getPath('documents'), 'Electronic Arts');
 
   // if we didn't find the locale in the registry (suspicious) loop through the known
   // ones and see if the corresponding mod folder exists
@@ -84,6 +83,13 @@ function findModPath() {
     locale = 'en_US';
   }
 
+  return locale;
+}
+
+function findModPath() {
+  const eaPath = path.join(appUni.getPath('documents'), 'Electronic Arts');
+
+  const locale = getLocale(eaPath);
   return path.join(eaPath, LOCALE_MODS_FOLDER[locale], 'Mods');
 }
 
@@ -167,9 +173,32 @@ function writeResourceCfg(resourceBasePath) {
     });
 }
 
+function enableModding() {
+  const parser = new IniParser.default(new IniParser.WinapiFormat());
+  const eaPath = path.join(util.getVortexPath('documents'), 'Electronic Arts');
+  const locale = getLocale(eaPath);
+  const filePath = path.join(eaPath, LOCALE_MODS_FOLDER[locale], 'Options.ini');
+
+  return parser.read(filePath)
+    .then(ini => {
+      // we could create the section but I don't know how the game would react
+      if (ini.data['options'] === undefined) { 
+        return;
+      }
+      ini.data['options']['scriptmodsenabled'] = 1;
+      ini.data['options']['modsdisabled'] = 0;
+      return parser.write(filePath, ini);
+    });
+}
+
 function prepareForModding() {
   return fs.ensureDirAsync(modPath())
-    .then(() => writeResourceCfg(baseModPath()));
+    // The baseModPath _should_ be created by the game, but
+    //  it appears that at least under certain scenarios it might be missing
+    //  https://github.com/Nexus-Mods/Vortex/issues/6835
+    .then(() => fs.ensureDirAsync(baseModPath()))
+    .then(() => writeResourceCfg(baseModPath()))
+    .then(() => enableModding());
 }
 
 const TRAY_EXTENSIONS = new Set([

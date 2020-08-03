@@ -79,18 +79,9 @@ class StardewValley {
    */
   async queryPath() {
     // check Steam
-    let game = await util.steam.findByAppId('413150');
+    let game = await util.GameStoreHelper.findByAppId(['413150', '1453375253']);
     if (game)
       return game.gamePath;
-
-    // check GOG Galaxy
-    let path =
-      await this.readRegistryKeyAsync('HKEY_LOCAL_MACHINE', 'SOFTWARE\\GOG.com\\Games\\1453375253', 'PATH')
-      || await this.readRegistryKeyAsync('HKEY_LOCAL_MACHINE', 'SOFTWARE\\GOG.com\\Games\\1453375253', 'path')
-      || await this.readRegistryKeyAsync('HKEY_LOCAL_MACHINE', 'SOFTWARE\\WOW6432Node\\GOG.com\\Games\\1453375253', 'PATH')
-      || await this.readRegistryKeyAsync('HKEY_LOCAL_MACHINE', 'SOFTWARE\\WOW6432Node\\GOG.com\\Games\\1453375253', 'path')
-    if (path && await this.getPathExistsAsync(path))
-      return path;
 
     // check default paths
     for (let defaultPath of this.defaultPaths)
@@ -476,13 +467,25 @@ module.exports = {
           // only act if we definitively know which mod owns the file
           if (entry.candidates.length === 1) {
             const mod = util.getSafe(state.persistent.mods, [GAME_ID, entry.candidates[0]], undefined);
+            if (mod === undefined) {
+              return Promise.resolve();
+            }
             const relPath = path.relative(modPaths[mod.type], entry.filePath);
             const targetPath = path.join(installPath, mod.id, relPath);
             // copy the new file back into the corresponding mod, then delete it. That way, vortex will
             // create a link to it with the correct deployment method and not ask the user any questions
             await fs.ensureDirAsync(path.dirname(targetPath));
-            await fs.copyAsync(entry.filePath, targetPath);
-            await fs.removeAsync(entry.filePath);
+            try {
+              await fs.copyAsync(entry.filePath, targetPath);
+              await fs.removeAsync(entry.filePath);
+            } catch (err) {
+              if (!err.message.includes('are the same file')) {
+                // should we be reporting this to the user? This is a completely
+                // automated process and if it fails more often than not the
+                // user probably doesn't care
+                log('error', 'failed to re-import added file to mod', err.message);
+              }
+            }
           }
         });
       });

@@ -77,6 +77,9 @@ async function getTargetData(targetPath) {
     if (err.code === 'ENOENT') {
       return undefined;
     }
+    err.message = `Failed to parse "${targetPath}": ${err.message}`;
+    log('error', 'failed to read xml file',
+      { targetPath, error: err.message, name: err.name, type: err.prototype.name });
     throw err;
   }
 }
@@ -118,6 +121,9 @@ function makeMergeXML(api) {
       if (err instanceof util.ProcessCanceled) {
         return;
       } else {
+        err.message = `Failed to merge "${relPath}": ${err.message}`;
+        log('error', 'failed to merge xml file', {
+          filePath, error: err.message, name: err.name });
         throw err;
       }
     }

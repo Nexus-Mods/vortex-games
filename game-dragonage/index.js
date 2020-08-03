@@ -8,14 +8,19 @@ const appUni = app || remote.app;
 
 const ADDINS_FILE = 'AddIns.xml';
 const STEAM_ID = 17450;
+const STEAM_ID_ULTIMATE_EDITION = 47810;
 
 // Static variables to store paths we resolve using appUni.
 let _ADDINS_PATH = undefined;
 let _MODS_PATH = undefined;
 
+let _APPID;
 function findGame() {
-  return util.steam.findByAppId(STEAM_ID.toString())
-    .then(discovered => discovered.path)
+  return util.GameStoreHelper.findByAppId([STEAM_ID.toString(), STEAM_ID_ULTIMATE_EDITION.toString()])
+    .then(game => {
+      _APPID = game.appid;
+      return Promise.resolve(game.gamePath);
+    })
     .catch(err => {
       try {
         const instPath = winapi.RegGetValue(
@@ -79,7 +84,7 @@ function requiresLauncher(gamePath) {
   //  safe to assume that if we find this file - we need the launcher.
   const gameRoot = gamePath.substring(0, gamePath.lastIndexOf(path.sep));
   return fs.statAsync(path.join(gameRoot, 'redist', 'DAOU_UpdateAddinsXML_Steam.exe'))
-    .then(() => Promise.resolve({ launcher: 'steam' }))
+    .then(() => Promise.resolve({ launcher: 'steam', addInfo: _APPID }))
     .catch(err => Promise.resolve(undefined));
 }
 

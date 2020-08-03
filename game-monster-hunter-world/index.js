@@ -23,6 +23,8 @@ const steamReg = 'SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Steam
 
 const MHW_EXEC = 'MonsterHunterWorld.exe';
 
+const I18N_NAMESPACE = 'game-monster-hunter-world';
+
 function findGame() {
   try {
     const instPath = winapi.RegGetValue(
@@ -71,21 +73,36 @@ const tools = [
 ];
 
 function prepareForModding(discovery, api) {
-  const showModEngineDialog = () => new Promise((resolve, reject) => {
-    api.store.dispatch(actions.showDialog('question', 'Action required',
+  const notifId = 'missing-stracker-notif';
+  const missingStracker = () => api.sendNotification({
+    id: notifId,
+    type: 'warning',
+    message: api.translate('"Stracker\'s Loader" not installed/configured', { ns: I18N_NAMESPACE }),
+    allowSuppress: true,
+    actions: [
       {
-        message: 'Monster Hunter: World requires "Stracker\'s Loader" for most mods to install and function correctly.\n'
+        title: 'More',
+        action: () => {
+          api.showDialog('question', 'Action required', {
+            text: 'Monster Hunter: World requires "Stracker\'s Loader" for most mods to install and function correctly.\n'
                 + 'Vortex is able to install Stracker\'s Loader automatically (as a mod) but please ensure it is enabled\n'
                 + 'and deployed at all times.'
+          }, [
+            { label: 'Continue', action: (dismiss) => dismiss() },
+            { label: 'Go to Stracker\'s Loader mod page', action: (dismiss) => {
+                util.opn('https://www.nexusmods.com/monsterhunterworld/mods/1982').catch(err => undefined);
+                dismiss();
+            }},
+          ]);
+        },
       },
-      [
-        { label: 'Continue', action: () => resolve() },
-        { label: 'Go to Stracker\'s Loader mod page', action: () => {
-            util.opn('https://www.nexusmods.com/monsterhunterworld/mods/1982').catch(err => undefined);
-            resolve();
-        }},
-      ]));
+    ],
   });
+
+  const raiseNotif = () => {
+    missingStracker();
+    return Promise.resolve();
+  }
 
   // Check whether Stracker's Loader is installed.
   return fs.ensureDirWritableAsync(path.join(discovery.path, NATIVE_PC_FOLDER), () => Promise.resolve())
@@ -95,17 +112,17 @@ function prepareForModding(discovery, api) {
     })
     .then(() => Promise.resolve())
     .catch(err => (err.code === 'ENOENT')
-      ? showModEngineDialog()
+      ? raiseNotif()
       : Promise.reject(err)));
 }
 
 function main(context) {
   const missingReshade = (api) => new Promise((resolve, reject) => {
     api.store.dispatch(actions.showDialog('warning', 'Action required', {
-      message: 'You\'re attempting to install what appears to be a ReShade mod, but '
+      message: api.translate('You\'re attempting to install what appears to be a ReShade mod, but '
              + 'Vortex is unable to confirm whether\n ReShade is installed. \n\nThe mod '
              + 'will still be installed, but please keep in mind that this mod will '
-             + 'not function without ReShade.',
+             + 'not function without ReShade.', { ns: I18N_NAMESPACE }),
     },
     [
       { label: 'Continue', action: () => resolve() },

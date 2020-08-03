@@ -61,6 +61,13 @@ function insertOffsets(cacheDir, entries, arcKey) {
   let newCache = {};
   return readInvalCache(cacheFilePath).then(invalCache => {
     newCache = { ...invalCache };
+    if (newCache[arcKey] === undefined) {
+      // If we're inserting offsets, we managed to invalidate
+      //  filepaths, but the cache template may be missing
+      //  new DLC/archive ids - we're going to initiate those
+      //  as an empty array at this point.
+      newCache[arcKey] = [];
+    }
     const hashEntries = Object.keys(newCache[arcKey]).map(key => newCache[arcKey][key]);
     entries.forEach(entry => {
       if (hashEntries.find(hash => hash.hashVal === entry.hash) === undefined) {

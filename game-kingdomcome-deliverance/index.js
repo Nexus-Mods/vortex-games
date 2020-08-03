@@ -70,7 +70,7 @@ function walkAsync(dir) {
 }
 
 
-function readModsFolder(modsFolder) {
+function readModsFolder(modsFolder, api) {
   const extL = input => path.extname(input).toLowerCase();
   const isValidMod = modFile => ['.pak', '.cfg', '.manifest'].indexOf(extL(modFile)) !== -1;
 
@@ -87,18 +87,26 @@ function readModsFolder(modsFolder) {
           return Promise.resolve(accum);
         })
         .catch(err => Promise.resolve(accum))
-    }, []));
+    }, []))
+    .catch(err => {
+      const allowReport = ['ENOENT', 'EPERM', 'EACCESS'].indexOf(err.code) === -1;
+      api.showErrorNotification('failed to read kingdom come mods directory',
+        err.message, { allowReport });
+      return Promise.resolve([]);
+    });
 }
 
 function listHasMod(modId, list) {
-  return list.map(mod =>
-    transformId(mod).toLowerCase()).includes(modId.toLowerCase());
+  return (!!list)
+    ? list.map(mod =>
+        transformId(mod).toLowerCase()).includes(modId.toLowerCase())
+    : false;
 }
 
-function getManuallyAddedMods(disabledMods, enabledMods, modOrderFilepath) {
+function getManuallyAddedMods(disabledMods, enabledMods, modOrderFilepath, api) {
   const modsPath = path.dirname(modOrderFilepath);
 
-  return readModsFolder(modsPath).then(deployedMods =>
+  return readModsFolder(modsPath, api).then(deployedMods =>
     getCurrentOrder(modOrderFilepath)
       .catch(err => (err.code === 'ENOENT') ? Promise.resolve('') : Promise.reject(err))
       .then(data => {
@@ -131,7 +139,8 @@ function refreshModList(context, discoveryPath) {
         ? accum.concat(mod)
         : accum);
   }, []).then(managedMods => {
-    return getManuallyAddedMods(disabled, enabled, path.join(discoveryPath, modsPath(), MODS_ORDER_FILENAME))
+    return getManuallyAddedMods(disabled, enabled, path.join(discoveryPath, modsPath(),
+      MODS_ORDER_FILENAME), context.api)
       .then(manuallyAdded => {
         _MODS_STATE.enabled = [].concat(managedMods
           .map(mod => transformId(mod)), manuallyAdded);
@@ -241,17 +250,29 @@ function modsPath() {
 
 function setNewOrder(props, ordered) {
   const { context, profile, onSetOrder } = props;
+  if (profile?.id === undefined) {
+    // Not sure how we got here without a valid profile.
+    //  possibly the user changed profile during the setup/preparation
+    //  stage ? https://github.com/Nexus-Mods/Vortex/issues/7053
+    log('error', 'failed to set new load order', 'undefined profile');
+    return;
+  }
 
-  _MODS_STATE.display = ordered;
+  // We filter the ordered list just in case there's an empty
+  //  entry, which is possible if the users had manually added
+  //  empty lines in the load order file.
+  const filtered = ordered.filter(entry => !!entry);
+  _MODS_STATE.display = filtered;
 
   return (!!onSetOrder)
-    ? onSetOrder(profile.id, ordered)
-    : context.api.store.dispatch(actions.setLoadOrder(profile.id, ordered));
+    ? onSetOrder(profile.id, filtered)
+    : context.api.store.dispatch(actions.setLoadOrder(profile.id, filtered));
 }
 
 function writeOrderFile(filePath, modList) {
   return fs.removeAsync(filePath)
     .catch(err => err.code === 'ENOENT' ? Promise.resolve() : Promise.reject(err))
+    .then(() => fs.ensureFileAsync(filePath))
     .then(() => fs.writeFileAsync(filePath, modList.join('\n'), { encoding: 'utf8' }));
 }
 
@@ -332,12 +353,15 @@ function main(context) {
       const modState = util.getSafe(profile, ['modState'], {});
       const enabled = modKeys.filter(mod => !!modState[mod] && modState[mod].enabled);
       const disabled = modKeys.filter(dis => !enabled.includes(dis));
-      getManuallyAddedMods(disabled, enabled, modsOrderFilePath)
+      getManuallyAddedMods(disabled, enabled, modsOrderFilePath, context.api)
         .then(manuallyAdded => {
           writeOrderFile(modsOrderFilePath, manuallyAdded)
             .then(() => setNewOrder({ context, profile }, manuallyAdded));
         })
-        .catch(err => context.api.showErrorNotification('Failed to re-instate manually added mods', err));
+        .catch(err => {
+          const userCanceled = (err instanceof util.userCanceled);
+          context.api.showErrorNotification('Failed to re-instate manually added mods', err, { allowReport: !userCanceled })
+        });
     });
 
     context.api.onAsync('did-deploy', (profileId, deployment) => {
@@ -386,7 +410,11 @@ function main(context) {
             : transformed;
 
           setNewOrder({ context, profile }, sorted);
-          return writeOrderFile(modOrderFile, transformed);
+          return writeOrderFile(modOrderFile, transformed)
+            .catch(err => {
+              const userCanceled = (err instanceof util.userCanceled);
+              context.api.showErrorNotification('Failed to write to load order file', err, { allowReport: !userCanceled });
+            });
         })
     });
   });
