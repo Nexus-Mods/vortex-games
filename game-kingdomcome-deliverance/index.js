@@ -359,7 +359,7 @@ function main(context) {
             .then(() => setNewOrder({ context, profile }, manuallyAdded));
         })
         .catch(err => {
-          const userCanceled = (err instanceof util.userCanceled);
+          const userCanceled = (err instanceof util.UserCanceled);
           context.api.showErrorNotification('Failed to re-instate manually added mods', err, { allowReport: !userCanceled })
         });
     });
@@ -412,7 +412,7 @@ function main(context) {
           setNewOrder({ context, profile }, sorted);
           return writeOrderFile(modOrderFile, transformed)
             .catch(err => {
-              const userCanceled = (err instanceof util.userCanceled);
+              const userCanceled = (err instanceof util.UserCanceled);
               context.api.showErrorNotification('Failed to write to load order file', err, { allowReport: !userCanceled });
             });
         })
