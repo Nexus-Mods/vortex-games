@@ -62,7 +62,7 @@ class SubnauticaBelowZero {
     }
 
     // skip if QModManager found
-    let qmodPath = path.join(discovery.path, 'SubnauticaZero_Data', 'Managed', 'QModManager.exe');
+    const qmodPath = path.join(discovery.path, 'BepInEx', 'patchers', 'QModManager', 'QModManager.exe')
   
     // show need-QModManager dialogue
     var context = this.context;
