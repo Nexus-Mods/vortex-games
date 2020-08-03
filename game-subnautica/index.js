@@ -49,7 +49,7 @@ class Subnautica {
   }
   
   async setup(discovery) {
-    const qmodPath = path.join(discovery.path, 'Subnautica_Data', 'Managed', 'QModManager.exe')
+    const qmodPath = path.join(discovery.path, 'BepInEx', 'patchers', 'QModManager', 'QModManager.exe');
   
     // show need-QModManager dialogue
     var context = this.context;
