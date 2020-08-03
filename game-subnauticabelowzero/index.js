@@ -13,17 +13,6 @@ class SubnauticaBelowZero {
     this.name = 'Subnautica: Below Zero';
     this.mergeMods = true;
     this.queryModPath = () => 'QMods';
-    this.supportedTools = [{
-      id: 'qmods',
-      name: 'QModManager',
-      executable: () => 'QModManager.exe',
-      requiredFiles: [
-        'QModManager.exe',
-      ],
-      relative: true,
-      shell: true,
-      }
-    ];
     this.logo = 'gameart.jpg';
     this.executable = () => 'SubnauticaZero.exe';
     this.requiredFiles = [
@@ -62,7 +51,7 @@ class SubnauticaBelowZero {
     }
 
     // skip if QModManager found
-    const qmodPath = path.join(discovery.path, 'BepInEx', 'patchers', 'QModManager', 'QModManager.exe')
+    const qmodPath = path.join(discovery.path, 'BepInEx', 'plugins', 'QModManager', 'QModInstaller.dll');
   
     // show need-QModManager dialogue
     var context = this.context;
@@ -78,7 +67,7 @@ class SubnauticaBelowZero {
           ]
         )
       );
-    }));
+    })).then(() => fs.ensureDirWritableAsync(path.join(discovery.path, 'QMods')));
   }
 }
 
