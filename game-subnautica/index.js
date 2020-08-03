@@ -13,16 +13,6 @@ class Subnautica {
     this.name = 'Subnautica';
     this.mergeMods = true;
     this.queryModPath = () => 'QMods';
-	  this.supportedTools = [{
-      id: 'qmods',
-      name: 'QModManager',
-      executable: () => 'QModManager.exe',
-      requiredFiles: [
-        'QModManager.exe',
-      ],
-      relative: true,
-      shell: true,
-    }];
     this.logo = 'gameart.jpg';
     this.executable = () => 'Subnautica.exe';
     this.requiredFiles = [
@@ -49,9 +39,9 @@ class Subnautica {
   }
   
   async setup(discovery) {
-    const qmodPath = path.join(discovery.path, 'BepInEx', 'patchers', 'QModManager', 'QModManager.exe');
+    const qmodPath = path.join(discovery.path, 'BepInEx', 'plugins', 'QModManager', 'QModInstaller.dll');
   
-    // show need-QModManager dialogue
+    // show need-QModManager dialogue and create the mods folder, if it's not already there.
     var context = this.context;
     return fs.statAsync(qmodPath).catch(() => new Promise((resolve, reject) => {
       context.api.store.dispatch(
@@ -65,7 +55,7 @@ class Subnautica {
           ]
         )
       );
-    }));
+    })).then(() => fs.ensureDirWritableAsync(path.join(discovery.path, 'QMods')));
   }
 }
 
