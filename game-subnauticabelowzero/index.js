@@ -1,10 +1,14 @@
 const Promise = require('bluebird');
 const path = require('path');
 const rjson = require('relaxed-json');
-const { actions, fs, util } = require('vortex-api');
+const { fs, util } = require('vortex-api');
 
 const MOD_FILE = 'mod.json';
 const GAME_ID = 'subnauticabelowzero';
+
+// Mod installation values.
+const QMM_MODPAGE = 'https://www.nexusmods.com/subnauticabelowzero/mods/1';
+const QMM_DLL = 'QModInstaller.dll';
 
 class SubnauticaBelowZero {
   constructor(context) {
@@ -39,6 +43,7 @@ class SubnauticaBelowZero {
   }
   
   async setup(discovery) {
+    const api = this.context.api;
     const { store } = this.context.api;
 
     if (util.getSafe(discovery, ['environment', 'SteamAPPId'], undefined) === undefined) {
@@ -51,23 +56,11 @@ class SubnauticaBelowZero {
     }
 
     // skip if QModManager found
-    const qmodPath = path.join(discovery.path, 'BepInEx', 'plugins', 'QModManager', 'QModInstaller.dll');
+    const qModPath = path.join(discovery.path, 'BepInEx', 'plugins', 'QModManager', 'QModInstaller.dll');
   
-    // show need-QModManager dialogue
-    var context = this.context;
-    return fs.statAsync(qmodPath).catch(() => new Promise((resolve, reject) => {
-      context.api.store.dispatch(
-        actions.showDialog(
-          'question',
-          'Action required',
-          { message: 'You must install QModManager to use mods with Subnautica: Below Zero.' },
-          [
-            { label: 'Cancel', action: () => reject(new util.UserCanceled()) },
-            { label: 'Go to QModManager page', action: () => { util.opn('https://www.nexusmods.com/subnauticabelowzero/mods/1').catch(err => undefined); reject(new util.UserCanceled()); } }
-          ]
-        )
-      );
-    })).then(() => fs.ensureDirWritableAsync(path.join(discovery.path, 'QMods')));
+    // create the QMods folder and show need-QModManager notification
+    return fs.ensureDirWritableAsync(path.join(discovery.path, 'QMods'))
+      .then(() => checkForQMM(api, qModPath));
   }
 }
 
@@ -116,9 +109,59 @@ function installMod(files, destinationPath) {
     .then(instructions => Promise.resolve({ instructions }));
 }
 
+function checkForQMM(api, qModPath) {
+  return fs.statAsync(qModPath)
+    .catch(() => {
+      api.sendNotification({
+        id: 'qmm-missing',
+        type: 'warning',
+        title: 'QModManager not installed',
+        message: 'QMM is required to mod Subnautica: Below Zero.',
+        actions: [
+          {
+            title: 'Get QMM',
+            action: () => util.opn(QMM_MODPAGE).catch(() => undefined)
+          }
+        ]
+      });
+    });
+}
+
+function testQMM(files, gameId) {
+  const supported = 
+    ((gameId === GAME_ID) 
+    && (!!files.find(f => path.basename(f).toLowerCase() === QMM_DLL.toLowerCase())));
+
+  return Promise.resolve({
+    supported,
+    requiredFiles: []
+  });
+}
+
+function installQMM(files, api) {
+  api.dismissNotification('qmm-missing');
+  // Set as dinput so the files are installed to the game root directory.
+  const modType = { type: 'setmodtype', value: 'dinput' };
+  // Filter out directories, as these cause a warning. 
+  files = files.filter(file => !file.endsWith(path.sep));
+  const instructions = files.map(file => {
+    return {
+      type: 'copy',
+      source: file,
+      destination: file
+    }
+  });
+  
+  instructions.push(modType);
+
+  return Promise.resolve({ instructions });
+
+}
+
 module.exports = {
   default: function(context) {
     context.registerGame(new SubnauticaBelowZero(context));
     context.registerInstaller('subnautica-belowzero-mod', 25, testMod, installMod);
+    context.registerInstaller('subnautica-qmm-installer', 25, testQMM, (files) => installQMM(files, context.api));
   }
 };
