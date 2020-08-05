@@ -64,6 +64,16 @@ function writeToModSettings() {
     });
 }
 
+function createModSettings() {
+  const filePath = getLoadOrderFilePath();
+  // Theoretically the Witcher 3 documents path should be
+  //  created at this point (either by us or the game) but
+  //  just in case it got removed somehow, we re-instate it
+  //  yet again... https://github.com/Nexus-Mods/Vortex/issues/7058
+  return fs.ensureDirWritableAsync(filePath)
+    .then(() => fs.writeFileAsync(filePath, '', { encoding: 'utf8' }));
+}
+
 // Attempts to parse and return data found inside
 //  the mods.settings file if found - otherwise this
 //  will ensure the file is present.
@@ -73,7 +83,7 @@ function ensureModSettings() {
   return fs.statAsync(filePath)
     .then(() => parser.read(filePath))
     .catch(err => (err.code === 'ENOENT')
-      ? fs.writeFileAsync(filePath, '', { encoding: 'utf8' }).then(() => parser.read(filePath))
+      ? createModSettings().then(() => parser.read(filePath))
       : Promise.reject(err));
 }
 
