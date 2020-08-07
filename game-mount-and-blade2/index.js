@@ -172,7 +172,15 @@ async function getManagedIds(context) {
 
   const invalidMods = [];
   const installationDir = selectors.installPathForGame(state, GAME_ID);
+  if (installationDir === undefined) {
+    log('error', 'failed to get managed ids', 'undefined staging folder');
+    return Promise.resolve([]);
+  }
   return Promise.reduce(enabledMods, async (accum, entry) => {
+    if (entry?.installationPath === undefined) {
+      // Invalid mod entry - skip it.
+      return Promise.resolve(accum);
+    }
     const modInstallationPath = path.join(installationDir, entry.installationPath);
     let files;
     try {
