@@ -25,7 +25,6 @@ const tools = [
   {
     id: 'tes3edit',
     name: 'TES3Edit',
-    logo: 'tes3edit.png',
     executable: () => 'TES3Edit.exe',
     requiredFiles: []
   },
