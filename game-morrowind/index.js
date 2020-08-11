@@ -32,6 +32,7 @@ const tools = [
   {
     id: 'mw-construction-set',
     name: 'Construction Set',
+    logo: 'constructionset.png',
     executable: () => 'TES Construction Set.exe',
     requiredFiles: [
       'TES Construction Set.exe',
