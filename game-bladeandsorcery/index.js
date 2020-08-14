@@ -368,6 +368,9 @@ function migrate010(api, oldVersion) {
     return Promise.resolve();
   }
 
+  // Holds mod ids of mods we failed to migrate.
+  let failedToMigrate = [];
+
   const deployTarget = path.join(gameDiscovery.path, streamingAssetsPath());
   const stagingFolder = selectors.installPathForGame(state, BLADEANDSORCERY_ID);
   const officialMods = modKeys.filter(key => mods[key].type === 'bas-official-modtype')
@@ -400,25 +403,57 @@ function migrate010(api, oldVersion) {
             const segments = entry.split(path.sep);
             segments.splice(modNameIdx, 1);
             const destination = segments.join(path.sep);
-            newFiles.push(destination);
             const newDir = path.dirname(destination);
-            if (newDir !== modPath) {
-              newDirs.push(newDir);
-            }
             return fs.ensureDirWritableAsync(newDir)
+              .tap(() => {
+                if (newDir !== modPath) {
+                  newDirs.push(newDir);
+                }
+              })
               .catch(err => err.code === 'EEXIST' ? Promise.resolve() : Promise.reject(err))
-              .then(() => fs.linkAsync(entry, destination).catch(err => err.code === 'EEXIST'
-                ? Promise.resolve() : Promise.reject(err)));
+              .then(() => fs.linkAsync(entry, destination)
+                .tap(() => newFiles.push(destination))
+                .catch(err => err.code === 'EEXIST' ? Promise.resolve() : Promise.reject(err)));
           })
           // Linking failed for some reason, remove the new links.
-          .tapCatch(err => Promise.each(newFiles, newFile => fs.unlinkAsync(newFile))
-            .then(() => Promise.each(newDirs.reverse(), newDir => fs.removeAsync(newDir))))
+          .tapCatch(err => {
+            failedToMigrate.push(mod.id);
+            return Promise.each(newFiles, newFile => fs.unlinkAsync(newFile))
+              .then(() => Promise.each(newDirs.reverse(), newDir => fs.removeAsync(newDir)))
+          })
           .then(() => Promise.each(files, entry => fs.removeAsync(entry)))
-          .then(() => Promise.each(directories.reverse(), dir => fs.removeAsync(dir)));
+          .then(() => Promise.each(directories.reverse(), dir => fs.removeAsync(dir)))
+          .catch(err => (err instanceof util.UserCanceled)
+            // No need to report the error if the user canceled the operation.
+            ? Promise.resolve()
+            : Promise.reject(err));
         }
       })
     }))
-    .finally(() => api.store.dispatch(actions.setDeploymentNecessary(BLADEANDSORCERY_ID, true)));
+    .finally(() => {
+      if (failedToMigrate.length > 0) {
+        api.sendNotification({
+          type: 'warning',
+          message: 'Failed to migrate mods',
+          actions: [
+            { title: 'More', action: (dismiss) =>
+              api.showDialog('info', 'Mods failed migration', {
+                text: api.translate('As part of implementing the Load Order system for '
+                                  + 'Blade and Sorcery, we were forced to change the way '
+                                  + 'we install BaS mods. Vortex has just attempted to migrate '
+                                  + 'your existing mods to the new file structure but failed. '
+                                  + 'These will have to be re-installed manually in order to '
+                                  + 'function properly. The mods that require re-installation are:\n\n'
+                                  + '{{modIds}}',
+                                  { replace: { modIds: failedToMigrate.join('\n') } })
+              }, [ { label: 'Close', action: () => dismiss() } ])
+            },
+          ],
+        });
+      } else {
+        api.store.dispatch(actions.setDeploymentNecessary(BLADEANDSORCERY_ID, true));
+      }
+    });
 }
 
 function loadOrderPrefix(api, mod) {
