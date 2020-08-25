@@ -536,7 +536,7 @@ function main(context) {
     context.api.onAsync('will-deploy', (profileId, deployment) => {
       const state = context.api.store.getState();
       const profile = selectors.profileById(state, profileId);
-      if (GAME_ID !== profile.gameId) {
+      if (GAME_ID !== profile?.gameId) {
         return Promise.resolve();
       }
       previousDeployment = deployment[''].map(iter => iter.relPath);
@@ -557,7 +557,7 @@ function main(context) {
       const state = store.getState();
       const profile = selectors.profileById(state, profileId);
 
-      if (GAME_ID !== profile.gameId) {
+      if (GAME_ID !== profile?.gameId) {
         return Promise.resolve();
       }
       const newDeployment = new Set(deployment[''].map(iter => iter.relPath));
