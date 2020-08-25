@@ -40,7 +40,7 @@ function findGame() {
 }
 
 function prepareForModding(discovery) {
-  return fs.ensureDirWritableAsync(path.join(discovery.path, 'Vampire'), Promise.resolve());
+  return fs.ensureDirWritableAsync(path.join(discovery.path, 'Vampire'), () => Promise.resolve());
 }
 
 function getUnofficialModPath() {
