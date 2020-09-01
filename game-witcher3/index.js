@@ -583,6 +583,9 @@ function genEntryActions (context, item, minPriority) {
                 ...loEntry,
                 prefix: parseInt(_INI_STRUCT[itemKey].Priority),
             }));
+            if (refreshFunc !== undefined) {
+              refreshFunc();
+            }
           }
         }),
     },
