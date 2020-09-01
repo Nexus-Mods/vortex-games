@@ -667,7 +667,7 @@ async function preSort(context, items, direction, updateType) {
   preSorted = (updateType !== 'drag-n-drop')
     ? preSorted.sort((lhs, rhs) => lhs.prefix - rhs.prefix)
     : preSorted.reduce((accum, entry, idx) => {
-        if (lockedEntries.indexOf(entry) !== -1) {
+        if (lockedEntries.indexOf(entry) !== -1 || idx === 0) {
           accum.push(entry);
         } else {
           const prevPrefix = parseInt(accum[idx - 1].prefix);
