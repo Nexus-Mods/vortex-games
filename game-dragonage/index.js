@@ -135,7 +135,7 @@ function main(context) {
   context.requireExtension('modtype-dragonage');
   context.registerGame({
     id: 'dragonage',
-    name: 'Dragon Age',
+    name: 'Dragon Age: Origins',
     mergeMods: true,
     requiresLauncher,
     queryPath: findGame,
