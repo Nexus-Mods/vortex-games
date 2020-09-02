@@ -72,7 +72,7 @@ function createModSettings() {
   //  created at this point (either by us or the game) but
   //  just in case it got removed somehow, we re-instate it
   //  yet again... https://github.com/Nexus-Mods/Vortex/issues/7058
-  return fs.ensureDirWritableAsync(filePath)
+  return fs.ensureDirWritableAsync(path.dirname(filePath))
     .then(() => fs.writeFileAsync(filePath, '', { encoding: 'utf8' }));
 }
 
