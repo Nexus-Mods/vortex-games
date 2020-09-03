@@ -494,7 +494,21 @@ function getPriority(loadorder, item, minPriority) {
     }
   }
 
-  return 999;
+  const maxPriority = () => Object.keys(loadorder).reduce((prev, key) => {
+    const prefixVal = (loadorder[key]?.prefix !== undefined)
+      ? parseInt(loadorder[key].prefix) : loadorder[key].pos;
+    const posVal = loadorder[key].pos;
+    if (posVal !== prefixVal) {
+      prev = (prefixVal > prev)
+        ? prefixVal : prev;
+    } else {
+      prev = (posVal > prev)
+        ? posVal : prev;
+    }
+    return prev;
+  }, minPriority);
+
+  return maxPriority() + 1;
 }
 
 async function setINIStruct(context, loadOrder, updateType) {
@@ -999,6 +1013,34 @@ function main(context) {
     const gameMode = selectors.activeGameId(state);
     return (gameMode === GAME_ID);
   })
+
+  context.registerAction('generic-load-order-icons', 100, 'loot-sort', {}, 'Reset Priorities',
+    () => {
+      context.api.showDialog('info', 'Reset Priorities', {
+        bbcode: context.api.translate('This action will revert all manually set priorities and will re-instate priorities in an incremental ' 
+          + 'manner starting from 1. Are you sure you want to do this ?', { ns: I18N_NAMESPACE }),
+      }, [
+        { label: 'No', action: () => {
+          return;
+        }},
+        { label: 'Yes', action: () => {
+          const state = context.api.store.getState();
+          const profile = selectors.activeProfile(state);
+          const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], {});
+          Object.keys(loadOrder).forEach(key => {
+            const loEntry = loadOrder[key];
+            context.api.store.dispatch(actions.setLoadOrderEntry(
+              profile.id, key, {
+                ...loEntry,
+                prefix: loEntry.pos + 1,
+            }));
+          });
+          if (refreshFunc !== undefined) {
+            refreshFunc();
+          }
+        }},
+      ]);
+    });
 
   const invalidModTypes = ['witcher3menumoddocuments'];
   context.registerLoadOrderPage({
