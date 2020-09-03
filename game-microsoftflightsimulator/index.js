@@ -421,7 +421,8 @@ async function mergeAircraft(mergePath, incomingPath, locId, firstMerge) {
     // don't repeat the base livery and introduce duplicates
     // the latter is particularly relevant since we use one of the mods as the basis for the merge,
     // so we're actually merging that file into itself at some point
-    const existingSection = existingFLTSIM.find(iter => _.isEqual(iter, incomingData.data[section]));
+    const existingSection = existingFLTSIM.find(iter =>
+      _.isEqual(_.omit(iter, 'vortex_merged'), incomingData.data[section]));
     if ((oldId !== '0') && (existingSection === undefined)) {
       locTexts.push(...renameLocKeys(incomingData.data[section], locId));
       fltsims[`FLTSIM.${offset++}`] = incomingData.data[section];
