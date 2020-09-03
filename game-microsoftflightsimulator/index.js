@@ -22,12 +22,8 @@ function toWordExp(input) {
 
 function findGame() {
   // game is currently available on Steam and the Microsoft store
-  const disco = util.GameStoreHelper.findByAppId([MS_APPID, STEAM_APPID]);
-  if (!!disco) {
-    return disco.gamePath;
-  } else {
-    return undefined;
-  }
+  return util.GameStoreHelper.findByAppId([MS_APPID, STEAM_APPID])
+    .then(disco => disco.gamePath);
 }
 
 function findLocalCache() {
