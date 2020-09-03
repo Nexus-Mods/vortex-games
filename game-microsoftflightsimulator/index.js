@@ -42,8 +42,18 @@ function findLocalCache() {
     fs.statSync(opt1);
     return opt1;
   } catch (err) {
-    fs.statSync(opt2);
-    return opt2;
+    try {
+      fs.statSync(opt2);
+      return opt2;
+    } catch (err) {
+      throw new util.SetupError(
+        'Failed to find LocalCache directory. This may be because the game '
+        + 'isn\'t fully installed or the game was installed in a way we don\'t support yet.\n'
+        + 'If you could send us the path to where your game stores files like '
+        + '"FlightSimulator.cfg" and "UserCfg.opt" we should be able to fix this quickly.\n'
+        + `We expected this to be\n"${opt1}" or\n"${opt2}"`
+        );
+    }
   }
 }
 
