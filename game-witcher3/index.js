@@ -1040,6 +1040,10 @@ function main(context) {
           }
         }},
       ]);
+    }, () => {
+      const state = context.api.store.getState();
+      const gameMode = selectors.activeGameId(state);
+      return gameMode === GAME_ID;
     });
 
   const invalidModTypes = ['witcher3menumoddocuments'];
