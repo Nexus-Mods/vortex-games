@@ -821,6 +821,8 @@ function main(context) {
         CACHE = await getDeployedModData(context, deployedSubModules);
       } catch (err) {
         context.api.showErrorNotification('Failed to resolve submodule file data', err);
+        _IS_SORTING = false;
+        return;
       }
 
       const modIds = Object.keys(CACHE);
