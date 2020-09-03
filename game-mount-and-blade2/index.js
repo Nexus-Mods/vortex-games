@@ -832,6 +832,14 @@ function main(context) {
 
       const state = context.api.store.getState();
       const activeProfile = selectors.activeProfile(state);
+      if (activeProfile?.id === undefined) {
+        // Probably best that we don't report this via notification as a number
+        //  of things may have occurred that caused this issue. We log it instead.
+        log('error', 'Failed to sort mods', { reason: 'No active profile' });
+        _IS_SORTING = false;
+        return;
+      }
+
       const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
 
       try {
