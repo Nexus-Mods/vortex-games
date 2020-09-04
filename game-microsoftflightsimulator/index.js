@@ -26,6 +26,14 @@ function findGame() {
     .then(disco => disco.gamePath);
 }
 
+function setupErrText(opt1, opt2) {
+  return 'Failed to find LocalCache directory. This may be because the game '
+        + 'isn\'t fully installed or the game was installed in a way we don\'t support yet.\n'
+        + 'If you could send us the path to where your game stores files like '
+        + '"FlightSimulator.cfg" and "UserCfg.opt" we should be able to fix this quickly.\n'
+        + `We expected this to be\n"${opt1}" or\n"${opt2}"`;
+}
+
 function findLocalCache() {
   const makeCachePath = (appName) =>
     path.join(process.env.LOCALAPPDATA, 'packages', `${appName}_${PACKAGE_ID}`, 'LocalCache');
@@ -42,13 +50,7 @@ function findLocalCache() {
       fs.statSync(opt2);
       return opt2;
     } catch (err) {
-      throw new util.SetupError(
-        'Failed to find LocalCache directory. This may be because the game '
-        + 'isn\'t fully installed or the game was installed in a way we don\'t support yet.\n'
-        + 'If you could send us the path to where your game stores files like '
-        + '"FlightSimulator.cfg" and "UserCfg.opt" we should be able to fix this quickly.\n'
-        + `We expected this to be\n"${opt1}" or\n"${opt2}"`
-        );
+      throw new util.SetupError(setupErrText(opt1, opt2));
     }
   }
 }
@@ -104,10 +106,32 @@ const getPackagesPath = (() => {
   return () => {
     if (cachedPath === undefined) {
       const basePath = findLocalCache();
+
       // now, if the user customized the path we should be able to find the actual path in this
       // config file
 
-      const usercfg = parseOPT(path.join(basePath, 'UserCfg.opt'));
+      let usercfg;
+      try {
+        usercfg = parseOPT(path.join(basePath, 'UserCfg.opt'));
+      } catch (err) {
+        if (err.code === 'ENOENT') {
+          const roamPath = path.join(util.getVortexPath('appData'),
+                                     'Microsoft Flight Simulator');
+          // if the .opt file doesn't exist in that location, this may be steam
+          // and it may be in a separate location from the LocalCache dir
+          try {
+            usercfg = parseOPT(path.join(roamPath, 'UserCfg.opt'));
+          } catch (innerErr) {
+            if (innerErr.code === 'ENOENT') {
+              throw new util.SetupError(setupErrText(basePath, roamPath));
+            } else {
+              throw err;
+            }
+          }
+        } else {
+          throw err;
+        }
+      }
       if (usercfg['InstalledPackagesPath'] !== undefined) {
         // configured
         cachedPath = path.join(usercfg['InstalledPackagesPath']);
