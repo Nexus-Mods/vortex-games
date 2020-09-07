@@ -221,7 +221,7 @@ function installNoProject(files, destinationPath) {
     return lhsParent.join(path.sep) === rhsParent.join(path.sep);
   }
 
-  const onlyFiles = files.filter(file => !file.endsWith(path.sep));
+  const onlyFiles = files.filter(file => path.extname(path.basename(file)) !== '');
   const portraits = onlyFiles.filter(file => file.indexOf(HERO_PORTRAIT_SUFFIX) !== -1);
 
   const findExternalHeroFiles = (dirStruct, portraitPath, destPath) => {
@@ -255,11 +255,11 @@ function installNoProject(files, destinationPath) {
       : matchDirStructure(file);
   });
 
+  const heroesRoot = 'heroes';
   if (dirStructure.length === 0) {
     // We couldn't find a matching directory structure. This is _probably_ a
     //  hero mod. We're going to populate dirStructure with the expected directory
     //  structure automatically.
-    const heroesRoot = 'heroes';
     portraits.forEach(portrait => {
       const portraitDir = path.dirname(portrait);
       const idx = portrait.indexOf(path.basename(portrait));
@@ -285,6 +285,20 @@ function installNoProject(files, destinationPath) {
         destination: file,
       };
     })
+
+    const leftOver = onlyFiles.filter(file =>
+         (dirStructure.find(x => x.source === file) === undefined)
+      && (file.split(path.sep).indexOf(heroesRoot) !== -1));
+
+    dirStructure = dirStructure.concat(leftOver.map(file => {
+      const segments = file.split(path.sep);
+      const idx = segments.indexOf(heroesRoot);
+      const destination = segments.slice(idx).join(path.sep);
+      return {
+        source: file,
+        destination,
+      }
+    }));
   }
 
   const modName = path.basename(destinationPath, '.installing')
