@@ -312,6 +312,39 @@ async function testSupportedReplacer(files, gameId) {
   });
 }
 
+function isManifest(filePath) {
+  return path.basename(filePath).toLowerCase() === 'manifest.json';
+}
+
+async function testSupportedPack(files, gameId) {
+  const supported = (gameId === GAME_ID) && (files.filter(isManifest).length > 1);
+  return Promise.resolve({
+    supported,
+    requiredFiles: [],
+  });
+}
+
+function makeInstallerPack(api) {
+  return async (files, tempPath) => {
+    const manifests = files.filter(isManifest);
+    let depth = manifests.reduce((prev, file) => {
+      return Math.min(file.split(path.sep).length, prev);
+    }, 1000);
+    depth = Math.max(depth - 2, 0);
+    return {
+      instructions: [
+        { type: 'setmodtype', value: 'msfs-pack' },
+      ].concat(files
+        .filter(filePath => !filePath.endsWith(path.sep))
+        .map(filePath => ({
+        type: 'copy',
+        source: filePath,
+        destination: filePath.split(path.sep).slice(depth).join(path.sep),
+      }))),
+    };
+  };
+}
+
 // initialized when the game is activated.
 // structure:
 // {
@@ -629,6 +662,9 @@ function main(context) {
   context.registerInstaller('msfs-replacer', 25,
                             testSupportedReplacer, makeInstallReplacer(context.api));
 
+  context.registerInstaller('msfs-pack', 20,
+    testSupportedPack, makeInstallerPack(context.api));
+
   context.registerMerge(makeTestMerge(context.api), makeMerge(context.api),  '');
 
   context.registerLoadOrderPage({
@@ -637,7 +673,7 @@ function main(context) {
       const t = context.api.translate;
       return t('If you have multiple mods replacing the same content (e.g. engine '
                + 'settings for a plane, in contrast to stuff like liveries that you '
-               + 'can select in-game) only the one loaded last here will takge effect.');
+               + 'can select in-game) only the one loaded last here will take effect.');
     },
     filter: (mods) => mods.filter(mod => (mod.type === '')),
     gameArtURL: `${__dirname}/gameart.jpg`,
@@ -649,6 +685,12 @@ function main(context) {
       }
     },
   });
+
+  context.registerModType('msfs-pack', 100, gameId => gameId === GAME_ID,
+    () => findModPath(), () => Promise.resolve(false), {
+      mergeMods: true,
+      name: 'Pack',
+    });
 
   return true;
 }
