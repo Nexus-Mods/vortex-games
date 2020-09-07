@@ -875,7 +875,18 @@ function merge(filePath, mergeDir, context) {
       } catch (err) {
         // This is the merged file - if it's invalid chances are we messed up
         //  somehow, reason why we're going to allow this error to get reported.
-        context.api.showErrorNotification('Invalid merged XML data', err, { allowReport: true });
+        const state = context.api.store.getState();
+        const activeProfile = selectors.activeProfile(state);
+        const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
+        context.api.showErrorNotification('Invalid merged XML data', err, {
+          allowReport: true,
+          attachments: [
+            { id: '__merged/input.xml', type: 'data', data: mergedData,
+              description: 'Witcher 3 menu mod merged data' },
+            { id: `${activeProfile.id}_loadOrder`, type: 'data', data: loadOrder,
+              description: 'Current load order' },
+          ],
+        });
         return Promise.reject(new util.DataInvalid('Invalid merged XML data'));
       }
     })
