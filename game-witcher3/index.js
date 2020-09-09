@@ -731,7 +731,7 @@ function getManagedModNames(context, mods) {
 const toggleModsState = async (context, props, enabled) => {
   const state = context.api.store.getState();
   const profile = selectors.activeProfile(state);
-  const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], undefined);
+  const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], {});
   const modMap = await getAllMods(context);
   const manualLocked = modMap.manual.filter(modName => modName.startsWith(LOCKED_PREFIX));
   const totalLocked = [].concat(modMap.merged, manualLocked);
