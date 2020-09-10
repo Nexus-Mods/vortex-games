@@ -284,18 +284,19 @@ function makeInstallReplacer(api) {
         destination: mapPathToTarget(filePath, actualTarget),
       }));
 
-    const layout = Promise.all(filesFiltered.map(async filePath => {
-      const stat = fs.stat(path.join(tempPath, filePath));
+    const layout = await Promise.all(filesFiltered.map(async filePath => {
+      const stat = await fs.statAsync(path.join(tempPath, filePath));
       return {
         path: filePath,
         size: stat.size,
-        date: toWinTimestamp(stat.mtimeMS),
+        date: toWinTimestamp(stat.mtimeMs),
       };
     }));
 
     instructions.push({
       type: 'generatefile',
-      data: Buffer.from(JSON.stringify(layout, undefined, 2), 'utf8').toString('base64'),
+      data: Buffer.from(JSON.stringify(layout, undefined, 2), 'utf8'),
+      destination: 'layout.json',
     });
     return { instructions };
   };
