@@ -417,7 +417,9 @@ function makeTestMerge(api) {
           .filter(file => isConfig(file.relPath))
           .reduce((prev, file) => {
             const id = file.relPath.toUpperCase();
-            if (prev[id] === undefined) {
+            // the latter part of the condition is a workaround for a bug in Vortex,
+            // we shouldn't be getting the __merged files as input to baseFiles
+            if ((prev[id] === undefined) && (file.source !== '__merged')) {
               prev[id] = file;
             }
             return prev;
