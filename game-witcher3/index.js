@@ -936,6 +936,7 @@ function merge(filePath, mergeDir, context) {
             const err = new util.DataInvalid('Duplicate group entries found in game input.xml'
               + `\n\n${path.join(mergeDir, INPUT_XML_FILENAME)}\n\n`
               + 'file - please fix this manually before attempting to re-install the mod');
+            context.api.showErrorNotification('Duplicate group entries detected', err, { allowReport: false });
             return Promise.reject(err);
           } else if (matchingIndexGroup.length === 0) {
             // Need to add the group AND the var.
@@ -949,6 +950,10 @@ function merge(filePath, mergeDir, context) {
 
       return fs.writeFileAsync(path.join(mergeDir, CONFIG_MATRIX_REL_PATH, INPUT_XML_FILENAME),
         gameIndexFile, { encoding: 'utf16le' });
+    })
+    .catch(err => {
+      log('error', 'input.xml merge failed', err);
+      return Promise.resolve();
     });
 }
 
