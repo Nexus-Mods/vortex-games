@@ -409,27 +409,7 @@ function makeTestMerge(api) {
   return (game, gameDiscovery) => {
     const installPath = selectors.installPathForGame(api.store.getState(), game.id);
     return {
-      baseFiles: (deployedFiles) => {
-        // this ensures that for every config we only use one file as the merge basis.
-        // Which one we pick _should_ be irrelevant as the merge later one will take load
-        // order into account
-        const mergeBases = deployedFiles
-          .filter(file => isConfig(file.relPath))
-          .reduce((prev, file) => {
-            const id = file.relPath.toUpperCase();
-            // the latter part of the condition is a workaround for a bug in Vortex,
-            // we shouldn't be getting the __merged files as input to baseFiles
-            if ((prev[id] === undefined) && (file.source !== '__merged')) {
-              prev[id] = file;
-            }
-            return prev;
-          }, {});
-
-        return Array.from(Object.values(mergeBases)).map(file => ({
-          in: path.join(installPath, file.source, file.relPath),
-          out: file.relPath,
-        }));
-      },
+      baseFiles: () => [],
       filter: filePath => isConfig(filePath),
     };
   }
@@ -494,6 +474,15 @@ async function mergeAircraft(mergePath, incomingPath, locId, firstMerge) {
   });
 
   existingData.data = _.merge(existingData.data, incomingData.data, fltsims);
+
+  // up to here we've only updated the FLTSIM entries that existed in the incoming data,
+  // but due to the way merging works there may still be sections that we haven't updated
+  Object.keys(existingData.data).filter(isFLTSIM).forEach(section => {
+    if (existingData.data[section].vortex_merged !== true) {
+      locTexts.push(...renameLocKeys(existingData.data[section], locId));
+    }
+  });
+
   await parser.write(mergePath, existingData);
 
   return locTexts;
