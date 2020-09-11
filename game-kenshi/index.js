@@ -91,7 +91,9 @@ function main(context) {
     queryModPath: () => 'mods',
     logo: 'gameart.jpg',
     executable: (discoveryPath) => getExecutable(discoveryPath),
-    requiredFiles: [],
+    requiredFiles: [
+      'OgreMain_x64.dll'
+    ],
     setup: prepareForModding,
     requiresLauncher,
     details: {
