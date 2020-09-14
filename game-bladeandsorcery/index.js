@@ -458,8 +458,14 @@ function migrate010(api, oldVersion) {
 
 function loadOrderPrefix(api, mod) {
   const state = api.store.getState();
-  const profile = selectors.activeProfile(state);
-  const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], []);
+
+  const gameProfile = selectors.lastActiveProfileForGame(state, BLADEANDSORCERY_ID);
+  if (gameProfile === undefined) {
+    return 'ZZZZ-';
+  }
+  const profile = selectors.profileById(state, gameProfile);
+  const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile?.id], []);
+
   const posToPrefix = (modId) => {
     const pos = loadOrder[modId]?.pos;
     if (pos === undefined) {

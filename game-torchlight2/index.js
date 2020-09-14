@@ -8,7 +8,7 @@ const appUni = app || remote.app;
 // Nexus Mods id for the game.
 const GAME_ID = 'torchlight2';
 
-const STEAM_ID = '200710';
+const STEAM_ID = 200710;
 
 const MOD_EXT = '.mod';
 
@@ -94,6 +94,9 @@ function main(context) {
       'ModLauncher.exe',
     ],
     setup: prepareForModding,
+    environment: {
+      SteamAPPId: STEAM_ID.toString(),
+    },
     details: {
       steamAppId: STEAM_ID,
     },
