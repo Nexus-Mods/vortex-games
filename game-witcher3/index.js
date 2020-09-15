@@ -464,6 +464,13 @@ async function getAllMods(context) {
   const invalidModTypes = ['witcher3menumoddocuments'];
   const state = context.api.store.getState();
   const profile = selectors.activeProfile(state);
+  if (profile?.id === undefined) {
+    return Promise.resolve({
+      merged: [],
+      manual: [],
+      managed: [],
+    });
+  }
   const modState = util.getSafe(state, ['persistent', 'profiles', profile.id, 'modState'], {});
   const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
 
