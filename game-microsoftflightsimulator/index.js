@@ -38,8 +38,6 @@ function findLocalCache() {
   const makeCachePath = (appName) =>
     path.join(process.env.LOCALAPPDATA, 'packages', `${appName}_${PACKAGE_ID}`, 'LocalCache');
 
-  const roamPath = path.join(util.getVortexPath('appData'), 'Microsoft Flight Simulator');
-
   const opt1 = makeCachePath(MS_APPID);
   // according to various pages this should exist when installed through Steam
   const opt2 = makeCachePath('Microsoft.FlightDashboard')
@@ -47,7 +45,7 @@ function findLocalCache() {
   //  FlightSimulator.CFG and UserCfg.opt files are both inside
   //  his roaming folder. Going to keep opt2 just in case that
   //  option is valid for other users.
-  const opt3 = makeCachePath(roamPath);
+  const opt3 = path.join(util.getVortexPath('appData'), 'Microsoft Flight Simulator');
 
   try {
     fs.statSync(opt1);
