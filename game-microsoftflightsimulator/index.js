@@ -26,21 +26,28 @@ function findGame() {
     .then(disco => disco.gamePath);
 }
 
-function setupErrText(opt1, opt2) {
+function setupErrText(opt1, opt2, opt3) {
   return 'Failed to find LocalCache directory. This may be because the game '
         + 'isn\'t fully installed or the game was installed in a way we don\'t support yet.\n'
         + 'If you could send us the path to where your game stores files like '
         + '"FlightSimulator.cfg" and "UserCfg.opt" we should be able to fix this quickly.\n'
-        + `We expected this to be\n"${opt1}" or\n"${opt2}"`;
+        + `We expected this to be\n"${opt1}" or\n"${opt2}" or\n"${opt3}"`;
 }
 
 function findLocalCache() {
   const makeCachePath = (appName) =>
     path.join(process.env.LOCALAPPDATA, 'packages', `${appName}_${PACKAGE_ID}`, 'LocalCache');
 
+  const roamPath = path.join(util.getVortexPath('appData'), 'Microsoft Flight Simulator');
+
   const opt1 = makeCachePath(MS_APPID);
   // according to various pages this should exist when installed through Steam
   const opt2 = makeCachePath('Microsoft.FlightDashboard')
+  // A Steam user was able to visually confirm that his
+  //  FlightSimulator.CFG and UserCfg.opt files are both inside
+  //  his roaming folder. Going to keep opt2 just in case that
+  //  option is valid for other users.
+  const opt3 = makeCachePath(roamPath);
 
   try {
     fs.statSync(opt1);
@@ -50,7 +57,12 @@ function findLocalCache() {
       fs.statSync(opt2);
       return opt2;
     } catch (err) {
-      throw new util.SetupError(setupErrText(opt1, opt2));
+      try {
+        fs.statSync(opt3);
+        return opt3;
+      } catch (err) {
+        throw new util.SetupError(setupErrText(opt1, opt2, opt3));
+      }
     }
   }
 }
