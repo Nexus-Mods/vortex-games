@@ -12,7 +12,7 @@ class MD5ComparisonError extends Error {
   }
 
   get errorMessage() {
-    return message + ': ' + this.path;
+    return this.message + ': ' + this.path;
   }
 }
 

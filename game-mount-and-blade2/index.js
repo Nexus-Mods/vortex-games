@@ -172,7 +172,15 @@ async function getManagedIds(context) {
 
   const invalidMods = [];
   const installationDir = selectors.installPathForGame(state, GAME_ID);
+  if (installationDir === undefined) {
+    log('error', 'failed to get managed ids', 'undefined staging folder');
+    return Promise.resolve([]);
+  }
   return Promise.reduce(enabledMods, async (accum, entry) => {
+    if (entry?.installationPath === undefined) {
+      // Invalid mod entry - skip it.
+      return Promise.resolve(accum);
+    }
     const modInstallationPath = path.join(installationDir, entry.installationPath);
     let files;
     try {
@@ -813,6 +821,8 @@ function main(context) {
         CACHE = await getDeployedModData(context, deployedSubModules);
       } catch (err) {
         context.api.showErrorNotification('Failed to resolve submodule file data', err);
+        _IS_SORTING = false;
+        return;
       }
 
       const modIds = Object.keys(CACHE);
@@ -824,6 +834,14 @@ function main(context) {
 
       const state = context.api.store.getState();
       const activeProfile = selectors.activeProfile(state);
+      if (activeProfile?.id === undefined) {
+        // Probably best that we don't report this via notification as a number
+        //  of things may have occurred that caused this issue. We log it instead.
+        log('error', 'Failed to sort mods', { reason: 'No active profile' });
+        _IS_SORTING = false;
+        return;
+      }
+
       const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
 
       try {
@@ -930,7 +948,7 @@ function main(context) {
           if (mod === undefined) {
             return Promise.resolve();
           }
-          const relPath = path.relative(modPaths[mod.type], entry.filePath);
+          const relPath = path.relative(modPaths[mod.type ?? ''], entry.filePath);
           const targetPath = path.join(installPath, mod.id, relPath);
           // copy the new file back into the corresponding mod, then delete it. That way, vortex will
           // create a link to it with the correct deployment method and not ask the user any questions

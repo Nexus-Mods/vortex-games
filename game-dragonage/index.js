@@ -10,6 +10,8 @@ const ADDINS_FILE = 'AddIns.xml';
 const STEAM_ID = 17450;
 const STEAM_ID_ULTIMATE_EDITION = 47810;
 
+const VDF_EXT = '.vdf';
+
 // Static variables to store paths we resolve using appUni.
 let _ADDINS_PATH = undefined;
 let _MODS_PATH = undefined;
@@ -80,11 +82,15 @@ function test(game) {
 }
 
 function requiresLauncher(gamePath) {
-  // Steam installation would include DAOU_UpdateAddinsXML_Steam.exe so it's
-  //  safe to assume that if we find this file - we need the launcher.
-  const gameRoot = gamePath.substring(0, gamePath.lastIndexOf(path.sep));
-  return fs.statAsync(path.join(gameRoot, 'redist', 'DAOU_UpdateAddinsXML_Steam.exe'))
-    .then(() => Promise.resolve({ launcher: 'steam', addInfo: _APPID }))
+  // The presence of any .vdf files at the game's root suggests that this is
+  //  a Steam copy (Both Game Editions)
+  return fs.readdirAsync(gamePath)
+    .then(entries => {
+      const files = entries.filter(entry => path.extname(entry) !== '');
+      return (files.find(file => path.extname(file) === VDF_EXT) !== undefined)
+        ? Promise.resolve({ launcher: 'steam', addInfo: _APPID })
+        : Promise.resolve(undefined);
+    })
     .catch(err => Promise.resolve(undefined));
 }
 
@@ -135,7 +141,7 @@ function main(context) {
   context.requireExtension('modtype-dragonage');
   context.registerGame({
     id: 'dragonage',
-    name: 'Dragon Age',
+    name: 'Dragon Age: Origins',
     mergeMods: true,
     requiresLauncher,
     queryPath: findGame,

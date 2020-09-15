@@ -22,6 +22,7 @@ const MERGE_INV_MANIFEST = 'MergeInventory.xml';
 const LOAD_ORDER_FILENAME = 'mods.settings';
 
 const UNI_PATCH = 'mod0000____CompilationTrigger';
+const LOCKED_PREFIX = 'mod0000__';
 
 const GOG_ID = '1207664663';
 const GOG_ID_GOTY = '1495134320';
@@ -30,6 +31,7 @@ const STEAM_ID = '499450';
 const CONFIG_MATRIX_REL_PATH = path.join('bin', 'config', 'r4game', 'user_config_matrix', 'pc');
 
 let _INI_STRUCT = {};
+let _PREVIOUS_LO = {};
 
 const tools = [
   {
@@ -64,6 +66,16 @@ function writeToModSettings() {
     });
 }
 
+function createModSettings() {
+  const filePath = getLoadOrderFilePath();
+  // Theoretically the Witcher 3 documents path should be
+  //  created at this point (either by us or the game) but
+  //  just in case it got removed somehow, we re-instate it
+  //  yet again... https://github.com/Nexus-Mods/Vortex/issues/7058
+  return fs.ensureDirWritableAsync(path.dirname(filePath))
+    .then(() => fs.writeFileAsync(filePath, '', { encoding: 'utf8' }));
+}
+
 // Attempts to parse and return data found inside
 //  the mods.settings file if found - otherwise this
 //  will ensure the file is present.
@@ -73,7 +85,7 @@ function ensureModSettings() {
   return fs.statAsync(filePath)
     .then(() => parser.read(filePath))
     .catch(err => (err.code === 'ENOENT')
-      ? fs.writeFileAsync(filePath, '', { encoding: 'utf8' }).then(() => parser.read(filePath))
+      ? createModSettings().then(() => parser.read(filePath))
       : Promise.reject(err));
 }
 
@@ -452,6 +464,13 @@ async function getAllMods(context) {
   const invalidModTypes = ['witcher3menumoddocuments'];
   const state = context.api.store.getState();
   const profile = selectors.activeProfile(state);
+  if (profile?.id === undefined) {
+    return Promise.resolve({
+      merged: [],
+      manual: [],
+      managed: [],
+    });
+  }
   const modState = util.getSafe(state, ['persistent', 'profiles', profile.id, 'modState'], {});
   const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
 
@@ -462,16 +481,49 @@ async function getAllMods(context) {
   const mergedModNames = await getMergedModNames(context);
   const manuallyAddedMods = await getManuallyAddedMods(context);
   const managedMods = await getManagedModNames(context, enabledMods.map(key => mods[key]));
-  return Promise.resolve([].concat(mergedModNames, managedMods, manuallyAddedMods.filter(mod => !mergedModNames.includes(mod))));
+  return Promise.resolve({
+    merged: mergedModNames,
+    manual: manuallyAddedMods.filter(mod => !mergedModNames.includes(mod)),
+    managed: managedMods,
+  });
 }
 
-async function setINIStruct(context, loadOrder) {
-  let nextAvailableIdx = Object.keys(loadOrder).length;
-  const getNextIdx = () => {
-    return nextAvailableIdx++;
+function getPriority(loadorder, item, minPriority) {
+  const itemKey = Object.keys(loadorder).find(x => x === item.id);
+  if (itemKey !== undefined) {
+    const prefixVal = (loadorder[itemKey]?.prefix !== undefined)
+      ? parseInt(loadorder[itemKey].prefix) : loadorder[itemKey].pos;
+    const posVal = loadorder[itemKey].pos;
+    if (posVal !== prefixVal && prefixVal > minPriority) {
+      return prefixVal;
+    } else {
+      return posVal;
+    }
   }
-  return getAllMods(context).then(mods => {
+
+  const maxPriority = () => Object.keys(loadorder).reduce((prev, key) => {
+    const prefixVal = (loadorder[key]?.prefix !== undefined)
+      ? parseInt(loadorder[key].prefix) : loadorder[key].pos;
+    const posVal = loadorder[key].pos;
+    if (posVal !== prefixVal) {
+      prev = (prefixVal > prev)
+        ? prefixVal : prev;
+    } else {
+      prev = (posVal > prev)
+        ? posVal : prev;
+    }
+    return prev;
+  }, minPriority);
+
+  return maxPriority() + 1;
+}
+
+async function setINIStruct(context, loadOrder, updateType) {
+  return getAllMods(context).then(modMap => {
     _INI_STRUCT = {};
+    const mods = [].concat(modMap.merged, modMap.managed, modMap.manual);
+    const manualLocked = modMap.manual.filter(modName => modName.startsWith(LOCKED_PREFIX));
+    const totalLocked = [].concat(modMap.merged, manualLocked);
     return Promise.each(mods, mod => {
       let name;
       let key;
@@ -487,44 +539,83 @@ async function setINIStruct(context, loadOrder) {
       _INI_STRUCT[name] = {
         // The INI file's enabled attribute expects 1 or 0
         Enabled: (LOEntry !== undefined) ? LOEntry.enabled ? 1 : 0 : 1,
-        Priority: (LOEntry !== undefined) ? LOEntry.pos + 1 : getNextIdx(),
+        Priority: totalLocked.includes(name)
+          ? totalLocked.indexOf(name)
+          : getPriority(loadOrder, { id: key }, totalLocked.length),
         VK: key,
       };
     });
   })
 }
 
-async function preSort(context, items, direction) {
-  const mergedModNames = await getMergedModNames(context);
-  const manuallyAddedMods = await getManuallyAddedMods(context);
+let refreshFunc;
+// item: ILoadOrderDisplayItem
+function genEntryActions (context, item, minPriority) {
+  const priorityInputDialog = () => {
+    return new Promise((resolve) => {
+      context.api.showDialog('question', 'Set New Priority', {
+        text: context.api.translate('Insert new numerical priority for {{itemName}} in the input box:', { replace: { itemName: item.name } }),
+        input: [
+          {
+            id: 'w3PriorityInput',
+            label: 'Priority',
+            type: 'number',
+            placeholder: _INI_STRUCT[item.id]?.Priority || 0,
+          }],
+      }, [ { label: 'Cancel' }, { label: 'Set', default: true } ])
+      .then(result => {
+        if (result.action === 'Set') {
+          const itemKey = Object.keys(_INI_STRUCT).find(key => _INI_STRUCT[key].VK === item.id);
+          const wantedPriority = result.input['w3PriorityInput'];
+          if (wantedPriority <= minPriority) {
+            context.api.showErrorNotification('Cannot change to locked entry Priority');
+            return resolve();
+          }
+          if (itemKey !== undefined) {
+            _INI_STRUCT[itemKey].Priority = parseInt(wantedPriority);
 
-  if ((mergedModNames.length === 0) && (manuallyAddedMods.length === 0)) {
-    return items || [];
+          } else {
+            log('error', 'Failed to set priority - mod is not in ini struct', { modId: item.id });
+          }
+        }
+        return resolve();
+      })
+    });
   }
+  const itemActions = [
+    {
+      show: item.locked !== true,
+      title: 'Set Manual Priority',
+      action: () => priorityInputDialog()
+        .then(() => writeToModSettings())
+        .then(() => {
+          const itemKey = Object.keys(_INI_STRUCT).find(key => _INI_STRUCT[key].VK === item.id);
+          if (itemKey === undefined) {
+            return Promise.resolve();
+          }
+          const state = context.api.store.getState();
+          const activeProfile = selectors.activeProfile(state);
+          const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
+          const loKey = Object.keys(loadOrder).find(key => key === item.id);
+          if (loKey !== undefined) {
+            const loEntry = loadOrder[loKey];
+            context.api.store.dispatch(actions.setLoadOrderEntry(
+              activeProfile.id, item.id, {
+                ...loEntry,
+                prefix: parseInt(_INI_STRUCT[itemKey].Priority),
+            }));
+            if (refreshFunc !== undefined) {
+              refreshFunc();
+            }
+          }
+        }),
+    },
+  ];
 
-  const lockedManualMods = manuallyAddedMods.filter(entry => entry.startsWith('mod0000__'));
-  const readableNames = {
-    'mod0000____CompilationTrigger': 'Unification/Community Patch',
-  };
-  const lockedEntries = [].concat(mergedModNames, lockedManualMods)
-    .filter(modName =>items.find(item => item.id === modName) === undefined)
-    .map(modName => ({
-      id: modName,
-      name: !!readableNames[modName] ? readableNames[modName] : modName,
-      imgUrl: `${__dirname}/gameart.jpg`,
-      locked: true,
-  }))
+  return itemActions;
+}
 
-  const manualEntries = manuallyAddedMods
-    .filter(key => (items.find(item => item.id === key) === undefined)
-                && (lockedEntries.find(entry => entry.id === key) === undefined))
-    .map(key => ({
-      id: key,
-      name: key,
-      imgUrl: `${__dirname}/gameart.jpg`,
-      external: true,
-  }));
-
+async function preSort(context, items, direction, updateType) {
   const state = context.api.store.getState();
   const activeProfile = selectors.activeProfile(state);
   if (activeProfile?.id === undefined) {
@@ -534,12 +625,57 @@ async function preSort(context, items, direction) {
     log('warn', '[W3] unable to presort due to no active profile');
     return Promise.resolve([]);
   }
+
   const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
+  const allMods = await getAllMods(context);
+  if ((allMods.merged.length === 0) && (allMods.manual.length === 0)) {
+    return items || [];
+  }
+
+  const lockedManualMods = allMods.manual.filter(entry => entry.startsWith(LOCKED_PREFIX));
+  const readableNames = {
+    'mod0000____CompilationTrigger': 'Unification/Community Patch',
+  };
+
+  const lockedEntries = [].concat(allMods.merged, lockedManualMods)
+    .map((modName, idx) => ({
+      id: modName,
+      name: !!readableNames[modName] ? readableNames[modName] : modName,
+      imgUrl: `${__dirname}/gameart.jpg`,
+      locked: true,
+      prefix: idx + 1,
+  }));
+
+  items = items.filter(item => !allMods.merged.includes(item.id)
+                            && !allMods.manual.includes(item.id)).map(item => {
+    return {
+      ...item,
+      contextMenuActions: genEntryActions(context, item, lockedEntries.length),
+      prefix: getPriority(loadOrder, item, lockedEntries.length),
+    };
+  });
+
+  const manualEntries = allMods.manual
+    .filter(key => lockedEntries.find(entry => entry.id === key) === undefined)
+    .map(key => {
+      const item = {
+        id: key,
+        name: key,
+        imgUrl: `${__dirname}/gameart.jpg`,
+        external: true,
+      }
+      return {
+        ...item,
+        prefix: getPriority(loadOrder, item, lockedEntries.length),
+        contextMenuActions: genEntryActions(context, item, lockedEntries.length),
+      }
+  });
+
   const keys = Object.keys(loadOrder);
   const knownManuallyAdded = manualEntries.filter(entry => keys.includes(entry.id)) || [];
   const unknownManuallyAdded = manualEntries.filter(entry => !keys.includes(entry.id)) || [];
   const filteredOrder = keys
-    .filter(key => !mergedModNames.includes(key))
+    .filter(key => lockedEntries.find(item => item.id === key) === undefined)
     .reduce((accum,key) => {
       accum[key] = loadOrder[key];
       return accum;
@@ -551,7 +687,25 @@ async function preSort(context, items, direction) {
     items = [].concat(items.slice(0, pos) || [], known, items.slice(pos) || []);
   });
 
-  const preSorted = [].concat(...lockedEntries, ...items, ...unknownManuallyAdded);
+  let preSorted = [].concat(...lockedEntries, items, ...unknownManuallyAdded);
+  preSorted = (updateType !== 'drag-n-drop')
+    ? preSorted.sort((lhs, rhs) => lhs.prefix - rhs.prefix)
+    : preSorted.reduce((accum, entry, idx) => {
+        if (lockedEntries.indexOf(entry) !== -1 || idx === 0) {
+          accum.push(entry);
+        } else {
+          const prevPrefix = parseInt(accum[idx - 1].prefix);
+          if (prevPrefix >= entry.prefix) {
+            accum.push({
+              ...entry,
+              prefix: prevPrefix + 1
+            });
+          } else {
+            accum.push(entry);
+          }
+        }
+        return accum;
+      }, []);
   return (direction === 'descending')
     ? Promise.resolve(preSorted.reverse())
     : Promise.resolve(preSorted);
@@ -581,7 +735,28 @@ function getManagedModNames(context, mods) {
     }), []);
 }
 
-let prevLoadOrder;
+const toggleModsState = async (context, props, enabled) => {
+  const state = context.api.store.getState();
+  const profile = selectors.activeProfile(state);
+  const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], {});
+  const modMap = await getAllMods(context);
+  const manualLocked = modMap.manual.filter(modName => modName.startsWith(LOCKED_PREFIX));
+  const totalLocked = [].concat(modMap.merged, manualLocked);
+  const newLO = Object.keys(loadOrder).reduce((accum, key) => {
+    if (totalLocked.includes(key)) {
+      accum[key] = loadOrder[key];
+    } else {
+      accum[key] = {
+        ...loadOrder[key],
+        enabled,
+      }
+    }
+    return accum;
+  }, {});
+  context.api.store.dispatch(actions.setLoadOrder(profile.id, newLO));
+  props.refresh();
+}
+
 function infoComponent(context, props) {
   const t = context.api.translate;
   return React.createElement(BS.Panel, { id: 'loadorderinfo' },
@@ -596,8 +771,9 @@ function infoComponent(context, props) {
       React.createElement('p', {}, t('Please note:', { ns: I18N_NAMESPACE })),
       React.createElement('ul', {},
         React.createElement('li', {}, t('For Witcher 3, the mod with the lowest index number (by default, the mod sorted at the top) overrides mods with a higher index number.', { ns: I18N_NAMESPACE })),
+        React.createElement('li', {}, t('You are able to modify the priority manually by right clicking any LO entry and set the mod\'s priority', { ns: I18N_NAMESPACE })),
         React.createElement('li', {}, t('If you cannot see your mod in this load order, you may need to add it manually (see our wiki for details).', { ns: I18N_NAMESPACE })),
-        React.createElement('li', {}, t('When managing menu mods, mod settings changed inside the game will be detected by Vortex as external changes - that is expected, ' 
+        React.createElement('li', {}, t('When managing menu mods, mod settings changed inside the game will be detected by Vortex as external changes - that is expected, '
           + 'choose to use the newer file and your settings will be made persistent.', { ns: I18N_NAMESPACE })),
         React.createElement('li', {}, t('Merges generated by the Witcher 3 Script merger must be loaded first and are locked in the first load order slot.', { ns: I18N_NAMESPACE })))),
     React.createElement(BS.Button, { onClick: () => {
@@ -605,14 +781,24 @@ function infoComponent(context, props) {
       const state = context.api.store.getState();
       const profile = selectors.activeProfile(state);
       const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], undefined);
-      if (prevLoadOrder === undefined) {
-        prevLoadOrder = loadOrder;
+      if (_PREVIOUS_LO === undefined) {
+        _PREVIOUS_LO = loadOrder;
       }
 
-      if (prevLoadOrder !== loadOrder) {
+      if (_PREVIOUS_LO !== loadOrder) {
         context.api.store.dispatch(actions.setDeploymentNecessary(GAME_ID, true));
       }
-    } }, t('Refresh')));
+    } }, t('Refresh')),
+    React.createElement('br'),
+    React.createElement('br'),
+    React.createElement(BS.Button, { onClick: () => {
+      toggleModsState(context, props, false);
+    }}, t('Disable All')),
+    React.createElement('br'),
+    React.createElement('br'),
+    React.createElement(BS.Button, { onClick: () => {
+      toggleModsState(context, props, true);
+    }}, t('Enable All ')), []);
 }
 
 function queryScriptMerge(context, reason) {
@@ -696,7 +882,18 @@ function merge(filePath, mergeDir, context) {
       } catch (err) {
         // This is the merged file - if it's invalid chances are we messed up
         //  somehow, reason why we're going to allow this error to get reported.
-        context.api.showErrorNotification('Invalid merged XML data', err, { allowReport: true });
+        const state = context.api.store.getState();
+        const activeProfile = selectors.activeProfile(state);
+        const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
+        context.api.showErrorNotification('Invalid merged XML data', err, {
+          allowReport: true,
+          attachments: [
+            { id: '__merged/input.xml', type: 'data', data: mergedData,
+              description: 'Witcher 3 menu mod merged data' },
+            { id: `${activeProfile.id}_loadOrder`, type: 'data', data: loadOrder,
+              description: 'Current load order' },
+          ],
+        });
         return Promise.reject(new util.DataInvalid('Invalid merged XML data'));
       }
     })
@@ -746,6 +943,7 @@ function merge(filePath, mergeDir, context) {
             const err = new util.DataInvalid('Duplicate group entries found in game input.xml'
               + `\n\n${path.join(mergeDir, INPUT_XML_FILENAME)}\n\n`
               + 'file - please fix this manually before attempting to re-install the mod');
+            context.api.showErrorNotification('Duplicate group entries detected', err, { allowReport: false });
             return Promise.reject(err);
           } else if (matchingIndexGroup.length === 0) {
             // Need to add the group AND the var.
@@ -759,6 +957,10 @@ function merge(filePath, mergeDir, context) {
 
       return fs.writeFileAsync(path.join(mergeDir, CONFIG_MATRIX_REL_PATH, INPUT_XML_FILENAME),
         gameIndexFile, { encoding: 'utf16le' });
+    })
+    .catch(err => {
+      log('error', 'input.xml merge failed', err);
+      return Promise.resolve();
     });
 }
 
@@ -835,8 +1037,38 @@ function main(context) {
     return (gameMode === GAME_ID);
   })
 
-  let refreshFunc;
-  let previousLO = {};
+  context.registerAction('generic-load-order-icons', 100, 'loot-sort', {}, 'Reset Priorities',
+    () => {
+      context.api.showDialog('info', 'Reset Priorities', {
+        bbcode: context.api.translate('This action will revert all manually set priorities and will re-instate priorities in an incremental ' 
+          + 'manner starting from 1. Are you sure you want to do this ?', { ns: I18N_NAMESPACE }),
+      }, [
+        { label: 'No', action: () => {
+          return;
+        }},
+        { label: 'Yes', action: () => {
+          const state = context.api.store.getState();
+          const profile = selectors.activeProfile(state);
+          const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], {});
+          Object.keys(loadOrder).forEach(key => {
+            const loEntry = loadOrder[key];
+            context.api.store.dispatch(actions.setLoadOrderEntry(
+              profile.id, key, {
+                ...loEntry,
+                prefix: loEntry.pos + 1,
+            }));
+          });
+          if (refreshFunc !== undefined) {
+            refreshFunc();
+          }
+        }},
+      ]);
+    }, () => {
+      const state = context.api.store.getState();
+      const gameMode = selectors.activeGameId(state);
+      return gameMode === GAME_ID;
+    });
+
   const invalidModTypes = ['witcher3menumoddocuments'];
   context.registerLoadOrderPage({
     gameId: GAME_ID,
@@ -846,14 +1078,18 @@ function main(context) {
     },
     gameArtURL: `${__dirname}/gameart.jpg`,
     filter: (mods) => mods.filter(mod => !invalidModTypes.includes(mod.type)),
-    preSort: (items, direction) => preSort(context, items, direction),
-    callback: (loadOrder) => {
-      if (loadOrder === previousLO) {
+    preSort: (items, direction, updateType) => preSort(context, items, direction, updateType),
+    callback: (loadOrder, updateType) => {
+      if (loadOrder === _PREVIOUS_LO) {
         return;
       }
-      context.api.store.dispatch(actions.setDeploymentNecessary(GAME_ID, true));
-      previousLO = loadOrder;
-      setINIStruct(context, loadOrder)
+
+      if (_PREVIOUS_LO !== undefined) {
+        context.api.store.dispatch(actions.setDeploymentNecessary(GAME_ID, true));
+      }
+      _PREVIOUS_LO = loadOrder;
+
+      setINIStruct(context, loadOrder, updateType)
         .then(() => writeToModSettings())
         .catch(err => {
           context.api.showErrorNotification('Failed to modify load order file', err);
@@ -873,7 +1109,8 @@ function main(context) {
           manuallyAdded.forEach((mod, idx) => {
             newStruct[mod] = {
               Enabled: 1,
-              Priority: ((loadOrder !== undefined && !!loadOrder[mod]) ? loadOrder[mod].pos : idx) + 1,
+              Priority: ((loadOrder !== undefined && !!loadOrder[mod])
+                ? parseInt(loadOrder[mod].prefix, 10) : idx) + 1,
             }
           });
 
