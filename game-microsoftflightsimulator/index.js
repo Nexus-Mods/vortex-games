@@ -31,7 +31,7 @@ function setupErrText(opt1, opt2, opt3) {
         + 'isn\'t fully installed or the game was installed in a way we don\'t support yet.\n'
         + 'If you could send us the path to where your game stores files like '
         + '"FlightSimulator.cfg" and "UserCfg.opt" we should be able to fix this quickly.\n'
-        + `We expected this to be\n"${opt1}" or\n"${opt2}" or\n"${opt3}"`;
+        + `We expected this to be\n"${opt1}" or\n"${opt2}" ${opt3 ? `or\n"${opt3}`: ''}"`;
 }
 
 function findLocalCache() {
@@ -386,7 +386,36 @@ async function setup() {
   // belong into. If the files in a mod are supposed to replace an existing file but lacking
   // the directory structure we don't know which, we can use that to determine 
 
-  const officialPath = path.join(packagesPath, 'Official', 'OneStore');
+  // The official path varies depending on the platform.
+  const steamPath = path.join(packagesPath, 'Official', 'Steam');
+  const msPath = path.join(packagesPath, 'Official', 'OneStore');
+
+  let officialPath;
+
+  try {
+    await fs.readdirAsync(msPath);
+    officialPath = msPath;
+  }
+  catch(err) {
+    if (err.code === 'ENOENT') {
+      try {
+        await fs.readdirAsync(steamPath);
+        officialPath = steamPath;
+
+      }
+      catch(innerErr) {
+        if (innerErr.code === 'ENOENT') {
+          throw new util.SetupError(
+              'Failed to find the official game data in your setup. Vortex checked the following file paths:\n'+
+              `${msPath}\n${steamPath}\n`+
+              'Please help us fix this error by contacting support, including the correct path for your setup.'
+            );
+        } else throw innerErr;
+      }
+
+    } else throw err;
+  }
+  
   const officialItems = await fs.readdirAsync(officialPath);
 
   for (let item of officialItems) {
