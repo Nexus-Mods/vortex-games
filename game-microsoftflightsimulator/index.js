@@ -26,12 +26,21 @@ function findGame() {
     .then(disco => disco.gamePath);
 }
 
-function setupErrText(opt1, opt2, opt3) {
+function localCacheMissingTest(...candidates) {
   return 'Failed to find LocalCache directory. This may be because the game '
         + 'isn\'t fully installed or the game was installed in a way we don\'t support yet.\n'
         + 'If you could send us the path to where your game stores files like '
         + '"FlightSimulator.cfg" and "UserCfg.opt" we should be able to fix this quickly.\n'
-        + `We expected this to be\n"${opt1}" or\n"${opt2}" or\n"${opt3}"`;
+        + 'We expected this to\n'
+        + candidates.map(opt => `"${opt}"`).join(' or\n');
+}
+
+function officialDataMissingTest(...candidates) {
+  return 'Failed to find the official data for the game. This may be because the game '
+        + 'isn\'t fully installed or the game was installed in a way we don\'t support yet.\n'
+        + 'Please help us fix this error by contacting support, including the correct path for your setup.\n'
+        + 'We expected this to\n'
+        + candidates.map(opt => `"${opt}"`).join(' or\n');
 }
 
 function findLocalCache() {
@@ -59,7 +68,7 @@ function findLocalCache() {
         fs.statSync(opt3);
         return opt3;
       } catch (err) {
-        throw new util.SetupError(setupErrText(opt1, opt2, opt3));
+        throw new util.SetupError(localCacheMissingTest(opt1, opt2, opt3));
       }
     }
   }
@@ -133,7 +142,7 @@ const getPackagesPath = (() => {
             usercfg = parseOPT(path.join(roamPath, 'UserCfg.opt'));
           } catch (innerErr) {
             if (innerErr.code === 'ENOENT') {
-              throw new util.SetupError(setupErrText(basePath, roamPath));
+              throw new util.SetupError(localCacheMissingTest(basePath, roamPath));
             } else {
               throw err;
             }
@@ -386,8 +395,31 @@ async function setup() {
   // belong into. If the files in a mod are supposed to replace an existing file but lacking
   // the directory structure we don't know which, we can use that to determine 
 
-  const officialPath = path.join(packagesPath, 'Official', 'OneStore');
-  const officialItems = await fs.readdirAsync(officialPath);
+  let officialItems;
+
+  const candidates = [
+    path.join(packagesPath, 'Official', 'OneStore'),
+    path.join(packagesPath, 'Official', 'Steam'),
+  ];
+  let officialPath;
+
+  for (let candidate of candidates) {
+    try {
+      officialItems = await fs.readdirAsync(candidate);
+      officialPath = candidate;
+      break;
+    } catch (err) {
+      if (err.code !== 'ENOENT') {
+        throw err;
+      }
+
+      log('debug', 'official msfs data not found in', candidate);
+    }
+  }
+
+  if (officialItems === undefined) {
+    throw new util.SetupError(officialDataMissingTest(...candidates));
+  }
 
   for (let item of officialItems) {
     const [publisher, type, name] = item.split('-');
