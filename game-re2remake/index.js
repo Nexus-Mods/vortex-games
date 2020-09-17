@@ -6,6 +6,8 @@ const cache = require('./cache');
 const { app, remote } = require('electron');
 const uniApp = app || remote.app;
 
+const { CACHE_FILE } = require('./common');
+
 const { actions, fs, log, selectors, util } = require('vortex-api');
 
 // Expected file name for the qbms script.
@@ -520,10 +522,63 @@ function invalidateFilePaths(wildCards, api, force = false) {
     }))
     .catch(err => err.message.indexOf('All entries invalidated') !== -1
       ? Promise.resolve()
-      : api.showErrorNotification('Invalidation failed', err))
+      : reportError('Invalidation failed', err))
     .finally(() => removeFromTemp(INVAL_SCRIPT)
       .then(() => removeFilteredList()));
 }
+
+const reportError = (message, err) => {
+  const queryFile = (file) => {
+    return fs.statAsync(file.filePath)
+      .then(() => Promise.resolve(file))
+      .catch(err => Promise.resolve(undefined));
+  };
+
+  const state = _API.store.getState();
+  const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
+  const modKeys = Object.keys(mods);
+  let attachments = [
+    {
+      id: 'installedMods',
+      type: 'data',
+      data: modKeys.join(', ') || 'None',
+      description: 'List of installed mods',
+    },
+  ];
+
+  const stagingFolder = selectors.installPathForGame(state, GAME_ID);
+  const qbmsLog = {
+    filePath: path.join(uniApp.getPath('userData'), 'quickbms.log'),
+    description: 'QuickBMS log file',
+  };
+
+  const vortexLog = {
+    filePath: path.join(uniApp.getPath('userData'), 'vortex.log'),
+    description: 'Vortex log file',
+  };
+  
+  const cacheFile = {
+    filePath: path.join(stagingFolder, CACHE_FILE),
+    description: 'Invalidation cache file',
+  };
+
+  return Promise.map([qbmsLog, vortexLog, cacheFile], file => queryFile(file))
+    .then(files => {
+      const validFiles = files.filter(file => !!file);
+      validFiles.forEach(file => {
+        attachments = [].concat(attachments, {
+          id: path.basename(file.filePath),
+          type: 'file',
+          data: file.filePath,
+          description: file.description,
+        })
+      })
+    })
+    .then(() => {
+      _API.showErrorNotification(message, err, { attachments });
+      return Promise.resolve();
+    });
+};
 
 let _API;
 function main(context) {
@@ -546,11 +601,6 @@ function main(context) {
       'A mod\'s installation folder is missing or is still being downloaded/removed.'
     + 'Please ensure that the mod installation directory "{{modDir}}" exists.',
       { replace: { modDir: modFolder }, allowReport: false });
-  };
-
-  const reportError = (message, err) => {
-    context.api.showErrorNotification(message, err);
-    return Promise.resolve();
   };
 
   // Pre-qbms RE2 installer was not fit for purpose and needs to be removed.
@@ -673,7 +723,7 @@ function main(context) {
                 missingModNotification(modFolder);
                 return Promise.resolve();
               } else {
-                context.api.showErrorNotification('Invalidation failed', err);
+                reportError('Invalidation failed', err);
               }
             });
         })

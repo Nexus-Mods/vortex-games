@@ -1,9 +1,8 @@
 const Promise = require('bluebird');
 const path = require('path');
 const { fs } = require('vortex-api');
+const { INVAL_FILE, CACHE_FILE } = require('./common');
 
-const CACHE_FILE = 'invalcache.json';
-const INVAL_FILE = 'invalcache.file';
 
 const CACHE_TEMPLATE = {
   _native: [],

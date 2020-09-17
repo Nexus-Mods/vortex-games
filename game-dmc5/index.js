@@ -7,6 +7,8 @@ const uniApp = app || remote.app;
 
 const { actions, fs, log, selectors, util } = require('vortex-api');
 
+const { CACHE_FILE } = require('./common');
+
 // Expected file name for the qbms script.
 const BMS_SCRIPT = path.join(__dirname, 'dmc5_pak_unpack.bms');
 
@@ -449,7 +451,7 @@ function invalidateFilePaths(wildCards, api, force = false) {
     }))
     .catch(err => err.message.indexOf('All entries invalidated') !== -1
       ? Promise.resolve()
-      : api.showErrorNotification('Invalidation failed', err))
+      : reportError('Invalidation failed', err))
     .finally(() => removeFromTemp(INVAL_SCRIPT)
       .then(() => removeFilteredList()))
 }
@@ -469,6 +471,59 @@ function fluffyDummyInstaller(context, files) {
     + 'use only one of these apps to manage mods for Devil May Cry 5.', { allowReport: false });
   return Promise.reject(new util.ProcessCanceled('Invalid mod'));
 }
+
+const reportError = (message, err) => {
+  const queryFile = (file) => {
+    return fs.statAsync(file.filePath)
+      .then(() => Promise.resolve(file))
+      .catch(err => Promise.resolve(undefined));
+  };
+
+  const state = _API.store.getState();
+  const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
+  const modKeys = Object.keys(mods);
+  let attachments = [
+    {
+      id: 'installedMods',
+      type: 'data',
+      data: modKeys.join(', ') || 'None',
+      description: 'List of installed mods',
+    },
+  ];
+
+  const stagingFolder = selectors.installPathForGame(state, GAME_ID);
+  const qbmsLog = {
+    filePath: path.join(uniApp.getPath('userData'), 'quickbms.log'),
+    description: 'QuickBMS log file',
+  };
+
+  const vortexLog = {
+    filePath: path.join(uniApp.getPath('userData'), 'vortex.log'),
+    description: 'Vortex log file',
+  };
+  
+  const cacheFile = {
+    filePath: path.join(stagingFolder, CACHE_FILE),
+    description: 'Invalidation cache file',
+  };
+
+  return Promise.map([qbmsLog, vortexLog, cacheFile], file => queryFile(file))
+    .then(files => {
+      const validFiles = files.filter(file => !!file);
+      validFiles.forEach(file => {
+        attachments = [].concat(attachments, {
+          id: path.basename(file.filePath),
+          type: 'file',
+          data: file.filePath,
+          description: file.description,
+        })
+      })
+    })
+    .then(() => {
+      _API.showErrorNotification(message, err, { attachments });
+      return Promise.resolve();
+    });
+};
 
 let _API;
 function main(context) {
@@ -491,11 +546,6 @@ function main(context) {
 
   context.registerInstaller('dmc5fluffyquack', 20, fluffyManagerTest, (files) => fluffyDummyInstaller(context, files));
   context.registerInstaller('dmc5qbmsmod', 25, testSupportedContent, installQBMS);
-
-  const reportError = (message, err) => {
-    context.api.showErrorNotification(message, err);
-    return Promise.resolve();
-  };
 
   context.registerAction('mod-icons', 500, 'savegame', {}, 'Invalidate Paths', () => {
     const store = context.api.store;
