@@ -70,6 +70,14 @@ function walkAsync(dir, gamePathIndex) {
           return Promise.resolve()
         }
       })
+      .catch(err => {
+        // The point of this function is to map out the game's
+        //  directory structure - any errors raised during mapping
+        //  simply signfies an unavailable path and therefore
+        //  shouldn't block the rest of the process (we log instead)
+        log('warn', '[DD] unable to add file to dir struct', err);
+        return Promise.resolve()
+      })
     })
     .then(() => Promise.resolve(_DIRECTORY_STRUCT));
   });
