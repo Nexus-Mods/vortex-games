@@ -463,7 +463,7 @@ function makeTestMerge(api) {
 const LOCALIZATION_KEYS = ['description', 'ui_manufacturer', 'ui_type', 'ui_variation'];
 
 function renameLocKeys(obj, locId) {
-  obj['vortex_merged'] = true;
+  obj['vortex_merged'] = locId;
   const locTexts = [];
   LOCALIZATION_KEYS.forEach(key => {
     let locKey = (obj[key] || '').match(/TT:[A-Za-z_.]*/);
@@ -477,6 +477,8 @@ function renameLocKeys(obj, locId) {
   return locTexts;
 }
 
+const isFLTSIM = section => section.startsWith('FLTSIM.');
+
 /**
  * To make liveries for the same aircraft from different mods work we have
  * to merge sections of the aircraft.cfg file
@@ -486,8 +488,6 @@ async function mergeAircraft(mergePath, incomingPath, locId, firstMerge) {
 
   const existingData = await parser.read(mergePath);
   const incomingData = await parser.read(incomingPath);
-
-  const isFLTSIM = section => section.startsWith('FLTSIM.');
 
   let locTexts = [];
 
@@ -508,7 +508,7 @@ async function mergeAircraft(mergePath, incomingPath, locId, firstMerge) {
     if ((oldId !== '0') && (existingSection === undefined)) {
       locTexts.push(...renameLocKeys(incomingData.data[section], locId));
       fltsims[`FLTSIM.${offset++}`] = incomingData.data[section];
-    } else if ((existingSection !== undefined) && existingSection['vortex_merged'] !== true) {
+    } else if ((existingSection !== undefined) && (existingSection['vortex_merged'] == undefined)) {
       locTexts.push(...renameLocKeys(incomingData.data[section], locId));
       fltsims[`FLTSIM.${oldId}`] = incomingData.data[section];
     }
@@ -520,7 +520,7 @@ async function mergeAircraft(mergePath, incomingPath, locId, firstMerge) {
   // up to here we've only updated the FLTSIM entries that existed in the incoming data,
   // but due to the way merging works there may still be sections that we haven't updated
   Object.keys(existingData.data).filter(isFLTSIM).forEach(section => {
-    if (existingData.data[section].vortex_merged !== true) {
+    if (existingData.data[section].vortex_merged === undefined) {
       locTexts.push(...renameLocKeys(existingData.data[section], locId));
     }
   });
@@ -584,33 +584,45 @@ function makeMerge(api) {
 
     await fs.ensureDirWritableAsync(path.dirname(targetPath), () =>  Promise.resolve());
 
+    let locTexts = [];
+    const locId = shortid.generate();
     try {
       await fs.statAsync(targetPath);
-      let locTexts = [];
-      const locId = shortid.generate();
       if (path.basename(filePath) === 'aircraft.cfg') {
-        const layoutEntry = layout.content.find(iter => iter.path === relPath);
+        // const layoutEntry = layout.content.find(iter => iter.path === relPath);
         locTexts = await mergeAircraft(targetPath, filePath, locId);
-      }
-
-      // if the configs we merged used localizations, we probably have to merge the corresponding
-      // localization files as well, since mods may use the same ids
-      if (locTexts.length > 0) {
-        const locFiles = await
-          mergeLocalizations(path.resolve(filePath, '..', '..', '..', '..'), mergePath, locTexts, locId);
-        layout.content = layout.content.filter(iter => !locFiles.includes(iter.path));
-        layout.content.push(...(await Promise.all(locFiles.map(async locFileName => {
-          const stats = await fs.statAsync(path.join(mergePath, locFileName));
-          return {
-            path: locFileName,
-            size: stats.size,
-            date: toWinTimestamp(stats.mtimeMs),
-          };
-        }))));
       }
     } catch (err) {
       // failed to merge, might be simply the first file we're looking at
       await fs.copyAsync(filePath, targetPath, { noSelfCopy: true });
+
+      const parser = new IniParser(new WinapiFormat());
+      const existingData = await parser.read(targetPath);
+
+      // update the localization keys
+      Object.keys(existingData.data).filter(isFLTSIM).forEach(section => {
+        if (existingData.data[section].vortex_merged === undefined) {
+          locTexts.push(...renameLocKeys(existingData.data[section], locId));
+        }
+      });
+
+      await parser.write(targetPath, existingData);
+    }
+
+    // if the configs we merged used localizations, we probably have to merge the corresponding
+    // localization files as well, since mods may use the same ids
+    if (locTexts.length > 0) {
+      const locFiles = await
+        mergeLocalizations(path.resolve(filePath, '..', '..', '..', '..'), mergePath, locTexts, locId);
+      layout.content = layout.content.filter(iter => !locFiles.includes(iter.path));
+      layout.content.push(...(await Promise.all(locFiles.map(async locFileName => {
+        const stats = await fs.statAsync(path.join(mergePath, locFileName));
+        return {
+          path: locFileName,
+          size: stats.size,
+          date: toWinTimestamp(stats.mtimeMs),
+        };
+      }))));
     }
 
     try {
