@@ -145,8 +145,17 @@ async function getManuallyAddedMods(context) {
     }, []);
   })
   .catch(err => {
-    const allowReport = ((err instanceof util.ProcessCanceled) === false);
-    context.api.showErrorNotification('Failed to lookup manually added mods', err, { allowReport })
+    // UserCanceled would suggest we were unable to stat the W3 mod folder
+    //  probably due to a permissioning issue (ENOENT is handled above)
+    const userCanceled = (err instanceof util.UserCanceled);
+    const processCanceled = (err instanceof util.ProcessCanceled);
+    const allowReport = (!userCanceled && !processCanceled);
+    const details = userCanceled
+      ? 'Vortex tried to scan your W3 mods folder for manually added mods but '
+        + 'was blocked by your OS/AV - please make sure to fix this before you '
+        + 'proceed to mod W3 as your modding experience will be severely affected.'
+      : err;
+    context.api.showErrorNotification('Failed to lookup manually added mods', details, { allowReport })
     return Promise.resolve([]);
   });
 }
