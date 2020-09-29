@@ -67,7 +67,7 @@ function testLooseMod(files, gameId) {
 }
 
 function main(context) {
-  const gameExec = 'Sekiro.exe';
+  const gameExec = 'sekiro.exe';
   _API = context.api;
   context.registerGame({
     id: GAME_ID,
