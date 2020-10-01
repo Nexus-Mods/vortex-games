@@ -657,13 +657,13 @@ function infoComponent(context, props) {
   const t = context.api.translate;
   return React.createElement(BS.Panel, { id: 'loadorderinfo' },
     React.createElement('h2', {}, t('Managing your load order', { ns: I18N_NAMESPACE })),
-    React.createElement(FlexLayout.Flex, {},
+    React.createElement(FlexLayout.Fixed, { style: { height: '30%' } },
     React.createElement('div', {},
     React.createElement('p', {}, t('You can adjust the load order for Blade and Sorcery by dragging and dropping '
     + 'mods up or down on this page. As the game loads its mods alphabetically - the AAA-ZZZ prefix will be added '
     + 'to the mod\'s folder name on every deployment event to guarantee that the game loads the mods in the order set inside Vortex. '
     + 'The higher prefix will win any conflicts (ZZZ > AAA)', { ns: I18N_NAMESPACE })))),
-    React.createElement('div', {},
+    React.createElement('div', { style: { height: '70%' } },
       React.createElement('p', {}, t('Please note:', { ns: I18N_NAMESPACE })),
       React.createElement('ul', {},
         React.createElement('li', {}, t('For the load order to be reflected correctly within the game\'s '
@@ -674,17 +674,7 @@ function infoComponent(context, props) {
           + 'simply rename "FakeMod" to "AAB-FakeMod" and click the refresh button.', { ns: I18N_NAMESPACE })),
         React.createElement('li', {}, t('Manually added mods are restricted to the prefix you set and '
           + 'Vortex has functionality to ensure this is respected, e.g. AAB-MyMod, Vortex will pick up on that prefix and sort it '
-          + 'correctly in the load order (e.g. after AAA-SomeMod but before AAC-AnotherMod).', { ns: I18N_NAMESPACE })))),
-    React.createElement(BS.Button, { onClick: () => {
-      props.refresh();
-
-      const state = context.api.store.getState();
-      const profile = selectors.activeProfile(state);
-      const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], undefined);
-      if (prevLoadOrder !== loadOrder) {
-        context.api.store.dispatch(actions.setDeploymentNecessary(BLADEANDSORCERY_ID, true));
-      }
-    } }, t('Refresh')));
+          + 'correctly in the load order (e.g. after AAA-SomeMod but before AAC-AnotherMod).', { ns: I18N_NAMESPACE })))));
 }
 
 function main(context) {
