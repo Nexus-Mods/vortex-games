@@ -123,8 +123,12 @@ class StardewValley {
    */
   async setup(discovery)
   {
-    // Make sure the folder for SMAPI mods exists. 
-    fs.ensureDirWritableAsync(path.join(discovery.path, 'Mods'));
+    // Make sure the folder for SMAPI mods exists.
+    try {
+      await fs.ensureDirWritableAsync(path.join(discovery.path, 'Mods'), undefined, 'test');
+    } catch (err) {
+      return Promise.reject(err);
+    }
     // skip if SMAPI found
     let smapiPath = path.join(discovery.path, SMAPI_EXE);
     let smapiFound = await this.getPathExistsAsync(smapiPath);
