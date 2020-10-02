@@ -95,9 +95,52 @@ function modPathEE() {
   return _modsFolder;
 }
 
-function prepareForModding(discovery) {
+function prepareForModding(discovery, context) {
+  const raiseNotif = (candidates) => {
+    context.api.sendNotification({
+      id: 'nwn-ee-multi-modpaths',
+      type: 'warning',
+      title: 'Multiple mod paths detected',
+      actions: [
+        {
+          title: 'More',
+          action: () => {
+            context.api.showDialog('warning', 'Multiple mod paths', {
+              text: 'Vortex has detected multiple "viable" Neverwinter Nights mod paths on your system:\n\n'
+                  + '{{modPaths}}\n\n'
+                  + 'Please note that Vortex will only deploy mods to the following mod path:\n\n'
+                  + '"{{modsPath}}"\n\n'
+                  + 'We recommend you rename/remove the other mod paths to ensure the game uses '
+                  + 'the same one that Vortex uses or your mods might not show correctly inside your game.',
+              parameters: {
+                modsPath: modPathEE(),
+                modPaths: candidates.map(cand => `"${path.join(path.dirname(modPathEE()), cand)}"`).join('\n'),
+              }
+            },
+            [
+              { label: 'Go to Documents Folder', action: () => util.opn(path.dirname(modPathEE())).catch(() => null) },
+              { label: 'Close' }
+            ])
+          }
+        }
+      ],
+    });
+    return Promise.resolve();
+  }
+
+  const rgx = /^Neverwinter Nights$|^Neverwinter Nights.[0-9]$/;
+  const testModsPath = () => (context === undefined)
+    ? Promise.resolve()
+    : fs.readdirAsync(path.dirname(modPathEE())).then(entries => {
+        const candidates = entries.filter(entry => rgx.test(entry));
+        return (candidates.length > 1)
+          ? raiseNotif(candidates)
+          : Promise.resolve();
+      });
+
   return Promise.map(Object.keys(MOD_EXT_DESTINATION),
-    ext => fs.ensureDirAsync(path.join(discovery.id === 'nwn' ? discovery.path : modPathEE(), MOD_EXT_DESTINATION[ext])));
+    ext => fs.ensureDirAsync(path.join(context === undefined ? discovery.path : modPathEE(), MOD_EXT_DESTINATION[ext])))
+    .then(() => testModsPath());
 }
 
 function main(context) {
@@ -132,7 +175,7 @@ function main(context) {
     details: {
       nexusPageId: 'neverwinter',
     },
-    setup: prepareForModding,
+    setup: (discovery) => prepareForModding(discovery, context),
   });
 
   context.registerInstaller('nwn-mod', 25, testSupportedContent, installContent);
