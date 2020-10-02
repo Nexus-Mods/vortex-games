@@ -125,7 +125,7 @@ class StardewValley {
   {
     // Make sure the folder for SMAPI mods exists.
     try {
-      await fs.ensureDirWritableAsync(path.join(discovery.path, 'Mods'), undefined, 'test');
+      await fs.ensureDirWritableAsync(path.join(discovery.path, 'Mods'));
     } catch (err) {
       return Promise.reject(err);
     }
