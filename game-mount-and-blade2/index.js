@@ -50,6 +50,16 @@ const BANNERLORD_EXEC = path.join('bin', 'Win64_Shipping_Client', 'Bannerlord.ex
 //  Casing is actually "SubModule.xml"
 const SUBMOD_FILE = "submodule.xml";
 
+const tools = [
+  {
+    id: 'bannerlord-sdk',
+    name: 'Modding Kit',
+    executable: () => path.join('bin', 'Win64_Shipping_wEditor', 'Bannerlord.exe'),
+    relative: true,
+    exclusive: true
+  }
+];
+
 async function walkAsync(dir, levelsDeep = 2) {
   let entries = [];
   return fs.readdirAsync(dir).then(files => {
@@ -766,6 +776,7 @@ function main(context) {
     id: GAME_ID,
     name: 'Mount & Blade II:\tBannerlord',
     mergeMods: true,
+    supportedTools: tools,
     queryPath: findGame,
     queryModPath: () => '.',
     logo: 'gameart.jpg',
