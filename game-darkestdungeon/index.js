@@ -368,6 +368,7 @@ function main(context) {
     logo: 'gameart.jpg',
     executable: (discoveryPath) => getExecutable(discoveryPath),
     requiredFiles: [
+      'audio/secondary_banks/en_darkestdungeon.bank',
     ],
     setup: prepareForModding,
     details: {
