@@ -9,6 +9,7 @@ const CustomItemRenderer = require('./customItemRenderer');
 
 const APPUNI = app || remote.app;
 const LAUNCHER_EXEC = path.join('bin', 'Win64_Shipping_Client', 'TaleWorlds.MountAndBlade.Launcher.exe');
+const MODDING_KIT_EXEC = path.join('bin', 'Win64_Shipping_wEditor', 'TaleWorlds.MountAndBlade.Launcher.exe');
 const LAUNCHER_DATA_PATH = path.join(APPUNI.getPath('documents'), 'Mount and Blade II Bannerlord', 'Configs', 'LauncherData.xml');
 const LAUNCHER_DATA = {
   singlePlayerSubMods: [],
@@ -49,16 +50,6 @@ const BANNERLORD_EXEC = path.join('bin', 'Win64_Shipping_Client', 'Bannerlord.ex
 // Bannerlord mods have this file in their root.
 //  Casing is actually "SubModule.xml"
 const SUBMOD_FILE = "submodule.xml";
-
-const tools = [
-  {
-    id: 'bannerlord-sdk',
-    name: 'Modding Kit',
-    executable: () => path.join('bin', 'Win64_Shipping_wEditor', 'Bannerlord.exe'),
-    relative: true,
-    exclusive: true
-  }
-];
 
 async function walkAsync(dir, levelsDeep = 2) {
   let entries = [];
@@ -427,9 +418,38 @@ function ensureOfficialLauncher(context, discovery) {
   }));
 }
 
+function setModdingTool(context, discovery, hidden = undefined) {
+  const toolId = 'bannerlord-sdk';
+  const exec = path.basename(MODDING_KIT_EXEC);
+  const tool = {
+    id: toolId,
+    name: 'Modding Kit',
+    logo: 'twlauncher.png',
+    executable: () => exec,
+    requiredFiles: [ exec ],
+    path: path.join(discovery.path, MODDING_KIT_EXEC),
+    relative: true,
+    exclusive: true,
+    workingDirectory: path.join(discovery.path, path.dirname(MODDING_KIT_EXEC)),
+    hidden,
+  };
+
+  context.api.store.dispatch(actions.addDiscoveredTool(GAME_ID, toolId, tool));
+}
+
 async function prepareForModding(context, discovery) {
   // Quickly ensure that the official Launcher is added.
   ensureOfficialLauncher(context, discovery);
+  try {
+    await fs.statAsync(path.join(discovery.path, MODDING_KIT_EXEC));
+    setModdingTool(context, discovery);
+  } catch (err) {
+    const tools = discovery?.tools;
+    if ((tools !== undefined)
+    && (util.getSafe(tools, ['bannerlord-sdk'], undefined) !== undefined)) {
+      setModdingTool(context, discovery, true);
+    }
+  }
 
   // If game store not found, location may be set manually - allow setup
   //  function to continue.
@@ -776,7 +796,6 @@ function main(context) {
     id: GAME_ID,
     name: 'Mount & Blade II:\tBannerlord',
     mergeMods: true,
-    supportedTools: tools,
     queryPath: findGame,
     queryModPath: () => '.',
     logo: 'gameart.jpg',
