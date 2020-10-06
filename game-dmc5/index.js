@@ -628,9 +628,10 @@ function main(context) {
     });
 
     context.api.onAsync('bake-settings', (gameId, mods) => {
-      if (gameId === GAME_ID && !profileChanging) {
-        const store = context.api.store;
-        const state = store.getState();
+      const store = context.api.store;
+      const state = store.getState();
+      const profile = selectors.activeProfile(state);
+      if (profile?.gameId === GAME_ID && !profileChanging) {
         const stagingFolder = selectors.installPathForGame(state, GAME_ID);
         store.dispatch(actions.startActivity('mods', ACTIVITY_INVAL));
         _incompleteNotifRaised = false;
