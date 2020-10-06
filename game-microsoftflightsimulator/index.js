@@ -449,6 +449,10 @@ function isConfig(filePath) {
 
 function makeTestMerge(api) {
   return (game, gameDiscovery) => {
+    if (game.id !== GAME_ID) {
+      return undefined;
+    }
+
     const installPath = selectors.installPathForGame(api.store.getState(), game.id);
     return {
       baseFiles: () => [],

@@ -851,6 +851,10 @@ function queryScriptMerge(context, reason) {
 }
 
 function canMerge(game, gameDiscovery) {
+  if (game.id !== GAME_ID) {
+    return undefined;
+  }
+
   return ({
     baseFiles: () => [
       {
