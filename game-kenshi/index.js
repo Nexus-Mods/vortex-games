@@ -92,7 +92,8 @@ function main(context) {
     logo: 'gameart.jpg',
     executable: (discoveryPath) => getExecutable(discoveryPath),
     requiredFiles: [
-      'OgreMain_x64.dll'
+      'OgreMain_x64.dll',
+      path.join('data', 'kenshi.ico'),
     ],
     setup: prepareForModding,
     requiresLauncher,
