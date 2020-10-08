@@ -92,7 +92,7 @@ function ensureModSettings() {
 async function getManuallyAddedMods(context) {
   return ensureModSettings().then(ini => {
     const state = context.api.store.getState();
-    const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], []);
+    const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
     const modKeys = Object.keys(mods);
     const iniEntries = Object.keys(ini.data);
     const manualCandidates = [].concat(iniEntries, [UNI_PATCH]).filter(entry => {
@@ -997,7 +997,10 @@ function scriptMergerDummyInstaller(context, files) {
     + 'The Witcher 3 Script Merger, which is a tool and not a mod for The Witcher 3.\n\n'
     + 'The script merger should\'ve been installed automatically by Vortex as soon as you activated this extension. '
     + 'If the download or installation has failed for any reason - please let us know why, by reporting the error through '
-    + 'our feedback system and make sure to include vortex logs.', { allowReport: false });
+    + 'our feedback system and make sure to include vortex logs. Please note: if you\'ve installed '
+    + 'the script merger in previous versions of Vortex as a mod and STILL have it installed '
+    + '(it\'s present in your mod list) - you should consider un-installing it followed by a Vortex restart; '
+    + 'the automatic merger installer/updater should then kick off and set up the tool for you.', { allowReport: false });
   return Promise.reject(new util.ProcessCanceled('Invalid mod'));
 }
 
