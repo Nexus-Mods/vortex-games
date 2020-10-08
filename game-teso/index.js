@@ -40,6 +40,9 @@ function main(context) {
     requiredFiles: [
       'Bethesda.net_Launcher.exe',
     ],
+    environment: {
+      SteamAPPId: '306130',
+    },
     details: {
       steamAppId: 306130,
       nexusPageId: 'elderscrollsonline',

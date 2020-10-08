@@ -62,8 +62,11 @@ class MasterChiefCollectionGame {
         relative: true,
       },
     ];
+    this.environment = {
+      SteamAPPId: STEAM_ID,
+    };
     this.details = {
-      steamAppId: STEAM_ID.toString(),
+      steamAppId: parseInt(STEAM_ID, 10),
     };
     this.mergeMods = true;
   }

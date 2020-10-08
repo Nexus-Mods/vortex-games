@@ -28,6 +28,9 @@ function main(context) {
       'grimrock.exe',
     ],
     setup: prepareForModding,
+    environment: {
+      SteamAPPId: '207170',
+    },
     details: {
       steamAppId: 207170,
     },

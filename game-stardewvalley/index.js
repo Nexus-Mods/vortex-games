@@ -30,6 +30,9 @@ class StardewValley {
     this.requiredFiles = process.platform == 'win32'
       ? ['Stardew Valley.exe']
       : ['StardewValley', 'StardewValley.exe'];
+    this.environment = {
+      SteamAPPId: '413150',
+    };
     this.details = {
       steamAppId: 413150
     };

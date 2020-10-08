@@ -172,8 +172,12 @@ function main(context) {
     requiredFiles: [
       'bin/win32/nwmain.exe',
     ],
+    environment: {
+      SteamAPPId: '704450',
+    },
     details: {
       nexusPageId: 'neverwinter',
+      steamAppId: 704450,
     },
     setup: (discovery) => prepareForModding(discovery, context),
   });

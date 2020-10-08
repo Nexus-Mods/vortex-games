@@ -25,6 +25,9 @@ function main(context) {
       'XComGame/CookedPCConsole/3DUIBP.upk',
       'XComGame/CharacterPool/Importable/Demos&Replays.bin'
     ],
+    environment: {
+      SteamAPPId: '268500',
+    },
     details: {
       steamAppId: 268500,
     },

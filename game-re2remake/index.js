@@ -593,6 +593,9 @@ function main(context) {
     queryModPath: () => '.',
     executable: () => 're2.exe',
     requiredFiles: ['re2.exe', GAME_PAK_FILE],
+    environment: {
+      SteamAPPId: STEAM_ID.toString(),
+    },
     setup: (discovery) => prepareForModding(discovery, context.api),
   });
 

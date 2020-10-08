@@ -53,6 +53,9 @@ function main(context) {
       //requiresLauncher,
       executable: () => 'Prison Architect64.exe',
       requiredFiles: ['Prison Architect64.exe'],
+      environment: {
+        SteamAPPId: STEAM_ID.toString(),
+      },
       details:
       {
         steamAppId: STEAM_ID,

@@ -302,6 +302,9 @@ function main(context) {
     requiredFiles: [
       'X4.exe',
     ],
+    environment: {
+      SteamAPPId: STEAM_ID.toString(),
+    },
     details: {
       steamAppId: STEAM_ID,
     },

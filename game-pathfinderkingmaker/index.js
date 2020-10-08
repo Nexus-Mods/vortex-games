@@ -24,6 +24,9 @@ function main(context) {
       queryModPath: () => 'Mods',
       executable: () => ExeName + '.exe',
       requiredFiles: [ExeName + '.exe'],
+      environment: {
+        SteamAPPId: SteamId.toString(),
+      }, 
       details:
       {
         steamAppId: SteamId,

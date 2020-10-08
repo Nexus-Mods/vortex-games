@@ -37,6 +37,9 @@ function main(context) {
       'data/core/graphics/factorio.ico',
     ],
     setup: prepareForModding,
+    environment: {
+      SteamAPPId: '427520',
+    },
     details: {
       steamAppId: 427520,
     },

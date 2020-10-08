@@ -114,8 +114,11 @@ function main(context) {
       requiredFiles: [
         mabGame.exec,
       ],
+      environment: {
+        SteamAPPId: mabGame.steamId,
+      },
       details: {
-        steamAppId: mabGame.steamId,
+        steamAppId: parseInt(mabGame.steamId, 10),
       },
       setup: prepareForModding,
     });

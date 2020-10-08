@@ -88,6 +88,9 @@ function main(context) {
       'Three_Kingdoms.exe'
     ],
     setup: prepareForModding,
+    environment: {
+      SteamAPPId: '779340',
+    },
     details: {
       steamAppId: 779340,
     },

@@ -96,6 +96,9 @@ function main(context) {
     ],
     setup: prepareForModding,
     requiresLauncher,
+    environment: {
+      SteamAPPId: '233860',
+    },
     details: {
       steamAppId: 233860,
     },

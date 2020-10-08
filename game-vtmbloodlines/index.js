@@ -67,6 +67,9 @@ function main(context) {
     queryModPath: () => 'Vampire',
     executable: () => 'Vampire.exe',
     requiredFiles: [],
+    environment: {
+      SteamAPPId: STEAM_ID.toString(),
+    },
     details: {
       steamAppId: STEAM_ID,
     },

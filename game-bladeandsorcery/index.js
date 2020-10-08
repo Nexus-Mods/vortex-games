@@ -699,6 +699,9 @@ function main(context) {
     requiredFiles: ['BladeAndSorcery.exe'],
     requiresCleanup: true,
     setup: (discovery) => prepareForModding(discovery, context.api),
+    environment: {
+      SteamAPPId: '629730',
+    },
     details: {
       // The default queryModPath result is used for replacement mods,
       //  this works in combination with the fomod stop patterns functionality

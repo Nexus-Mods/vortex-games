@@ -371,6 +371,9 @@ function main(context) {
       'audio/secondary_banks/en_darkestdungeon.bank',
     ],
     setup: prepareForModding,
+    environment: {
+      SteamAPPId: STEAM_ID,
+    },
     details: {
       steamAppId: parseInt(STEAM_ID),
     },

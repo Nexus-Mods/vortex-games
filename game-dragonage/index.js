@@ -155,6 +155,9 @@ function main(context) {
     requiredFiles: [
       'bin_ship/daorigins.exe',
     ],
+    environment: {
+      SteamAPPId: STEAM_ID.toString(),
+    },
     details: {
       steamAppId: STEAM_ID,
     },

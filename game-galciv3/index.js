@@ -107,6 +107,9 @@ function main(context) {
       'GalCiv3.exe',
     ],
     setup: () => prepareForModding(context.api),
+    environment: {
+      SteamAPPId: STEAM_ID.toString(),
+    },
     details: {
       steamAppId: STEAM_ID,
     },

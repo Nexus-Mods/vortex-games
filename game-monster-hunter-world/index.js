@@ -158,8 +158,11 @@ function main(context) {
     requiredFiles: [
       MHW_EXEC,
     ],
+    environment: {
+      SteamAPPId: '582010',
+    },
     details: {
-      steamAppId: '582010',
+      steamAppId: 582010,
     },
     setup: (discovery) => prepareForModding(discovery, context.api),
   });

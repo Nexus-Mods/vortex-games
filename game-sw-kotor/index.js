@@ -90,8 +90,11 @@ function main(context) {
       requiredFiles: [
         game.exec,
       ],
+      environment: {
+        SteamAPPId: game.steamId,
+      },
       details: {
-        steamAppId: game.steamId,
+        steamAppId: parseInt(game.steamId, 10),
       },
       setup: prepareForModding,
     });

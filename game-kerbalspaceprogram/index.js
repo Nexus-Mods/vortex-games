@@ -20,6 +20,9 @@ function main(context) {
     requiredFiles: [
       'KSP_x64.exe',
     ],
+    environment: {
+      SteamAPPId: '220200',
+    },
     details: {
       steamAppId: 220200,
     },

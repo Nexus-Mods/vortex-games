@@ -538,6 +538,9 @@ function main(context) {
     queryModPath: () => '.',
     executable: () => 'DevilMayCry5.exe',
     requiredFiles: ['DevilMayCry5.exe'],
+    environment: {
+      SteamAPPId: STEAM_ID.toString(),
+    },
     details: {
       steamAppId: STEAM_ID,
     },

@@ -126,6 +126,9 @@ function main(context) {
       'Packs/Cubemaps.hpk',
     ],
     setup: prepareForModding,
+    environment: {
+      SteamAPPId: '464920',
+    },
     details: {
       steamAppId: 464920,
     },

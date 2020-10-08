@@ -78,6 +78,9 @@ function main(context) {
     queryModPath: () => 'mods',
     executable: () => gameExec,
     requiredFiles: [gameExec],
+    environment: {
+      SteamAPPId: STEAM_ID.toString(),
+    },
     details: {
       steamAppId: STEAM_ID,
     },

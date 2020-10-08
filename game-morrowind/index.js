@@ -58,7 +58,7 @@ function main(context) {
       SteamAPPId: STEAMAPP_ID,
     },
     details: {
-      steamAppId: parseInt(STEAMAPP_ID),
+      steamAppId: parseInt(STEAMAPP_ID, 10),
       gogAppId: GOGAPP_ID
     },
   });

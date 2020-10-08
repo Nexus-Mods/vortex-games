@@ -1016,6 +1016,9 @@ function main(context) {
     requiredFiles: [
       'bin/x64/witcher3.exe',
     ],
+    environment: {
+      SteamAPPId: '292030',
+    },
     details: {
       steamAppId: 292030,
     }

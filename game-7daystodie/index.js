@@ -262,6 +262,9 @@ function main(context) {
       '7DaysToDie.exe',
     ],
     setup: prepareForModding,
+    environment: {
+      SteamAPPId: '251570',
+    },
     details: {
       steamAppId: 251570,
     },

@@ -19,6 +19,9 @@ function main(context) {
     requiredFiles: [
       'Ellie_Ball_Project.exe',
     ],
+    environment: {
+      SteamAPPId: '545890',
+    },
     details: {
       steamAppId: 545890,
     },
