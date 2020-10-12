@@ -503,10 +503,13 @@ function reversePrefix(prefix) {
     return -1;
   }
 
-  const pos = prefix.reduce((prev, iter) => {
-    prev = prev + iter.charCodeAt(0);
+  const pos = prefix.reduce((prev, iter, idx) => {
+    const pow = 2 - idx;
+    const mult = Math.pow(26, pow);
+    const charCode = (iter.charCodeAt(0) % 65);
+    prev = prev + (charCode * mult);
     return prev;
-  }, -195);
+  }, 0);
 
   return pos;
 }
@@ -515,8 +518,8 @@ function makePrefix(input) {
   let res = '';
   let rest = input;
   while (rest > 0) {
-    res = String.fromCharCode(65 + (rest % 25)) + res;
-    rest = Math.floor(rest / 25);
+    res = String.fromCharCode(65 + (rest % 26)) + res;
+    rest = Math.floor(rest / 26);
   }
   return util.pad(res, 'A', 3);
 }
