@@ -86,7 +86,7 @@ async function getDeployedSubModPaths(context) {
   const state = context.api.store.getState();
   const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
   if (discovery?.path === undefined) {
-    return Promise.reject(new util.ProcessCanceled('game discovered is incomplete'));
+    return Promise.reject(new util.ProcessCanceled('game discovery is incomplete'));
   }
   const modulePath = path.join(discovery.path, MODULES);
   let moduleFiles;
@@ -931,8 +931,18 @@ function main(context) {
       return Promise.resolve();
     }
 
-    const deployedSubModules = await getDeployedSubModPaths(context);
-    CACHE = await getDeployedModData(context, deployedSubModules);
+    try {
+      const deployedSubModules = await getDeployedSubModPaths(context);
+      CACHE = await getDeployedModData(context, deployedSubModules);
+    } catch (err) {
+      // ProcessCanceled means that we were unable to scan for deployed
+      //  subModules, probably because game discovery is incomplete.
+      // It's beyond the scope of this function to report discovery
+      //  related issues.
+      return (err instanceof util.ProcessCanceled)
+        ? Promise.resolve()
+        : Promise.reject(err);
+    }
 
     const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
 
