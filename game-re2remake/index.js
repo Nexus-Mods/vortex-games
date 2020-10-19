@@ -38,7 +38,7 @@ const QBMS_TEMP_PATH = path.join(uniApp.getPath('userData'), 'temp', 'qbms');
 const FILTERED_LIST = path.join(QBMS_TEMP_PATH, 'filtered.list');
 
 // Regex pattern used to identify installed DLCs
-const DLC_FOLDER_RGX = /^\d+$/gm;
+const DLC_FOLDER_RGX = /^\d{6,8}$/gm;
 
 //const MODULE_CONFIG = 'moduleconfig.xml';
 const NATIVES_DIR = 'natives' + path.sep;
@@ -174,7 +174,8 @@ async function findArchiveFile(files, discoveryPath, api) {
           archivePath = path.join(discoveryPath, dlc, DLC_PAK_FILE);
           return (found !== undefined)
           ? Promise.resolve()
-          : testArchive(files, discoveryPath, archivePath, api)
+          : fs.statAsync(archivePath)
+            .then(() => testArchive(files, discoveryPath, archivePath, api))
             .then(data => {
               found = {
                 arcPath: path.join(dlc, DLC_PAK_FILE),
@@ -182,7 +183,10 @@ async function findArchiveFile(files, discoveryPath, api) {
               }
               return Promise.resolve();
             })
-            .catch(util.NotFound, () => Promise.resolve());
+            .catch(util.NotFound, () => Promise.resolve())
+            .catch(err => ['ENOENT'].includes(err.code)
+              ? Promise.resolve()
+              : Promise.reject(err));
         })
         .then(() => found)
       }));
