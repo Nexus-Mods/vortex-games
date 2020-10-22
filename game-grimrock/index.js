@@ -2,6 +2,10 @@ const { remote } = require('electron');
 const { fs, log, util } = require('vortex-api');
 const path = require('path');
 
+const executable =  process.platform == 'linux'
+    ? 'Grimrock.bin.x86'
+    : 'grimrock.exe';
+
 function findGame() {
   return util.steam.findByName('Legend of Grimrock')
       .then(game => game.gamePath);
@@ -23,9 +27,9 @@ function main(context) {
     queryPath: findGame,
     queryModPath: modPath,
     logo: 'gameart.jpg',
-    executable: () => 'grimrock.exe',
+    executable: () => executable,
     requiredFiles: [
-      'grimrock.exe',
+      executable,
     ],
     setup: prepareForModding,
     environment: {

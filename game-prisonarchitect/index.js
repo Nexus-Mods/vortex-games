@@ -4,6 +4,10 @@ const winapi = require('winapi-bindings');
 const { fs, util } = require('vortex-api');
 const { app, remote } = require('electron');
 
+const executable =  process.platform == 'linux'
+    ? 'PrisonArchitect'
+    : 'Prison Architect64.exe';
+
 const appUni = remote !== undefined ? remote.app : app;
 
 const MODS_LOCAL = path.resolve(appUni.getPath('appData'),
@@ -51,8 +55,8 @@ function main(context) {
       queryPath: findGame,
       queryModPath: () => MODS_LOCAL,
       //requiresLauncher,
-      executable: () => 'Prison Architect64.exe',
-      requiredFiles: ['Prison Architect64.exe'],
+      executable: () => executable,
+      requiredFiles: [executable],
       environment: {
         SteamAPPId: STEAM_ID.toString(),
       },
