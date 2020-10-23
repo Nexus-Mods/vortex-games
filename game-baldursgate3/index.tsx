@@ -164,6 +164,9 @@ function installReplacer(files: string[],
 
   const instructions: types.IInstruction[] = (dataPath !== undefined)
     ? files.reduce((prev: types.IInstruction[], filePath: string) => {
+      if (filePath.endsWith(path.sep)) {
+        return prev;
+      }
       const relPath = path.relative(dataPath, filePath);
       if (!relPath.startsWith('..')) {
         prev.push({
@@ -244,7 +247,7 @@ async function writeLoadOrder(api: types.IExtensionApi,
       iter.attribute.find(attr => (attr.$.id === 'Name') && (attr.$.value === 'Gustav')));
 
     const enabledPaks = Object.keys(loadOrder)
-        .filter(key => !!loadOrder[key].data.uuid && loadOrder[key].enabled);
+        .filter(key => !!loadOrder[key].data?.uuid && loadOrder[key].enabled);
 
     // add new nodes for the enabled mods
     for (const key of enabledPaks) {
@@ -313,7 +316,6 @@ async function extractPak(pakPath, destPath, pattern) {
 
 async function extractMeta(pakPath: string): Promise<IModSettings> {
   const metaPath = path.join(util.getVortexPath('temp'), 'lsmeta', shortid());
-  console.log('extract', pakPath, metaPath);
   await fs.ensureDirAsync(metaPath);
   await extractPak(pakPath, metaPath, '*/meta.lsx');
   try {
@@ -328,7 +330,6 @@ async function extractMeta(pakPath: string): Promise<IModSettings> {
     });
     const dat = await fs.readFileAsync(metaLSXPath);
     const meta = await parseStringPromise(dat);
-    console.log('remove', pakPath, metaPath);
     await fs.removeAsync(metaPath);
     return meta;
   } catch (err) {
@@ -561,8 +562,8 @@ function main(context: types.IExtensionContext) {
 
   (context as any).registerLoadOrderPage({
     gameId: GAME_ID,
-    createInfoPanel: (forceRefreshIn) => {
-      forceRefresh = forceRefreshIn;
+    createInfoPanel: (props) => {
+      forceRefresh = props.forceRefreshIn;
       return React.createElement(InfoPanel, {
         t: context.api.translate,
         currentProfile: context.api.store.getState().settings.baldursgate3?.playerProfile,
@@ -593,7 +594,7 @@ function main(context: types.IExtensionContext) {
 
     context.api.onAsync('did-deploy', (profileId: string, deployment) => {
       const profile = selectors.profileById(context.api.getState(), profileId);
-      if (profile.gameId === GAME_ID) {
+      if ((profile.gameId === GAME_ID) && (forceRefresh !== undefined)) {
         forceRefresh();
       }
       return Promise.resolve();
