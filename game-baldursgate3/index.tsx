@@ -76,7 +76,7 @@ function prepareForModding(api: types.IExtensionApi, discovery): any {
             + 'Mods may become incompatible within days of being released, generally '
             + 'not work and/or break unrelated things within the game.<br/><br/>'
             + '[color="red"]Please don\'t report issues that happen in connection with mods to the '
-            + 'game developers (Larian Studios) or through the Vortex feedback system.[/color]'
+            + 'game developers (Larian Studios) or through the Vortex feedback system.[/color]',
       }, [ { label: 'I understand' } ])));
 }
 
@@ -189,8 +189,15 @@ function installReplacer(files: string[],
 }
 
 const getPlayerProfiles = (() => {
-  const cached = (fs as any).readdirSync(profilesPath())
-      .filter(name => (path.extname(name) === '') && (name !== 'Default'));
+  let cached = [];
+  try {
+    cached = (fs as any).readdirSync(profilesPath())
+        .filter(name => (path.extname(name) === '') && (name !== 'Default'));
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      throw err;
+    }
+  }
   return () => cached;
 })();
 
@@ -567,9 +574,16 @@ function main(context: types.IExtensionContext) {
       return React.createElement(InfoPanel, {
         t: context.api.translate,
         currentProfile: context.api.store.getState().settings.baldursgate3?.playerProfile,
-        onSetPlayerProfile: (profileName: string) => {
+        onSetPlayerProfile: async (profileName: string) => {
           context.api.store.dispatch(setPlayerProfile(profileName));
-          readStoredLO(context.api);
+          try {
+            await readStoredLO(context.api);
+          } catch (err) {
+            context.api.showErrorNotification('Failed to read load order', err, {
+              message: 'Please run the game before you start modding',
+              allowReport: false,
+            });
+          }
           forceRefresh();
         },
       });
@@ -583,12 +597,19 @@ function main(context: types.IExtensionContext) {
 
   context.once(() => {
     context.api.onStateChange(['session', 'base', 'toolsRunning'],
-      (prev: any, current: any) => {
+      async (prev: any, current: any) => {
         // when a tool exits, re-read the load order from disk as it may have been
         // changed
         const gameMode = selectors.activeGameId(context.api.getState());
         if ((gameMode === GAME_ID) && (Object.keys(current).length === 0)) {
-          readStoredLO(context.api);
+          try {
+            await readStoredLO(context.api);
+          } catch (err) {
+            context.api.showErrorNotification('Failed to read load order', err, {
+              message: 'Please run the game before you start modding',
+              allowReport: false,
+            });
+          }
         }
       });
 
@@ -600,7 +621,19 @@ function main(context: types.IExtensionContext) {
       return Promise.resolve();
     });
 
-    return Bluebird.resolve(readStoredLO(context.api));
+    context.api.events.on('gamemode-activated', async (gameMode: string) => {
+      if (gameMode === GAME_ID) {
+        try {
+          await readStoredLO(context.api);
+        } catch (err) {
+          context.api.showErrorNotification(
+            'Failed to read load order', err, {
+              message: 'Please run the game before you start modding',
+              allowReport: false,
+            });
+        }
+      }
+    });
   });
 
   return true;
