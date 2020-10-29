@@ -398,7 +398,7 @@ async function installSubModules(files, destinationPath) {
       source: modFile,
       destination: path.join(MODULES, modName, modFile.slice(idx)),
     }));
-    return accum.concat(accum, instructions);
+    return accum.concat(instructions);
   }, [])
   .then(merged => Promise.resolve({ instructions: merged }));
 }
