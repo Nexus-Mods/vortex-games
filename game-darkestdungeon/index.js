@@ -47,12 +47,21 @@ function getModsFolder() {
   }
   const state = _API.store.getState();
   const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
+  if (discovery?.path === undefined) {
+    throw new util.ProcessCanceled('Game is not discovered!');
+  }
   _GAME_MODS_FOLDER = path.join(discovery.path, 'mods');
   return _GAME_MODS_FOLDER;
 }
 
 function walkAsync(dir, gamePathIndex) {
-  if(path.relative(dir, getModsFolder()) === 'mods') {
+  let modsFolder;
+  try {
+    modsFolder = getModsFolder();
+  } catch (err) {
+    return Promise.reject(err);
+  }
+  if(path.relative(dir, modsFolder) === 'mods') {
     gamePathIndex = dir.length + 1;
   }
   return fs.readdirAsync(dir).then(files => {
@@ -146,7 +155,12 @@ function installProject(files, destinationPath) {
   const rootPath = path.dirname(projectFile);
   const modName = path.basename(destinationPath, '.installing')
     .replace(/[^A-Za-z]/g, '');
-  const expectedModPath = path.join(getModsFolder(), modName);
+  let expectedModPath;
+  try {
+    expectedModPath = path.join(getModsFolder(), modName);
+  } catch (err) {
+    return Promise.reject(err);
+  }
   return setModDataPath(path.join(destinationPath, projectFile), expectedModPath)
     .then(() => {
       // Remove directories and anything that isn't in the rootPath.
@@ -311,7 +325,12 @@ function installNoProject(files, destinationPath) {
 
   const modName = path.basename(destinationPath, '.installing')
     .replace(/[^A-Za-z]/g, '');
-  const expectedModPath = path.join(getModsFolder(), modName);
+  let expectedModPath;
+  try {
+    expectedModPath = path.join(getModsFolder(), modName);
+  } catch (err) {
+    return Promise.reject(err);
+  }
   return writeProjectFile(path.join(destinationPath, PROJECT_FILE), modName, expectedModPath)
     .then(() => {
       dirStructure.push({
