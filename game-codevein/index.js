@@ -64,6 +64,17 @@ function testSupportedContent(files, gameId) {
   });
 }
 
+const localAppData = (() => {
+  let cached;
+  return () => {
+    if (cached === undefined) {
+      cached = process.env.LOCALAPPDATA
+        || path.resolve(util.getVortexPath('appData'), '..', 'Local');
+    }
+    return cached;
+  };
+})();
+
 let _API = undefined;
 function main(context) {
   _API = context.api;
@@ -86,6 +97,7 @@ function main(context) {
     },
     details: {
       steamAppId: 678960,
+      settingsPath: () => path.join(localAppData(), 'CodeVein', 'Saved', 'Config', 'WindowsNoEditor'),
     },
   });
 
