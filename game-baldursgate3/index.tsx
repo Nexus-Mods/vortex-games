@@ -584,7 +584,7 @@ function main(context: types.IExtensionContext) {
               allowReport: false,
             });
           }
-          forceRefresh();
+          forceRefresh?.();
         },
       });
     },
