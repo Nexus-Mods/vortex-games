@@ -47,12 +47,21 @@ function getModsFolder() {
   }
   const state = _API.store.getState();
   const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
+  if (discovery?.path === undefined) {
+    throw new util.ProcessCanceled('Game is not discovered!');
+  }
   _GAME_MODS_FOLDER = path.join(discovery.path, 'mods');
   return _GAME_MODS_FOLDER;
 }
 
 function walkAsync(dir, gamePathIndex) {
-  if(path.relative(dir, getModsFolder()) === 'mods') {
+  let modsFolder;
+  try {
+    modsFolder = getModsFolder();
+  } catch (err) {
+    return Promise.reject(err);
+  }
+  if(path.relative(dir, modsFolder) === 'mods') {
     gamePathIndex = dir.length + 1;
   }
   return fs.readdirAsync(dir).then(files => {
@@ -69,6 +78,14 @@ function walkAsync(dir, gamePathIndex) {
         } else {
           return Promise.resolve()
         }
+      })
+      .catch(err => {
+        // The point of this function is to map out the game's
+        //  directory structure - any errors raised during mapping
+        //  simply signfies an unavailable path and therefore
+        //  shouldn't block the rest of the process (we log instead)
+        log('warn', '[DD] unable to add file to dir struct', err);
+        return Promise.resolve()
       })
     })
     .then(() => Promise.resolve(_DIRECTORY_STRUCT));
@@ -138,7 +155,12 @@ function installProject(files, destinationPath) {
   const rootPath = path.dirname(projectFile);
   const modName = path.basename(destinationPath, '.installing')
     .replace(/[^A-Za-z]/g, '');
-  const expectedModPath = path.join(getModsFolder(), modName);
+  let expectedModPath;
+  try {
+    expectedModPath = path.join(getModsFolder(), modName);
+  } catch (err) {
+    return Promise.reject(err);
+  }
   return setModDataPath(path.join(destinationPath, projectFile), expectedModPath)
     .then(() => {
       // Remove directories and anything that isn't in the rootPath.
@@ -303,7 +325,12 @@ function installNoProject(files, destinationPath) {
 
   const modName = path.basename(destinationPath, '.installing')
     .replace(/[^A-Za-z]/g, '');
-  const expectedModPath = path.join(getModsFolder(), modName);
+  let expectedModPath;
+  try {
+    expectedModPath = path.join(getModsFolder(), modName);
+  } catch (err) {
+    return Promise.reject(err);
+  }
   return writeProjectFile(path.join(destinationPath, PROJECT_FILE), modName, expectedModPath)
     .then(() => {
       dirStructure.push({
@@ -360,8 +387,12 @@ function main(context) {
     logo: 'gameart.jpg',
     executable: (discoveryPath) => getExecutable(discoveryPath),
     requiredFiles: [
+      'audio/secondary_banks/en_darkestdungeon.bank',
     ],
     setup: prepareForModding,
+    environment: {
+      SteamAPPId: STEAM_ID,
+    },
     details: {
       steamAppId: parseInt(STEAM_ID),
     },

@@ -21,6 +21,9 @@ function main(context) {
     requiredFiles: [
       'StateOfDecay.exe',
     ],
+    environment: {
+      SteamAPPId: '241540',
+    },
     details: {
       steamAppId: 241540,
     },

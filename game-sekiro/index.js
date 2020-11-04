@@ -67,7 +67,7 @@ function testLooseMod(files, gameId) {
 }
 
 function main(context) {
-  const gameExec = 'Sekiro.exe';
+  const gameExec = 'sekiro.exe';
   _API = context.api;
   context.registerGame({
     id: GAME_ID,
@@ -78,6 +78,9 @@ function main(context) {
     queryModPath: () => 'mods',
     executable: () => gameExec,
     requiredFiles: [gameExec],
+    environment: {
+      SteamAPPId: STEAM_ID.toString(),
+    },
     details: {
       steamAppId: STEAM_ID,
     },

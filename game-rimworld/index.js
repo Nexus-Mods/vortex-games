@@ -29,6 +29,9 @@ function main(context) {
       'RimWorldWin64.exe'
     ],
     requiresLauncher,
+    environment: {
+      SteamAPPId: '294100',
+    },
     details: {
       steamAppId: 294100,
     },

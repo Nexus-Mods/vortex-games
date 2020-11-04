@@ -158,8 +158,11 @@ function main(context) {
     requiredFiles: [
       MHW_EXEC,
     ],
+    environment: {
+      SteamAPPId: '582010',
+    },
     details: {
-      steamAppId: '582010',
+      steamAppId: 582010,
     },
     setup: (discovery) => prepareForModding(discovery, context.api),
   });
@@ -254,6 +257,10 @@ function isReshadeMod(files, gameId) {
 }
 
 function isSupported(files, gameId) {
+  const strackerFiles = (STRACKER_FILES.filter(stracker => files.includes(stracker)));
+  if (strackerFiles.length > 0) {
+    return Promise.resolve({ supported: false, requiredFiles: [] })
+  }
   // Ensure that the archive structure has the nativePC Folder present.
   const supported = (gameId === GAME_ID)
     && (files.find(file =>

@@ -190,6 +190,9 @@ function main(context) {
       'DDDA.exe',
     ],
     setup: (discovery) => prepareForModding(discovery, context),
+    environment: {
+      SteamAPPId: '367500',
+    },
     details: {
       steamAppId: 367500,
     },

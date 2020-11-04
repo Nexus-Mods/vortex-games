@@ -107,6 +107,9 @@ function main(context) {
       'GalCiv3.exe',
     ],
     setup: () => prepareForModding(context.api),
+    environment: {
+      SteamAPPId: STEAM_ID.toString(),
+    },
     details: {
       steamAppId: STEAM_ID,
     },
@@ -122,7 +125,7 @@ function main(context) {
     context.api.onAsync('will-deploy', (profileId, deployment) => {
       const state = context.api.store.getState();
       const profile = selectors.profileById(state, profileId);
-      if (GAME_ID !== profile.gameId) {
+      if (GAME_ID !== profile?.gameId) {
         return Promise.resolve();
       }
 
@@ -137,7 +140,7 @@ function main(context) {
       const state = context.api.store.getState();
       const profile = selectors.profileById(state, profileId);
 
-      if (GAME_ID !== profile.gameId) {
+      if (GAME_ID !== profile?.gameId) {
         return Promise.resolve();
       }
 

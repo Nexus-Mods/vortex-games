@@ -31,6 +31,9 @@ function main(context) {
       'Binaries/NMS.exe',
     ],
     setup: prepareForModding,
+    environment: {
+      SteamAPPId: '275850',
+    },
     details: {
       steamAppId: 275850,
     },

@@ -71,9 +71,12 @@ const gameParameters = {
   queryModPath: () => 'datalocal',
   executable: () => 'GreedFall.exe',
   requiredFiles: ['GreedFall.exe'],
+  environment: {
+    SteamAPPId: '606880',
+  },
   details:
   {
-    steamAppId: "606880",
+    steamAppId: 606880,
   },
   setup: prepareForModding,
 }

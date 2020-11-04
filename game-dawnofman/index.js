@@ -157,7 +157,12 @@ function main(context) {
     queryPath: findGame,
     queryModPath: () => 'Mods',
     executable: () => 'DawnOfMan.exe',
-    requiredFiles: [],
+    requiredFiles: [
+      'DawnOfMan.exe'
+    ],
+    environment: {
+      SteamAPPId: STEAM_ID.toString(),
+    },
     details: {
       steamAppId: STEAM_ID,
     },

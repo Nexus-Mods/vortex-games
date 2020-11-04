@@ -76,12 +76,51 @@ function findGame() {
       .then(game => game.gamePath);
 }
 
-function prepareForModding(discovery, api) {
+function createModDirectories(discovery) {
+  const createDir = (filePath) => fs.ensureDirWritableAsync(filePath);
+  return Promise.all([
+    createDir(path.join(discovery.path, streamingAssetsPath())),
+    createDir(path.join(discovery.path, streamingAssetsPath(), 'Mods'))
+  ]);
+}
+
+function isOfficialModType(modType) {
+  return ['bas-legacy-modtype', 'bas-official-modtype'].includes(modType)
+}
+
+async function purgeMods(discovery, api) {
+  const baseModsPath = path.join(discovery.path, streamingAssetsPath());
+  await api.emitAndAwait('purge-mods-in-path', BLADEANDSORCERY_ID, 'bas-official-modtype', path.join(baseModsPath, 'Mods'));
+  return await api.emitAndAwait('purge-mods-in-path', BLADEANDSORCERY_ID, 'bas-legacy-modtype', baseModsPath);
+}
+
+async function ensureModType(discovery, api) {
+  // Aims to ensure that the user's mods are all assigned
+  //  the correct modType for their game version.
+  //  (We're doing this as users may jump between 8.4 and older versions)
+  const targetModType = await getOfficialModType(api);
   const state = api.store.getState();
-  const profile = selectors.activeProfile(state);
-  //api.store.dispatch(actions.setLoadOrder(profile.id, []));
-  return fs.ensureDirWritableAsync(path.join(discovery.path, streamingAssetsPath()),
-    () => Promise.resolve());
+  const mods = util.getSafe(state, ['persistent', 'mods', BLADEANDSORCERY_ID], {});
+
+  // Not really invalid - just wrong modType for the currently installed game version.
+  const invalidMods = Object.keys(mods).filter(key => isOfficialModType(mods[key]?.type)
+                                                  && mods[key].type !== targetModType);
+  return (invalidMods.length > 0)
+    ? purgeMods(discovery, api).then(() => {
+        invalidMods.forEach(key => api.store.dispatch(actions.setModType(BLADEANDSORCERY_ID, key, targetModType)));
+        api.store.dispatch(actions.setDeploymentNecessary(BLADEANDSORCERY_ID, true));
+        return Promise.resolve();
+      })
+    : Promise.resolve();
+}
+
+async function prepareForModding(discovery, api) {
+  try {
+    await createModDirectories(discovery);
+    await ensureModType(discovery, api);
+  } catch (err) {
+    return Promise.reject(err);
+  }
 }
 
 function testModInstaller(files, gameId, fileName) {
@@ -122,15 +161,28 @@ async function checkModGameVersion(destination, minModVersion, modFile) {
 }
 
 function findGameConfig(discoveryPath) {
-  const expectedLocation = path.join(discoveryPath, streamingAssetsPath(), 'Default');
-  return fs.readdirAsync(expectedLocation)
+  const findConfig = (searchPath) => fs.readdirAsync(searchPath)
     .then(entries => {
       const configFile = entries.find(file => (file.toLowerCase() === GAME_FILE)
         || (file.toLowerCase() === GLOBAL_FILE));
       return (configFile !== undefined)
-        ? Promise.resolve(path.join(expectedLocation, configFile))
+        ? Promise.resolve(path.join(searchPath, configFile))
         : Promise.reject(new Error('Missing config file.'));
     });
+  const basePath = path.join(discoveryPath, streamingAssetsPath(), 'Default');
+  return findConfig(path.join(basePath, 'Bas'))
+    .catch(err => findConfig(basePath));
+}
+
+async function getGameVersion(discoveryPath) {
+  try {
+    const configFile = await findGameConfig(discoveryPath);
+    let gameVersion = await getJSONElement(configFile, 'gameVersion');
+    gameVersion = gameVersion.toString().replace(',', '.');
+    return Promise.resolve(gameVersion);
+  } catch (err) {
+    return Promise.reject(err);
+  }
 }
 
 async function getMinModVersion(discoveryPath) {
@@ -170,8 +222,10 @@ async function installOfficialMod(files,
   });
 
   let minModVersion;
+  let gameVersion;
   const discoveryPath = getDiscoveryPath(api);
   try {
+    gameVersion = await getGameVersion(discoveryPath);
     minModVersion = await getMinModVersion(discoveryPath);
     minModVersion.version = minModVersion.version.toString().replace(',', '.');
   }
@@ -228,6 +282,14 @@ async function installOfficialMod(files,
           value: (manifestFiles.length > 1),
         })
 
+        const modTypeInstr = {
+          type: 'setmodtype',
+          value: semver.gte(semver.coerce(gameVersion), semver.coerce('8.4'))
+            ? 'bas-official-modtype'
+            : 'bas-legacy-modtype'
+        }
+
+        instructions.push(modTypeInstr);
         return Promise.resolve(instructions);
       });
 
@@ -300,14 +362,6 @@ function installUMAPresetReplacer(files,
   })
 
   return Promise.resolve({ instructions });
-}
-
-function instructionsHaveFile(instructions, fileName) {
-  const copies = instructions.filter(instruction => instruction.type === 'copy');
-  return new Promise((resolve, reject) => {
-    const fileExists = copies.find(inst => path.basename(inst.destination).toLowerCase() === fileName) !== undefined;
-    return resolve(fileExists);
-  })
 }
 
 function testUMAContent(instructions) {
@@ -503,10 +557,13 @@ function reversePrefix(prefix) {
     return -1;
   }
 
-  const pos = prefix.reduce((prev, iter) => {
-    prev = prev + iter.charCodeAt(0);
+  const pos = prefix.reduce((prev, iter, idx) => {
+    const pow = 2 - idx;
+    const mult = Math.pow(26, pow);
+    const charCode = (iter.charCodeAt(0) % 65);
+    prev = prev + (charCode * mult);
     return prev;
-  }, -195);
+  }, 0);
 
   return pos;
 }
@@ -515,22 +572,35 @@ function makePrefix(input) {
   let res = '';
   let rest = input;
   while (rest > 0) {
-    res = String.fromCharCode(65 + (rest % 25)) + res;
-    rest = Math.floor(rest / 25);
+    res = String.fromCharCode(65 + (rest % 26)) + res;
+    rest = Math.floor(rest / 26);
   }
   return util.pad(res, 'A', 3);
+}
+
+async function getOfficialModType(api) {
+  const discoveryPath = getDiscoveryPath(api);
+  const gameVersion = await getGameVersion(discoveryPath);
+  const modType = semver.gte(semver.coerce(gameVersion), semver.coerce('8.4'))
+    ? 'bas-official-modtype' : 'bas-legacy-modtype';
+  return Promise.resolve(modType);
 }
 
 async function getManuallyAdded(context, loadOrder) {
   const state = context.api.store.getState();
   const loKeys = Object.keys(loadOrder).map(key => key.toLowerCase());
   const mods = util.getSafe(state, ['persistent', 'mods', BLADEANDSORCERY_ID], {});
+  const discoveryPath = getDiscoveryPath(context.api);
+  const gameVersion = await getGameVersion(discoveryPath);
+  const modType = semver.gte(semver.coerce(gameVersion), semver.coerce('8.4'))
+    ? 'bas-official-modtype' : 'bas-legacy-modtype';
   const managedModNames = Object.keys(mods)
-    .filter(key => mods[key]?.type === 'bas-official-modtype')
+    .filter(key => mods[key]?.type === modType)
     .map(key => mods[key].id.replace(/[^a-zA-Z]+/g, '').toLowerCase());
 
   const invalidNames = [].concat(['default'], managedModNames);
-  const modsPath = selectors.modPathsForGame(state, BLADEANDSORCERY_ID)['bas-official-modtype'];
+
+  const modsPath = selectors.modPathsForGame(state, BLADEANDSORCERY_ID)[modType];
   const modNames = {
     known: [],
     unknown: [],
@@ -559,12 +629,16 @@ async function getManuallyAdded(context, loadOrder) {
 
 async function preSort(context, items, direction) {
   const state = context.api.store.getState();
+  const mods = util.getSafe(state, ['persistent', 'mods', BLADEANDSORCERY_ID], {});
   const activeProfile = selectors.activeProfile(state);
   const toLOPage = (itemList) => {
     return (direction === 'descending')
       ? Promise.resolve(itemList.reverse())
       : Promise.resolve(itemList);
   }
+
+  const targetModType = await getOfficialModType(context.api);
+  items = items.filter(it => mods?.[it.id]?.type === targetModType);
 
   if (activeProfile === undefined) {
     return toLOPage(items);
@@ -657,13 +731,13 @@ function infoComponent(context, props) {
   const t = context.api.translate;
   return React.createElement(BS.Panel, { id: 'loadorderinfo' },
     React.createElement('h2', {}, t('Managing your load order', { ns: I18N_NAMESPACE })),
-    React.createElement(FlexLayout.Flex, {},
+    React.createElement(FlexLayout.Fixed, { style: { height: '30%' } },
     React.createElement('div', {},
     React.createElement('p', {}, t('You can adjust the load order for Blade and Sorcery by dragging and dropping '
     + 'mods up or down on this page. As the game loads its mods alphabetically - the AAA-ZZZ prefix will be added '
     + 'to the mod\'s folder name on every deployment event to guarantee that the game loads the mods in the order set inside Vortex. '
     + 'The higher prefix will win any conflicts (ZZZ > AAA)', { ns: I18N_NAMESPACE })))),
-    React.createElement('div', {},
+    React.createElement('div', { style: { height: '70%' } },
       React.createElement('p', {}, t('Please note:', { ns: I18N_NAMESPACE })),
       React.createElement('ul', {},
         React.createElement('li', {}, t('For the load order to be reflected correctly within the game\'s '
@@ -674,17 +748,7 @@ function infoComponent(context, props) {
           + 'simply rename "FakeMod" to "AAB-FakeMod" and click the refresh button.', { ns: I18N_NAMESPACE })),
         React.createElement('li', {}, t('Manually added mods are restricted to the prefix you set and '
           + 'Vortex has functionality to ensure this is respected, e.g. AAB-MyMod, Vortex will pick up on that prefix and sort it '
-          + 'correctly in the load order (e.g. after AAA-SomeMod but before AAC-AnotherMod).', { ns: I18N_NAMESPACE })))),
-    React.createElement(BS.Button, { onClick: () => {
-      props.refresh();
-
-      const state = context.api.store.getState();
-      const profile = selectors.activeProfile(state);
-      const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], undefined);
-      if (prevLoadOrder !== loadOrder) {
-        context.api.store.dispatch(actions.setDeploymentNecessary(BLADEANDSORCERY_ID, true));
-      }
-    } }, t('Refresh')));
+          + 'correctly in the load order (e.g. after AAA-SomeMod but before AAC-AnotherMod).', { ns: I18N_NAMESPACE })))));
 }
 
 function main(context) {
@@ -692,8 +756,12 @@ function main(context) {
     return path.join(getDiscoveryPath(context.api), 'BladeAndSorcery_Data');
   }
 
-  const getOfficialDestination = () => {
+  const getLegacyDestination = () => {
     return path.join(getDiscoveryPath(context.api), streamingAssetsPath());
+  }
+
+  const getOfficialDestination = () => {
+    return path.join(getDiscoveryPath(context.api), streamingAssetsPath(), 'Mods');
   }
 
   context.registerGame({
@@ -709,6 +777,9 @@ function main(context) {
     requiredFiles: ['BladeAndSorcery.exe'],
     requiresCleanup: true,
     setup: (discovery) => prepareForModding(discovery, context.api),
+    environment: {
+      SteamAPPId: '629730',
+    },
     details: {
       // The default queryModPath result is used for replacement mods,
       //  this works in combination with the fomod stop patterns functionality
@@ -744,13 +815,23 @@ function main(context) {
       installOfficialMod(files, destinationPath, gameId, progressDelegate, context.api));
 
   context.registerModType('bas-official-modtype', 15, (gameId) => (gameId === BLADEANDSORCERY_ID),
-    getOfficialDestination, (instructions) => instructionsHaveFile(instructions, OFFICIAL_MOD_MANIFEST),
-      { mergeMods: mod => loadOrderPrefix(context.api, mod) + mod.id.replace(/[^a-zA-Z]+/g, '') });
+    getOfficialDestination, () => Promise.resolve(false),
+    {
+      mergeMods: mod => loadOrderPrefix(context.api, mod) + mod.id.replace(/[^a-zA-Z]+/g, ''),
+      name: 'Official Mod (v8.4+)',
+    });
+
+  context.registerModType('bas-legacy-modtype', 15, (gameId) => (gameId === BLADEANDSORCERY_ID),
+    getLegacyDestination, () => Promise.resolve(false),
+    {
+      mergeMods: mod => loadOrderPrefix(context.api, mod) + mod.id.replace(/[^a-zA-Z]+/g, ''),
+      name: 'Legacy Mod (v8.3 and below)',
+    });
 
   context.registerLoadOrderPage({
     gameId: BLADEANDSORCERY_ID,
     createInfoPanel: (props) => infoComponent(context, props),
-    filter: (mods) => mods.filter(mod => (mod.type === 'bas-official-modtype') && (mod?.attributes?.hasMultipleMods === false)),
+    filter: (mods) => mods.filter(mod => isOfficialModType(mod.type) && (mod?.attributes?.hasMultipleMods === false)),
     gameArtURL: `${__dirname}/gameart.jpg`,
     preSort: (items, direction) => preSort(context, items, direction),
     displayCheckboxes: false,
@@ -764,6 +845,34 @@ function main(context) {
         context.api.store.dispatch(actions.setDeploymentNecessary(BLADEANDSORCERY_ID, true))
       }
     },
+  });
+
+  context.once(() => {
+    context.api.onAsync('will-deploy', async (profileId, deployment) => {
+      const state = context.api.store.getState();
+      const activeProf = selectors.activeProfile(state);
+      const profile = selectors.profileById(state, profileId);
+      if ((activeProf !== profile) || (BLADEANDSORCERY_ID !== profile?.gameId)) {
+        return Promise.resolve();
+      }
+      const mods = util.getSafe(state, ['persistent', 'mods', BLADEANDSORCERY_ID], {});
+      const targetModType = await getOfficialModType(context.api);
+      // Not really invalid - just wrong modType for the currently installed game version.
+      const invalidMods = Object.keys(mods).filter(key => isOfficialModType(mods[key]?.type)
+                                                       && mods[key].type !== targetModType);
+      return (invalidMods.length > 0)
+        ? new Promise((resolve) => {
+          context.api.showDialog('error', 'Blade & Sorcery version mismatch', {
+            text: 'Vortex has detected a change in the installed version of Blade & Sorcery '
+                + 'since the last deployment. Some of your mods may not work correctly. '
+                + 'Please restart Vortex to fix this issue.',
+          },
+          [
+            { label: 'Ok', action: () => resolve() },
+          ])
+        })
+        : Promise.resolve();
+    });
   });
 
   return true;

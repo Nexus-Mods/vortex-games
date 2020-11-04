@@ -23,7 +23,7 @@ function findGame() {
       _APPID = game.appid;
       return Promise.resolve(game.gamePath);
     })
-    .catch(err => {
+    .catch(() => {
       try {
         const instPath = winapi.RegGetValue(
           'HKEY_LOCAL_MACHINE',
@@ -36,21 +36,15 @@ function findGame() {
       } catch (err) {
         return Promise.reject(err);
       }
-    })
+    });
 }
 
 function queryModPath() {
   if (_MODS_PATH === undefined) {
     _MODS_PATH = path.join(appUni.getPath('documents'), 'BioWare', 'Dragon Age', 'packages', 'core', 'override');
   }
-  
-  return _MODS_PATH;
-}
 
-function prepareForModding() {
-  return fs.ensureDirWritableAsync(queryModPath())
-    .then(() => fs.ensureDirAsync(path.join(appUni.getPath('documents'), 'BioWare', 'Dragon Age', 'AddIns')))
-    .then(() => fs.ensureDirAsync(path.dirname(addinsPath())));
+  return _MODS_PATH;
 }
 
 function addinsPath() {
@@ -60,6 +54,12 @@ function addinsPath() {
   }
 
   return _ADDINS_PATH;
+}
+
+function prepareForModding() {
+  return fs.ensureDirWritableAsync(queryModPath())
+    .then(() => fs.ensureDirAsync(path.join(appUni.getPath('documents'), 'BioWare', 'Dragon Age', 'AddIns')))
+    .then(() => fs.ensureDirAsync(path.dirname(addinsPath())));
 }
 
 const emptyAddins = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -91,7 +91,18 @@ function requiresLauncher(gamePath) {
         ? Promise.resolve({ launcher: 'steam', addInfo: _APPID })
         : Promise.resolve(undefined);
     })
-    .catch(err => Promise.resolve(undefined));
+    .catch(() => Promise.resolve(undefined));
+}
+
+function readAddinsData(mergeDir) {
+  return fs.readFileAsync(path.join(mergeDir, 'Settings', ADDINS_FILE))
+    .catch(err => (err.code === 'ENOENT')
+      ? fs.readFileAsync(addinsPath())
+          .catch(fallbackErr => (fallbackErr.code === 'ENOENT')
+              ? Promise.resolve(emptyAddins)
+              : Promise.reject(fallbackErr))
+      : Promise.reject(err)
+    );
 }
 
 function merge(filePath, mergeDir) {
@@ -107,7 +118,7 @@ function merge(filePath, mergeDir) {
       })
       .then(() => readAddinsData(mergeDir))
       .then(addinsData => new Promise((resolve, reject) => {
-        try  {
+        try {
           resolve(parseXmlString(addinsData));
         } catch (err) {
           resolve(parseXmlString(emptyAddins));
@@ -125,16 +136,8 @@ function merge(filePath, mergeDir) {
         const destPath = path.join(mergeDir, 'Settings');
         return fs.ensureDirAsync(destPath)
           .then(() => fs.writeFileAsync(path.join(destPath, ADDINS_FILE),
-            addins.toString(), { encoding: 'utf-8' }))
+            addins.toString(), { encoding: 'utf-8' }));
       });
-}
-
-function readAddinsData(mergeDir) {
-  return fs.readFileAsync(path.join(mergeDir, 'Settings', ADDINS_FILE))
-    .catch(err => (err.code === 'ENOENT')
-      ? fs.readFileAsync(addinsPath()).catch(err => emptyAddins)
-      : Promise.reject(err)
-    );
 }
 
 function main(context) {
@@ -152,6 +155,9 @@ function main(context) {
     requiredFiles: [
       'bin_ship/daorigins.exe',
     ],
+    environment: {
+      SteamAPPId: STEAM_ID.toString(),
+    },
     details: {
       steamAppId: STEAM_ID,
     },

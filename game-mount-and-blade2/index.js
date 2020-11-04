@@ -9,6 +9,7 @@ const CustomItemRenderer = require('./customItemRenderer');
 
 const APPUNI = app || remote.app;
 const LAUNCHER_EXEC = path.join('bin', 'Win64_Shipping_Client', 'TaleWorlds.MountAndBlade.Launcher.exe');
+const MODDING_KIT_EXEC = path.join('bin', 'Win64_Shipping_wEditor', 'TaleWorlds.MountAndBlade.Launcher.exe');
 const LAUNCHER_DATA_PATH = path.join(APPUNI.getPath('documents'), 'Mount and Blade II Bannerlord', 'Configs', 'LauncherData.xml');
 const LAUNCHER_DATA = {
   singlePlayerSubMods: [],
@@ -85,7 +86,7 @@ async function getDeployedSubModPaths(context) {
   const state = context.api.store.getState();
   const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
   if (discovery?.path === undefined) {
-    return Promise.reject(new util.ProcessCanceled('game discovered is incomplete'));
+    return Promise.reject(new util.ProcessCanceled('game discovery is incomplete'));
   }
   const modulePath = path.join(discovery.path, MODULES);
   let moduleFiles;
@@ -397,7 +398,7 @@ async function installSubModules(files, destinationPath) {
       source: modFile,
       destination: path.join(MODULES, modName, modFile.slice(idx)),
     }));
-    return accum.concat(accum, instructions);
+    return accum.concat(instructions);
   }, [])
   .then(merged => Promise.resolve({ instructions: merged }));
 }
@@ -417,9 +418,38 @@ function ensureOfficialLauncher(context, discovery) {
   }));
 }
 
+function setModdingTool(context, discovery, hidden = undefined) {
+  const toolId = 'bannerlord-sdk';
+  const exec = path.basename(MODDING_KIT_EXEC);
+  const tool = {
+    id: toolId,
+    name: 'Modding Kit',
+    logo: 'twlauncher.png',
+    executable: () => exec,
+    requiredFiles: [ exec ],
+    path: path.join(discovery.path, MODDING_KIT_EXEC),
+    relative: true,
+    exclusive: true,
+    workingDirectory: path.join(discovery.path, path.dirname(MODDING_KIT_EXEC)),
+    hidden,
+  };
+
+  context.api.store.dispatch(actions.addDiscoveredTool(GAME_ID, toolId, tool));
+}
+
 async function prepareForModding(context, discovery) {
   // Quickly ensure that the official Launcher is added.
   ensureOfficialLauncher(context, discovery);
+  try {
+    await fs.statAsync(path.join(discovery.path, MODDING_KIT_EXEC));
+    setModdingTool(context, discovery);
+  } catch (err) {
+    const tools = discovery?.tools;
+    if ((tools !== undefined)
+    && (util.getSafe(tools, ['bannerlord-sdk'], undefined) !== undefined)) {
+      setModdingTool(context, discovery, true);
+    }
+  }
 
   // If game store not found, location may be set manually - allow setup
   //  function to continue.
@@ -901,8 +931,18 @@ function main(context) {
       return Promise.resolve();
     }
 
-    const deployedSubModules = await getDeployedSubModPaths(context);
-    CACHE = await getDeployedModData(context, deployedSubModules);
+    try {
+      const deployedSubModules = await getDeployedSubModPaths(context);
+      CACHE = await getDeployedModData(context, deployedSubModules);
+    } catch (err) {
+      // ProcessCanceled means that we were unable to scan for deployed
+      //  subModules, probably because game discovery is incomplete.
+      // It's beyond the scope of this function to report discovery
+      //  related issues.
+      return (err instanceof util.ProcessCanceled)
+        ? Promise.resolve()
+        : Promise.reject(err);
+    }
 
     const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
 

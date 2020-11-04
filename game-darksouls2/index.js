@@ -10,6 +10,9 @@ class DarkSouls2 {
     this.name = 'Dark Souls II';
     this.mergeMods = true;
     this.logo = 'gameart.jpg';
+    this.environment = {
+      SteamAPPId: '236430',
+    };
     this.details = {
       steamAppId: 236430,
     };

@@ -92,7 +92,7 @@ function ensureModSettings() {
 async function getManuallyAddedMods(context) {
   return ensureModSettings().then(ini => {
     const state = context.api.store.getState();
-    const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], []);
+    const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
     const modKeys = Object.keys(mods);
     const iniEntries = Object.keys(ini.data);
     const manualCandidates = [].concat(iniEntries, [UNI_PATCH]).filter(entry => {
@@ -145,8 +145,17 @@ async function getManuallyAddedMods(context) {
     }, []);
   })
   .catch(err => {
-    const allowReport = ((err instanceof util.ProcessCanceled) === false);
-    context.api.showErrorNotification('Failed to lookup manually added mods', err, { allowReport })
+    // UserCanceled would suggest we were unable to stat the W3 mod folder
+    //  probably due to a permissioning issue (ENOENT is handled above)
+    const userCanceled = (err instanceof util.UserCanceled);
+    const processCanceled = (err instanceof util.ProcessCanceled);
+    const allowReport = (!userCanceled && !processCanceled);
+    const details = userCanceled
+      ? 'Vortex tried to scan your W3 mods folder for manually added mods but '
+        + 'was blocked by your OS/AV - please make sure to fix this before you '
+        + 'proceed to mod W3 as your modding experience will be severely affected.'
+      : err;
+    context.api.showErrorNotification('Failed to lookup manually added mods', details, { allowReport })
     return Promise.resolve([]);
   });
 }
@@ -488,19 +497,8 @@ async function getAllMods(context) {
   });
 }
 
-function getPriority(loadorder, item, minPriority) {
-  const itemKey = Object.keys(loadorder).find(x => x === item.id);
-  if (itemKey !== undefined) {
-    const prefixVal = (loadorder[itemKey]?.prefix !== undefined)
-      ? parseInt(loadorder[itemKey].prefix) : loadorder[itemKey].pos;
-    const posVal = loadorder[itemKey].pos;
-    if (posVal !== prefixVal && prefixVal > minPriority) {
-      return prefixVal;
-    } else {
-      return posVal;
-    }
-  }
-
+let _MAX_PRIORITY = undefined;
+function getPriority(loadorder, item, minPriority, reset = false) {
   const maxPriority = () => Object.keys(loadorder).reduce((prev, key) => {
     const prefixVal = (loadorder[key]?.prefix !== undefined)
       ? parseInt(loadorder[key].prefix) : loadorder[key].pos;
@@ -515,7 +513,25 @@ function getPriority(loadorder, item, minPriority) {
     return prev;
   }, minPriority);
 
-  return maxPriority() + 1;
+  if (_MAX_PRIORITY === undefined || reset) {
+    _MAX_PRIORITY = maxPriority();
+  }
+
+  const itemKey = Object.keys(loadorder).find(x => x === item.id);
+  if (itemKey !== undefined) {
+    const prefixVal = (loadorder[itemKey]?.prefix !== undefined)
+      ? parseInt(loadorder[itemKey].prefix) : loadorder[itemKey].pos;
+    const posVal = loadorder[itemKey].pos;
+    if (posVal !== prefixVal && prefixVal > minPriority) {
+      return prefixVal;
+    } else {
+      return (posVal > minPriority)
+        ? posVal : _MAX_PRIORITY++;
+    }
+  }
+
+  _MAX_PRIORITY += 1;
+  return _MAX_PRIORITY;
 }
 
 async function setINIStruct(context, loadOrder, updateType) {
@@ -524,7 +540,7 @@ async function setINIStruct(context, loadOrder, updateType) {
     const mods = [].concat(modMap.merged, modMap.managed, modMap.manual);
     const manualLocked = modMap.manual.filter(modName => modName.startsWith(LOCKED_PREFIX));
     const totalLocked = [].concat(modMap.merged, manualLocked);
-    return Promise.each(mods, mod => {
+    return Promise.each(mods, (mod, idx) => {
       let name;
       let key;
       if (typeof(mod) === 'object' && mod !== null) {
@@ -541,7 +557,7 @@ async function setINIStruct(context, loadOrder, updateType) {
         Enabled: (LOEntry !== undefined) ? LOEntry.enabled ? 1 : 0 : 1,
         Priority: totalLocked.includes(name)
           ? totalLocked.indexOf(name)
-          : getPriority(loadOrder, { id: key }, totalLocked.length),
+          : getPriority(loadOrder, { id: key }, totalLocked.length, idx === 0),
         VK: key,
       };
     });
@@ -629,7 +645,13 @@ async function preSort(context, items, direction, updateType) {
   const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
   const allMods = await getAllMods(context);
   if ((allMods.merged.length === 0) && (allMods.manual.length === 0)) {
-    return items || [];
+    items.map((item, idx) => {
+      return {
+        ...item,
+        contextMenuActions: genEntryActions(context, item, 0),
+        prefix: getPriority(loadOrder, item, 0, idx === 0),
+      };
+    })
   }
 
   const lockedManualMods = allMods.manual.filter(entry => entry.startsWith(LOCKED_PREFIX));
@@ -647,11 +669,11 @@ async function preSort(context, items, direction, updateType) {
   }));
 
   items = items.filter(item => !allMods.merged.includes(item.id)
-                            && !allMods.manual.includes(item.id)).map(item => {
+                            && !allMods.manual.includes(item.id)).map((item, idx) => {
     return {
       ...item,
       contextMenuActions: genEntryActions(context, item, lockedEntries.length),
-      prefix: getPriority(loadOrder, item, lockedEntries.length),
+      prefix: getPriority(loadOrder, item, lockedEntries.length, idx === 0),
     };
   });
 
@@ -761,13 +783,15 @@ function infoComponent(context, props) {
   const t = context.api.translate;
   return React.createElement(BS.Panel, { id: 'loadorderinfo' },
     React.createElement('h2', {}, t('Managing your load order', { ns: I18N_NAMESPACE })),
-    React.createElement(FlexLayout.Flex, {},
+    React.createElement(FlexLayout.Flex, { style: { height: '30%' } },
     React.createElement('div', {},
     React.createElement('p', {}, t('You can adjust the load order for The Witcher 3 by dragging and dropping '
       + 'mods up or down on this page.  If you are using several mods that add scripts you may need to use '
       + 'the Witcher 3 Script merger. For more information see: ', { ns: I18N_NAMESPACE }),
     React.createElement('a', { onClick: () => util.opn('https://wiki.nexusmods.com/index.php/Modding_The_Witcher_3_with_Vortex') }, t('Modding The Witcher 3 with Vortex.', { ns: I18N_NAMESPACE }))))),
-    React.createElement('div', {},
+    React.createElement('div', {
+      style: { height: '80%' }
+    },
       React.createElement('p', {}, t('Please note:', { ns: I18N_NAMESPACE })),
       React.createElement('ul', {},
         React.createElement('li', {}, t('For Witcher 3, the mod with the lowest index number (by default, the mod sorted at the top) overrides mods with a higher index number.', { ns: I18N_NAMESPACE })),
@@ -775,30 +799,22 @@ function infoComponent(context, props) {
         React.createElement('li', {}, t('If you cannot see your mod in this load order, you may need to add it manually (see our wiki for details).', { ns: I18N_NAMESPACE })),
         React.createElement('li', {}, t('When managing menu mods, mod settings changed inside the game will be detected by Vortex as external changes - that is expected, '
           + 'choose to use the newer file and your settings will be made persistent.', { ns: I18N_NAMESPACE })),
-        React.createElement('li', {}, t('Merges generated by the Witcher 3 Script merger must be loaded first and are locked in the first load order slot.', { ns: I18N_NAMESPACE })))),
-    React.createElement(BS.Button, { onClick: () => {
-      props.refresh();
-      const state = context.api.store.getState();
-      const profile = selectors.activeProfile(state);
-      const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], undefined);
-      if (_PREVIOUS_LO === undefined) {
-        _PREVIOUS_LO = loadOrder;
-      }
-
-      if (_PREVIOUS_LO !== loadOrder) {
-        context.api.store.dispatch(actions.setDeploymentNecessary(GAME_ID, true));
-      }
-    } }, t('Refresh')),
-    React.createElement('br'),
-    React.createElement('br'),
-    React.createElement(BS.Button, { onClick: () => {
-      toggleModsState(context, props, false);
-    }}, t('Disable All')),
-    React.createElement('br'),
-    React.createElement('br'),
-    React.createElement(BS.Button, { onClick: () => {
-      toggleModsState(context, props, true);
-    }}, t('Enable All ')), []);
+        React.createElement('li', {}, t('Merges generated by the Witcher 3 Script merger must be loaded first and are locked in the first load order slot.', { ns: I18N_NAMESPACE }))),
+        React.createElement(BS.Button, {
+          onClick: () => toggleModsState(context, props, false),
+          style: {
+            marginBottom: '5px',
+            width: 'min-content',
+          }
+        }, t('Disable All')),
+        React.createElement('br'),
+        React.createElement(BS.Button, {
+          onClick: () => toggleModsState(context, props, true),
+          style: {
+            marginBottom: '5px',
+            width: 'min-content',
+          }
+        }, t('Enable All ')), []));
 }
 
 function queryScriptMerge(context, reason) {
@@ -835,6 +851,10 @@ function queryScriptMerge(context, reason) {
 }
 
 function canMerge(game, gameDiscovery) {
+  if (game.id !== GAME_ID) {
+    return undefined;
+  }
+
   return ({
     baseFiles: () => [
       {
@@ -977,7 +997,10 @@ function scriptMergerDummyInstaller(context, files) {
     + 'The Witcher 3 Script Merger, which is a tool and not a mod for The Witcher 3.\n\n'
     + 'The script merger should\'ve been installed automatically by Vortex as soon as you activated this extension. '
     + 'If the download or installation has failed for any reason - please let us know why, by reporting the error through '
-    + 'our feedback system and make sure to include vortex logs.', { allowReport: false });
+    + 'our feedback system and make sure to include vortex logs. Please note: if you\'ve installed '
+    + 'the script merger in previous versions of Vortex as a mod and STILL have it installed '
+    + '(it\'s present in your mod list) - you should consider un-installing it followed by a Vortex restart; '
+    + 'the automatic merger installer/updater should then kick off and set up the tool for you.', { allowReport: false });
   return Promise.reject(new util.ProcessCanceled('Invalid mod'));
 }
 
@@ -996,6 +1019,9 @@ function main(context) {
     requiredFiles: [
       'bin/x64/witcher3.exe',
     ],
+    environment: {
+      SteamAPPId: '292030',
+    },
     details: {
       steamAppId: 292030,
     }
@@ -1050,14 +1076,15 @@ function main(context) {
           const state = context.api.store.getState();
           const profile = selectors.activeProfile(state);
           const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], {});
-          Object.keys(loadOrder).forEach(key => {
+          const newLO = Object.keys(loadOrder).reduce((accum, key) => {
             const loEntry = loadOrder[key];
-            context.api.store.dispatch(actions.setLoadOrderEntry(
-              profile.id, key, {
-                ...loEntry,
-                prefix: loEntry.pos + 1,
-            }));
-          });
+            accum[key] = {
+              ...loEntry,
+              prefix: loEntry.pos + 1,
+            }
+            return accum;
+          }, {});
+          context.api.store.dispatch(actions.setLoadOrder(profile.id, newLO));
           if (refreshFunc !== undefined) {
             refreshFunc();
           }

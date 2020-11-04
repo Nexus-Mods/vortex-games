@@ -28,6 +28,9 @@ function main(context) {
       gameExecutable(),
     ],
     setup: prepareForModding,
+    environment: {
+      SteamAPPId: '211820',
+    },
     details: {
       steamAppId: 211820,
     },

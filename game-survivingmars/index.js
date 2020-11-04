@@ -122,8 +122,13 @@ function main(context) {
     queryModPath: modPath,
     logo: 'gameart.jpg',
     executable: (discoveryPath) => getExecutable(discoveryPath),
-    requiredFiles: [],
+    requiredFiles: [
+      'Packs/Cubemaps.hpk',
+    ],
     setup: prepareForModding,
+    environment: {
+      SteamAPPId: '464920',
+    },
     details: {
       steamAppId: 464920,
     },

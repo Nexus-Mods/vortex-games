@@ -53,6 +53,9 @@ function main(context) {
       'win64/aces.exe',
     ],
     setup: prepareForModding,
+    environment: {
+      SteamAPPId: '236390',
+    },
     details: {
       steamAppId: 236390,
     },

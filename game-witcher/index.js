@@ -51,6 +51,9 @@ function main(context) {
     requiredFiles: [
       gameExecutable(),
     ],
+    environment: {
+      SteamAPPId: '20900',
+    },
     details: {
       steamAppId: 20900,
     }

@@ -30,7 +30,8 @@ const HALO_GAMES = {
   halo1: { internalId: '1', name: 'Halo: CE', modsPath: 'halo1', img: path.join(__dirname, 'halo1.png') },
   halo2: { internalId: '2', name: 'Halo 2', modsPath: 'halo2', img: path.join(__dirname, 'halo2.png') },
   halo3: { internalId: '3', name: 'Halo 3', modsPath: 'halo3', img: path.join(__dirname, 'halo3.png') },
-  odst: { internalId: '4', name: 'ODST', modsPath: 'odst', img: path.join(__dirname, 'odst.png') },
+  // Someone should get Mike a cookie for his premonition skills
+  odst: { internalId: '4', name: 'ODST', modsPath: 'halo3odst', img: path.join(__dirname, 'odst.png') },
   halo4: { internalId: '5', name: 'Halo 4', modsPath: 'halo4', img: path.join(__dirname, 'halo4.png') },
   haloreach: { internalId: '6', name: 'Reach', modsPath: 'haloreach', img: path.join(__dirname, 'haloreach.png') },
 };
@@ -61,8 +62,11 @@ class MasterChiefCollectionGame {
         relative: true,
       },
     ];
+    this.environment = {
+      SteamAPPId: STEAM_ID,
+    };
     this.details = {
-      steamAppId: STEAM_ID.toString(),
+      steamAppId: parseInt(STEAM_ID, 10),
     };
     this.mergeMods = true;
   }

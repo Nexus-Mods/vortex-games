@@ -83,6 +83,9 @@ function main(context) {
       'Binaries/Win64/HatInTimeGame.exe',
     ],
     setup: prepareForModding,
+    environment: {
+      SteamAPPId: '253230',
+    },
     details: {
       steamAppId: 253230,
     },

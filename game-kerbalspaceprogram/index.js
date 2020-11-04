@@ -3,6 +3,10 @@ const { remote } = require('electron');
 const path = require('path');
 const { fs, log, selectors, util } = require('vortex-api');
 
+const extension =  process.platform == 'linux'
+    ? '.x86_64'
+    : '_x64.exe';
+
 function findGame() {
   return util.steam.findByAppId('220200')
       .then(game => game.gamePath);
@@ -16,10 +20,13 @@ function main(context) {
     queryPath: findGame,
     queryModPath: () => 'GameData',
     logo: 'gameart.jpg',
-    executable: () => 'KSP_x64.exe',
+    executable: () => 'KSP' + extension,
     requiredFiles: [
-      'KSP_x64.exe',
+      'KSP' + extension,
     ],
+    environment: {
+      SteamAPPId: '220200',
+    },
     details: {
       steamAppId: 220200,
     },

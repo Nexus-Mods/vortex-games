@@ -12,6 +12,10 @@ const STEAM_ID = 200710;
 
 const MOD_EXT = '.mod';
 
+const extension =  process.platform == 'linux'
+    ? '.bin.x86'
+    : '.exe';
+
 function modPath() {
   return path.join(appUni.getPath('documents'), 'My Games', 'runic games', 'torchlight 2', 'mods');
 }
@@ -88,10 +92,10 @@ function main(context) {
     queryPath: findGame,
     queryModPath: modPath,
     logo: 'gameart.jpg',
-    executable: () => 'ModLauncher.exe',
+    executable: () => 'ModLauncher' + extension,
     requiredFiles: [
-      'Torchlight2.exe',
-      'ModLauncher.exe',
+      'Torchlight2' + extension,
+      'ModLauncher' + extension,
     ],
     setup: prepareForModding,
     environment: {

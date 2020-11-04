@@ -212,14 +212,14 @@ const MODS_EXTENSIONS = new Set([
 
 function testMixed(files, gameId) {
   if (gameId !== 'thesims4') {
-    return Promise.resolve(false);
+    return Promise.resolve({ supported: false, requiredFiles: [] });
   }
 
   const trayFile = files.find(
     file => {
       const ext = path.extname(file);
       return TRAY_EXTENSIONS.has(ext.toLowerCase());
-     })
+     });
 
   return Promise.resolve({
     supported: trayFile !== undefined,
@@ -237,9 +237,8 @@ function hasParent(input, set) {
     return true;
   } else if (dirPath === '.') {
     return false;
-  } else {
-    return hasParent(dirPath, set);
   }
+  return hasParent(dirPath, set);
 }
 
 function installMixed(files, destinationPath) {
