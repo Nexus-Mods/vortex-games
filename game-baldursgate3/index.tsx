@@ -569,6 +569,9 @@ function main(context: types.IExtensionContext) {
     details: {
       steamAppId: 1086940,
       stopPatterns: STOP_PATTERNS.map(toWordExp),
+      ignoreConflicts: [
+        'info.json',
+      ],
     },
   });
 
