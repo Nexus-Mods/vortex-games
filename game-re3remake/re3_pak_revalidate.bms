@@ -1,0 +1,17 @@
+idstring "KPKA"
+get VERSION long 0
+get FILES long 0
+get DUMMY0 long 0
+
+open "." "invalcache.file" 1
+goto -4 1
+get INVAL_FILES long 1
+goto 0 1
+for i = 0 < INVAL_FILES
+  get OFFSET longlong 1
+  get NAME_CRC_L long 1
+  get NAME_CRC_U long 1
+  goto OFFSET 0
+  put NAME_CRC_L long 0
+  put NAME_CRC_U long 0
+next i
