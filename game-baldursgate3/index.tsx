@@ -295,6 +295,7 @@ async function writeLoadOrder(api: types.IExtensionApi,
 
 async function extractPak(pakPath, destPath, pattern) {
   return new Promise((resolve, reject) => {
+    let returned: boolean = false;
     const exe = path.join(__dirname, 'tools', 'divine.exe');
     const args = [
       '--action', 'extract-package',
@@ -308,14 +309,28 @@ async function extractPak(pakPath, destPath, pattern) {
 
     proc.stdout.on('data', data => log('debug', data));
     proc.stderr.on('data', data => log('warn', data));
-    proc.on('exit', code => {
-      if (code === 0) {
-        resolve();
-      } else {
-        const err = new Error('divine.exe failed');
+    proc.on('error', (errIn: Error) => {
+      if (!returned) {
+        returned = true;
+        const err = new Error('divine.exe failed: ' + errIn.message);
         err['attachLogOnReport'] = true;
-        err['code'] = code;
         reject(err);
+      }
+    });
+    proc.on('exit', (code: number) => {
+      if (!returned) {
+        returned = true;
+        if (code === 0) {
+          resolve();
+        } else {
+          // divine.exe returns the actual error code + 100 if a fatal error occured
+          if (code > 100) {
+            code -= 100;
+          }
+          const err = new Error(`divine.exe failed: ${code}`);
+          err['attachLogOnReport'] = true;
+          reject(err);
+        }
       }
     });
   });
@@ -476,49 +491,49 @@ function makePreSort(api: types.IExtensionApi) {
     const result: any[] = [];
 
     for (const fileName of paks) {
-      const existingItem = items.find(iter => iter.id === fileName);
-      if ((existingItem !== undefined)
-          && (updateType !== 'refresh')
-          && (existingItem.imgUrl !== undefined)) {
-        result.push(existingItem);
-        continue;
-      }
+      await (util as any).withErrorContext('reading pak', fileName, async () => {
+        try {
+          const existingItem = items.find(iter => iter.id === fileName);
+          if ((existingItem !== undefined)
+              && (updateType !== 'refresh')
+              && (existingItem.imgUrl !== undefined)) {
+            result.push(existingItem);
+            return;
+          }
 
-      const manifestEntry = manifest.files.find(entry => entry.relPath === fileName);
-      const mod = manifestEntry !== undefined
-        ? state.persistent.mods[GAME_ID][manifestEntry.source]
-        : undefined;
+          const manifestEntry = manifest.files.find(entry => entry.relPath === fileName);
+          const mod = manifestEntry !== undefined
+            ? state.persistent.mods[GAME_ID][manifestEntry.source]
+            : undefined;
 
-      let modInfo = existingItem?.data;
-      if (modInfo === undefined) {
-        modInfo = await extractPakInfo(path.join(modsPath(), fileName));
-      }
+          let modInfo = existingItem?.data;
+          if (modInfo === undefined) {
+            modInfo = await extractPakInfo(path.join(modsPath(), fileName));
+          }
 
-      if (mod !== undefined) {
-        // pak is from a mod (an installed one)
-        result.push({
-          id: fileName,
-          name: util.renderModName(mod),
-          imgUrl: mod.attributes?.pictureUrl ?? fallbackPicture,
-          data: modInfo,
-          external: false,
-        });
-      } else {
-        result.push({
-          id: fileName,
-          name: path.basename(fileName, path.extname(fileName)),
-          imgUrl: fallbackPicture,
-          data: modInfo,
-          external: true,
-        });
-      }
+          if (mod !== undefined) {
+            // pak is from a mod (an installed one)
+            result.push({
+              id: fileName,
+              name: util.renderModName(mod),
+              imgUrl: mod.attributes?.pictureUrl ?? fallbackPicture,
+              data: modInfo,
+              external: false,
+            });
+          } else {
+            result.push({
+              id: fileName,
+              name: path.basename(fileName, path.extname(fileName)),
+              imgUrl: fallbackPicture,
+              data: modInfo,
+              external: true,
+            });
+          }
+        } catch (err) {
+          api.showErrorNotification('Failed to read pak', err);
+        }
+      });
     }
-
-    /*
-    .sort((lhs, rhs) => (sortDir === 'ascending')
-      ? lhs.name.localeCompare(rhs.name)
-      : rhs.name.localeCompare(lhs.name))
-      ;*/
     storedLO = result.sort((lhs, rhs) => items.indexOf(lhs) - items.indexOf(rhs));
     return storedLO;
   };
