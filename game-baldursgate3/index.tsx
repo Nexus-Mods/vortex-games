@@ -59,6 +59,7 @@ function findGame(): any {
 function prepareForModding(api: types.IExtensionApi, discovery): any {
   const mp = modsPath();
   api.sendNotification({
+    id: 'bg3-uses-lslib',
     type: 'info',
     title: 'BG3 support uses LSLib',
     message: LSLIB_URL,
@@ -209,8 +210,8 @@ function InfoPanel(props) {
   }, [onSetPlayerProfile]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
-      <div style={{ display: 'flex', whiteSpace: 'nowrap' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', padding: '16px' }}>
+      <div style={{ display: 'flex', whiteSpace: 'nowrap', alignItems: 'center' }}>
         {t('Ingame Profile: ')}
         <FormControl
           componentClass='select'
@@ -219,12 +220,17 @@ function InfoPanel(props) {
           value={currentProfile}
           onChange={onSelect}
         >
+          <option key='' value=''>{t('Please select one')}</option>
           {getPlayerProfiles().map(prof => (<option key={prof} value={prof}>{prof}</option>))}
         </FormControl>
       </div>
+      <hr/>
       <div>
         {t('Please refer to mod descriptions from mod authors to determine the right order. '
           + 'If you can\'t find any suggestions for a mod, it probably doesn\'t matter.')}
+        <hr/>
+        {t('GUI mods are locked in this list because they are loaded differently by the engine '
+          + 'and can therefore not be disabled or load ordered on this screen.')}
       </div>
     </div>
   );
@@ -235,9 +241,15 @@ async function writeLoadOrder(api: types.IExtensionApi,
   const bg3profile: string = api.store.getState().settings.baldursgate3?.playerProfile;
 
   if (!bg3profile) {
-    log('warn', 'No Baldur\'s Gate 3 profile to save load order to');
+    api.sendNotification({
+      id: 'bg3-no-profile-selected',
+      type: 'warning',
+      title: 'No profile selected',
+      message: 'Please select the in-game profile to mod on the "Load Order" page',
+    });
     return;
   }
+  api.dismissNotification('bg3-no-profile-selected');
 
   const modSettings = await readModSettings(api);
 
@@ -254,7 +266,9 @@ async function writeLoadOrder(api: types.IExtensionApi,
       iter.attribute.find(attr => (attr.$.id === 'Name') && (attr.$.value === 'Gustav')));
 
     const enabledPaks = Object.keys(loadOrder)
-        .filter(key => !!loadOrder[key].data?.uuid && loadOrder[key].enabled);
+        .filter(key => !!loadOrder[key].data?.uuid
+                    && loadOrder[key].enabled
+                    && !loadOrder[key].data?.isGUI);
 
     // add new nodes for the enabled mods
     for (const key of enabledPaks) {
@@ -293,22 +307,46 @@ async function writeLoadOrder(api: types.IExtensionApi,
   }
 }
 
-async function extractPak(pakPath, destPath, pattern) {
-  return new Promise((resolve, reject) => {
+type DivineAction = 'create-package' | 'list-package' | 'extract-single-file'
+                  | 'extract-package' | 'extract-packages' | 'convert-model'
+                  | 'convert-models' | 'convert-resource' | 'convert-resources';
+
+interface IDivineOptions {
+  source: string;
+  destination?: string;
+  expression?: string;
+}
+
+interface IDivineOutput {
+  stdout: string;
+  returnCode: number;
+}
+
+function divine(action: DivineAction, options: IDivineOptions): Promise<IDivineOutput> {
+  return new Promise<IDivineOutput>((resolve, reject) => {
     let returned: boolean = false;
+    let stdout: string = '';
+
     const exe = path.join(__dirname, 'tools', 'divine.exe');
     const args = [
-      '--action', 'extract-package',
-      '--source', pakPath,
-      '--destination', destPath,
+      '--action', action,
+      '--source', options.source,
       '--loglevel', 'off',
       '--game', 'bg3',
-      '--expression', pattern,
     ];
+
+    if (options.destination !== undefined) {
+      args.push('--destination', options.destination);
+    }
+    if (options.expression !== undefined) {
+      args.push('--expression', options.expression);
+    }
+
     const proc = spawn(exe, args, { cwd: path.join(__dirname, 'tools') });
 
-    proc.stdout.on('data', data => log('debug', data));
+    proc.stdout.on('data', data => stdout += data);
     proc.stderr.on('data', data => log('warn', data));
+
     proc.on('error', (errIn: Error) => {
       if (!returned) {
         returned = true;
@@ -321,7 +359,7 @@ async function extractPak(pakPath, destPath, pattern) {
       if (!returned) {
         returned = true;
         if (code === 0) {
-          resolve();
+          resolve({ stdout, returnCode: 0 });
         } else {
           // divine.exe returns the actual error code + 100 if a fatal error occured
           if (code > 100) {
@@ -334,6 +372,10 @@ async function extractPak(pakPath, destPath, pattern) {
       }
     });
   });
+}
+
+async function extractPak(pakPath, destPath, pattern) {
+  return divine('extract-package', { source: pakPath, destination: destPath, expression: pattern });
 }
 
 async function extractMeta(pakPath: string): Promise<IModSettings> {
@@ -367,6 +409,12 @@ function findNode<T extends IXmlNode<{ id: string }>, U>(nodes: T[], id: string)
   return nodes?.find(iter => iter.$.id === id) ?? undefined;
 }
 
+async function isGUIMod(pakPath: string): Promise<boolean> {
+  const res = await divine('list-package', { source: pakPath });
+  const lines = res.stdout.split('\n');
+  return lines.find(line => line.toLowerCase().startsWith('public/game/gui')) !== undefined;
+}
+
 async function extractPakInfo(pakPath: string): Promise<IPakInfo> {
   const meta = await extractMeta(pakPath);
   const config = findNode(meta?.save?.region, 'Config');
@@ -387,6 +435,7 @@ async function extractPakInfo(pakPath: string): Promise<IPakInfo> {
     type: attr('Type', () => 'Adventure'),
     uuid: attr('UUID', () => require('uuid').v4()),
     version: attr('Version', () => '1'),
+    isGUI: await isGUIMod(pakPath),
   };
 }
 
@@ -456,6 +505,7 @@ async function readStoredLO(api: types.IExtensionApi) {
     const lastWrite = state.settings.baldursgate3?.settingsWritten?.[bg3profile];
     if ((lastWrite !== undefined) && (lastWrite.count > 1)) {
       api.sendNotification({
+        id: 'bg3-modsettings-reset',
         type: 'warning',
         allowSuppress: true,
         title: '"modsettings.lsx" file was reset',
@@ -511,23 +561,31 @@ function makePreSort(api: types.IExtensionApi) {
             modInfo = await extractPakInfo(path.join(modsPath(), fileName));
           }
 
+          let res: types.ILoadOrderDisplayItem;
           if (mod !== undefined) {
             // pak is from a mod (an installed one)
-            result.push({
+            res = {
               id: fileName,
               name: util.renderModName(mod),
               imgUrl: mod.attributes?.pictureUrl ?? fallbackPicture,
               data: modInfo,
               external: false,
-            });
+            };
           } else {
-            result.push({
+            res = {
               id: fileName,
               name: path.basename(fileName, path.extname(fileName)),
               imgUrl: fallbackPicture,
               data: modInfo,
               external: true,
-            });
+            };
+          }
+
+          if (modInfo.isGUI) {
+            res.locked = true;
+            result.unshift(res);
+          } else {
+            result.push(res);
           }
         } catch (err) {
           api.showErrorNotification('Failed to read pak', err);
@@ -588,7 +646,7 @@ function main(context: types.IExtensionContext) {
   (context as any).registerLoadOrderPage({
     gameId: GAME_ID,
     createInfoPanel: (props) => {
-      forceRefresh = props.forceRefreshIn;
+      forceRefresh = props.refresh;
       return React.createElement(InfoPanel, {
         t: context.api.translate,
         currentProfile: context.api.store.getState().settings.baldursgate3?.playerProfile,
