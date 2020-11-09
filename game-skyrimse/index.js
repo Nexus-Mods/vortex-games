@@ -54,6 +54,7 @@ const tools = [
     executable: () => 'skse64_loader.exe',
     requiredFiles: [
       'skse64_loader.exe',
+      'SkyrimSE.exe',
     ],
     relative: true,
     exclusive: true,

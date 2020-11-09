@@ -55,6 +55,7 @@ let tools = [
     executable: () => 'skse_loader.exe',
     requiredFiles: [
       'skse_loader.exe',
+      'TESV.exe',
     ],
     relative: true,
     exclusive: true,

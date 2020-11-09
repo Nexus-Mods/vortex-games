@@ -44,6 +44,7 @@ let tools = [
     executable: () => 'f4se_loader.exe',
     requiredFiles: [
       'f4se_loader.exe',
+      'Fallout4.exe',
     ],
     relative: true,
     exclusive: true,
