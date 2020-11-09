@@ -78,9 +78,11 @@ function findGame() {
 
 function createModDirectories(discovery) {
   const createDir = (filePath) => fs.ensureDirWritableAsync(filePath);
+  const streamingPath = path.join(discovery.path, streamingAssetsPath());
   return Promise.all([
-    createDir(path.join(discovery.path, streamingAssetsPath())),
-    createDir(path.join(discovery.path, streamingAssetsPath(), 'Mods'))
+    createDir(streamingPath),
+    createDir(streamingPath, 'Mods'),
+    createDir(streamingPath, 'Default'),
   ]);
 }
 
@@ -162,12 +164,22 @@ async function checkModGameVersion(destination, minModVersion, modFile) {
 
 function findGameConfig(discoveryPath) {
   const findConfig = (searchPath) => fs.readdirAsync(searchPath)
+    .catch(err => {
+      const warnAndContinue = () => {
+        log('warn', 'missing BAS game directory', searchPath);
+        return Promise.resolve([]);
+      };
+
+      return ['ENOENT', 'ENOTFOUND'].includes(err.code)
+        ? warnAndContinue()
+        : Promise.reject(err);
+    })
     .then(entries => {
       const configFile = entries.find(file => (file.toLowerCase() === GAME_FILE)
         || (file.toLowerCase() === GLOBAL_FILE));
       return (configFile !== undefined)
         ? Promise.resolve(path.join(searchPath, configFile))
-        : Promise.reject(new Error('Missing config file.'));
+        : Promise.reject(new util.NotFound('Missing game.json config file.'));
     });
   const basePath = path.join(discoveryPath, streamingAssetsPath(), 'Default');
   return findConfig(path.join(basePath, 'Bas'))
