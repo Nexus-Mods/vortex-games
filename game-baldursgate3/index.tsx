@@ -251,9 +251,9 @@ async function writeLoadOrder(api: types.IExtensionApi,
   }
   api.dismissNotification('bg3-no-profile-selected');
 
-  const modSettings = await readModSettings(api);
-
   try {
+    const modSettings = await readModSettings(api);
+
     const region = findNode(modSettings.save.region, 'ModuleSettings');
     const root = findNode(region.node, 'root');
     const modsNode = findNode(root.children[0].node, 'Mods');
@@ -588,7 +588,7 @@ function makePreSort(api: types.IExtensionApi) {
             result.push(res);
           }
         } catch (err) {
-          api.showErrorNotification('Failed to read pak', err);
+          api.showErrorNotification('Failed to read pak', err, { allowReport: true });
         }
       });
     }
@@ -628,6 +628,9 @@ function main(context: types.IExtensionContext) {
       steamAppId: 1086940,
       stopPatterns: STOP_PATTERNS.map(toWordExp),
       ignoreConflicts: [
+        'info.json',
+      ],
+      ignoreDeploy: [
         'info.json',
       ],
     },
