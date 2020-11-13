@@ -115,7 +115,9 @@ const ORIGINAL_FILES = new Set([
 ]);
 
 function isReplacer(api: types.IExtensionApi, files: types.IInstruction[]) {
-  const origFile = files.find(iter => ORIGINAL_FILES.has(iter.destination.toLowerCase()));
+  const origFile = files.find(iter =>
+    iter.type === 'copy' && ORIGINAL_FILES.has(iter.destination.toLowerCase()));
+
   const paks = files.filter(iter => path.extname(iter.destination).toLowerCase() === '.pak');
   if ((origFile !== undefined) || (paks.length === 0)) {
     return api.showDialog('question', 'Mod looks like a replacer', {
