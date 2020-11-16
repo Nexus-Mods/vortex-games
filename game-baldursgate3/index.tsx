@@ -535,8 +535,25 @@ function makePreSort(api: types.IExtensionApi) {
     }
 
     const state = api.getState();
-    const paks = (await fs.readdirAsync(modsPath()))
+    let paks: string[];
+    try {
+      paks = (await fs.readdirAsync(modsPath()))
       .filter(fileName => path.extname(fileName).toLowerCase() === '.pak');
+    } catch (err) {
+      if (err.code === 'ENOENT') {
+        try {
+        await fs.ensureDirWritableAsync(modsPath(), () => Bluebird.resolve());
+        } catch (err) {
+          // nop
+        }
+      } else {
+        api.showErrorNotification('Failed to read mods directory', err, {
+          id: 'bg3-failed-read-mods',
+          message: modsPath(),
+        });
+      }
+      paks = [];
+    }
 
     const manifest = await util.getManifest(api, '', GAME_ID);
 
