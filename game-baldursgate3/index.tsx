@@ -116,9 +116,11 @@ const ORIGINAL_FILES = new Set([
 
 function isReplacer(api: types.IExtensionApi, files: types.IInstruction[]) {
   const origFile = files.find(iter =>
-    iter.type === 'copy' && ORIGINAL_FILES.has(iter.destination.toLowerCase()));
+    (iter.type === 'copy') && ORIGINAL_FILES.has(iter.destination.toLowerCase()));
 
-  const paks = files.filter(iter => path.extname(iter.destination).toLowerCase() === '.pak');
+  const paks = files.filter(iter =>
+    (iter.type === 'copy') && (path.extname(iter.destination).toLowerCase() === '.pak'));
+
   if ((origFile !== undefined) || (paks.length === 0)) {
     return api.showDialog('question', 'Mod looks like a replacer', {
       bbcode: 'The mod you just installed looks like a "replacer", meaning it is intended to replace '
