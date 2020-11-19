@@ -1,7 +1,7 @@
 const Promise = require('bluebird');
 const path = require('path');
 const rjson = require('relaxed-json');
-const { actions, fs, util } = require('vortex-api');
+const { actions, fs, util, selectors } = require('vortex-api');
 
 // Nexus Mods and game store IDs.
 const SUBNAUTICA_ID = 'subnautica';
@@ -17,6 +17,9 @@ const MOD_FILE = 'mod.json';
 const ADDON_FILE = 'info.json';
 // CustomCraft2 mods should be packed with a CustomCraft2SML folder.
 const CC2_FOLDER = 'CustomCraft2SML';
+
+// Nitrox DLL - for compat check
+const NITROX_DLL = (gamePath) => path.join(gamePath, 'Subnautica_Data', 'Managed', '0Harmony.dll');
 
 
 function main(context) {
@@ -46,7 +49,68 @@ function main(context) {
   context.registerInstaller('subnautica-qmm-installer', 25, testQMM, (files) => installQMM(files, context.api));
   context.registerInstaller('subnautica-mod-installer', 25, testSubnauticaMod, installSubnauticaMod);
 
+  context.once(() => {
+    // Test to ensure that Nitrox (or another junk file won't break QMM)
+    context.api.onAsync('did-deploy', () => testForHarmonyConflict(context.api));
+    context.api.events.on('gamemode-activated', () => testForHarmonyConflict(context.api));
+  });
+
   return true;
+}
+
+async function testForHarmonyConflict(api) {
+  const state = api.store.getState();
+  const gameMode = selectors.activeGameId(state);
+  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', gameMode], undefined);
+
+  if (gameMode !== SUBNAUTICA_ID || !discovery || !discovery.path) return Promise.resolve(undefined);
+
+  const dllToCheck = NITROX_DLL(discovery.path);
+
+  try {
+    await fs.statAsync(dllToCheck);
+    api.sendNotification({
+      id: 'subnautica-conflict',
+      type: 'warning',
+      title: 'QMM/Nitrox Conflict detected',
+      message: 'Your mods may not load correctly',
+      actions: [
+        {
+          title: 'More',
+          action: (dismiss) => {
+            api.showDialog('warn', 'QModManager/Nitrox Conflict detected', {
+              text: 'Vortex has detected a file that is known to be incompatible with QModManager. Attempting to load the game with this file present may cause your mods to fail to load.'
+              +'\n\n{{filePath}}'
+              +'\n\nThis file is often installed as part of the Nitrox multiplayer mod or an old version of QMM. To play with the mods installed in Vortex this file should be deleted.',
+              parameters: { filePath: dllToCheck }
+            }, [
+              {
+                label: 'Fix (Delete file)',
+                action: () => fs.removeAsync(dllToCheck).then(() => dismiss()).catch((err) => {
+                  api.sendNotification({
+                    id: 'subnautica-conflict-error',
+                    type: 'error',
+                    title: `Failed to remove ${path.basename(dllToCheck)}`,
+                    message: err.message || 'Unknown error'
+                  })
+                  dismiss()
+                })
+              },
+              {
+                label: 'Ignore',
+                action: () => dismiss()
+              }
+            ]
+            );
+          } 
+        }
+      ]
+    })
+  }
+  catch(err) {
+    // The file doesn't exist, hurrah! 
+    return Promise.resolve(undefined);
+  }
 }
 
 function requiresEpicLauncher() {
