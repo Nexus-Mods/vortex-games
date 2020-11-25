@@ -580,7 +580,7 @@ function main(context) {
                 name: 'Baldur\'s Gate 3 (Vulkan)',
                 executable: () => 'bin/bg3.exe',
                 requiredFiles: [
-                    'game/bin/TS4.exe',
+                    'bin/bg3.exe',
                 ],
                 relative: true,
             },
