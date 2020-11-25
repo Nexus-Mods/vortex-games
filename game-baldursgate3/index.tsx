@@ -613,7 +613,26 @@ function makePreSort(api: types.IExtensionApi) {
         }
       });
     }
-    storedLO = result.sort((lhs, rhs) => items.indexOf(lhs) - items.indexOf(rhs));
+
+    const modSettings = await readModSettings(api);
+    const config = findNode(modSettings.save?.region, 'ModuleSettings');
+    const configRoot = findNode(config?.node, 'root');
+    const modOrderRoot = findNode(configRoot?.children?.[0]?.node, 'ModOrder');
+    const modOrderNodes = modOrderRoot.children?.[0]?.node ?? [];
+    const modOrder = modOrderNodes.map(node => findNode(node.attribute, 'UUID').$?.value);
+
+    storedLO = (updateType !== 'refresh')
+      ? result.sort((lhs, rhs) => items.indexOf(lhs) - items.indexOf(rhs))
+      : result.sort((lhs, rhs) => {
+        // A refresh suggests that we're either deploying or the user decided to refresh
+        //  the list forcefully - in both cases we're more intrested in the LO specifed
+        //  by the mod list file rather than what we stored in our state as we assume
+        //  that the LO had already been saved to file.
+        const lhsIdx = modOrder.findIndex(i => i === lhs.data.uuid);
+        const rhsIdx = modOrder.findIndex(i => i === rhs.data.uuid);
+        return lhsIdx - rhsIdx;
+      });
+
     return storedLO;
   };
 }
