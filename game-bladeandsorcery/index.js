@@ -214,25 +214,6 @@ async function installOfficialMod(files,
                         progressDelegate,
                         api) {
   const t = api.translate;
-  const versionMismatchDialog = (gameVersion, modGameVersion) => new Promise((resolve, reject) => {
-    api.store.dispatch(
-      actions.showDialog(
-        'warning',
-        'Game Version Mismatch',
-        { text: t('The mod you\'re attempting to install has been created for game version: "{{modVer}}"; '
-                + 'the currently installed game version is: "{{gameVer}}", version mismatches may '
-                + 'cause unexpected results inside the game, please keep this in mind if you choose to continue.',
-        { replace: { modVer: modGameVersion, gameVer: gameVersion } }) },
-        [
-          { label: 'Cancel', action: () => reject(new util.UserCanceled()) },
-          {
-            label: 'Continue installation', action: () => resolve()
-          }
-        ]
-      )
-    );
-  });
-
   let minModVersion;
   let gameVersion;
   const discoveryPath = getDiscoveryPath(api);
@@ -262,7 +243,7 @@ async function installOfficialMod(files,
 
   const createInstructions = (manifestFile) =>
     getModName(destinationPath, manifestFile, 'Name', undefined)
-      .then(manifestModName => {
+      .then(async manifestModName => {
         const isUsedModName = usedModNames.find(modName => modName === manifestModName) !== undefined;
         const modName = (isUsedModName)
           ? manifestModName + '_' + shortId.generate()
@@ -294,6 +275,19 @@ async function installOfficialMod(files,
           value: (manifestFiles.length > 1),
         })
 
+        let modVersion;
+        try {
+          modVersion = await checkModGameVersion(destinationPath, minModVersion, manifestFile);
+        } catch (err) {
+          return Promise.reject(err);
+        }
+
+        instructions.push({
+          type: 'attribute',
+          key: 'maxGameVersion',
+          value: semver.coerce(modVersion.modVersion).version,
+        })
+
         const modTypeInstr = {
           type: 'setmodtype',
           value: semver.gte(semver.coerce(gameVersion), semver.coerce('8.4'))
@@ -305,20 +299,15 @@ async function installOfficialMod(files,
         return Promise.resolve(instructions);
       });
 
-  return Promise.map(manifestFiles, manFile =>
-    checkModGameVersion(destinationPath, minModVersion, manFile)
-    .then(res => (!res.match)
-      ? versionMismatchDialog(res.globalVersion, res.modVersion)
-          .then(() => createInstructions(manFile))
-      : createInstructions(manFile))
-  ).then(manifestMods => {
-    const instructions = manifestMods.reduce((prev, instructions) => {
-      prev = prev.concat(instructions);
-      return prev;
-    }, []);
+  return Promise.map(manifestFiles, manFile => createInstructions(manFile))
+    .then(manifestMods => {
+      const instructions = manifestMods.reduce((prev, instructions) => {
+        prev = prev.concat(instructions);
+        return prev;
+      }, []);
 
-    return Promise.resolve({ instructions });
-  });
+      return Promise.resolve({ instructions });
+    });
 }
 
 async function installMulleMod(files,
@@ -592,7 +581,13 @@ function makePrefix(input) {
 
 async function getOfficialModType(api) {
   const discoveryPath = getDiscoveryPath(api);
-  const gameVersion = await getGameVersion(discoveryPath);
+  let gameVersion;
+  try {
+    gameVersion = await getGameVersion(discoveryPath);
+  } catch (err) {
+    // Failed to ascertain the game's version
+    return Promise.reject(err);
+  }
   const modType = semver.gte(semver.coerce(gameVersion), semver.coerce('8.4'))
     ? 'bas-official-modtype' : 'bas-legacy-modtype';
   return Promise.resolve(modType);
@@ -649,7 +644,15 @@ async function preSort(context, items, direction) {
       : Promise.resolve(itemList);
   }
 
-  const targetModType = await getOfficialModType(context.api);
+  let targetModType;
+  try {
+    targetModType = await getOfficialModType(context.api);
+  } catch (err) {
+    // The game.json file must be missing...
+    log('error', 'failed to ascertain current official modType', err);
+    return Promise.resolve(items);
+  }
+
   items = items.filter(it => mods?.[it.id]?.type === targetModType);
 
   if (activeProfile === undefined) {
@@ -784,6 +787,7 @@ function main(context) {
     //supportedTools: tools,
     // FOMOD installer will act as a replacer by default.
     queryModPath: () => path.join(streamingAssetsPath(), 'Default'),
+    getGameVersion: (discoveryPath) => getMinModVersion(discoveryPath).then(minVer => Promise.resolve(semver.coerce(minVer.version).version)),
     logo: 'gameart.jpg',
     executable: () => 'BladeAndSorcery.exe',
     requiredFiles: ['BladeAndSorcery.exe'],
