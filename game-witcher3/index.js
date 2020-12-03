@@ -359,7 +359,7 @@ function installMenuMod(files,
     : -1;
   const modNames = (modsIdx !== -1)
     ? modFiles.reduce((accum, iter) => {
-      const modName = iter.split(path.sep).splice(modsIdx + 1, 1);
+      const modName = iter.split(path.sep).splice(modsIdx + 1, 1).join();
       if (!accum.includes(modName)) {
         accum.push(modName);
       }
