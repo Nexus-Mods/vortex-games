@@ -266,14 +266,10 @@ function infoComponent(context, props) {
     React.createElement('div', { style: { height: '70%' } },
       React.createElement('p', {}, t('Please note:', { ns: I18N_NAMESPACE })),
       React.createElement('ul', {},
-        React.createElement('li', {}, t('The mods displayed within ', { ns: I18N_NAMESPACE })),
-        React.createElement('li', {}, t('If you cannot see your manually added mod in this load order, you '
-          + 'may need to manually set the wanted prefix by renaming the mod\'s folder in the mods folder directly. '
-          + 'as an example, lets say you have installed "FakeMod" and want to add it below your AAA-UnlimitedPotions mod, '
-          + 'simply rename "FakeMod" to "AAB-FakeMod" and click the refresh button.', { ns: I18N_NAMESPACE })),
-        React.createElement('li', {}, t('Manually added mods are restricted to the prefix you set and '
-          + 'Vortex has functionality to ensure this is respected, e.g. AAB-MyMod, Vortex will pick up on that prefix and sort it '
-          + 'correctly in the load order (e.g. after AAA-SomeMod but before AAC-AnotherMod).', { ns: I18N_NAMESPACE })))));
+        React.createElement('li', {}, t('The mods displayed in this page are valid mods, confirmed to be deployed inside the '
+          + 'game\'s mods folder. If a mod is missing, try deploying your mods - if it\'s still missing - it\'s not a valid mod!', { ns: I18N_NAMESPACE })),
+        React.createElement('li', {}, t('If you cannot see your manually added mod in this load order - click refresh and Vortex '
+          + 'should be able to pick it up as long as it has a valid manifest.xml file.', { ns: I18N_NAMESPACE })))));
 }
 
 function main(context) {
