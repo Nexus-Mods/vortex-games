@@ -604,7 +604,7 @@ function tSort(subModIds, allowLocked = false, loadOrder = undefined) {
         continue;
       }
 
-      if (!visited[dep]) {
+      if (!visited[dep] && !lockedSubMods.includes(dep)) {
         if (!Object.keys(graph).includes(dep)) {
           CACHE[node].invalid.missing.push(dep);
         } else {
