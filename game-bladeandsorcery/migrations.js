@@ -49,7 +49,7 @@ function migrate020(api, oldVersion) {
     .then(() => {
       const baseFolder = path.join(gameDiscovery.path, streamingAssetsPath());
       const modTypes = {
-        'bas-official-mod': path.join(baseFolder, 'Mods'),
+        'bas-official-modtype': path.join(baseFolder, 'Mods'),
         'bas-legacy-modtype': baseFolder,
       };
 
