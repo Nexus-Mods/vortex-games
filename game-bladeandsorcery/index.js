@@ -276,7 +276,7 @@ function infoComponent(context, props) {
         React.createElement('li', {}, t('The mods displayed in this page are valid mods, confirmed to be deployed inside the '
           + 'game\'s mods folder. If a mod is missing, try deploying your mods - if it\'s still missing - it\'s not a valid mod!', { ns: I18N_NAMESPACE })),
         React.createElement('li', {}, t('If you cannot see your manually added mod in this load order - click refresh and Vortex '
-          + 'should be able to pick it up as long as it has a valid manifest.xml file.', { ns: I18N_NAMESPACE })),
+          + 'should be able to pick it up as long as it has a valid manifest.json file.', { ns: I18N_NAMESPACE })),
         React.createElement('li', {}, t('The load order file will only be picked up by the game in version 8.4 Beta 5 and above', { ns: I18N_NAMESPACE })))));
 }
 
