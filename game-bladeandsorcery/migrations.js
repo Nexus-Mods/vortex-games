@@ -69,7 +69,7 @@ function migrate020(api, oldVersion) {
       return Promise.each(officialMods, mod => migrateMod020(api, mods[mod])
         .catch(err => {
           log('error', 'failed to migrate BaS mod', err.message);
-          failedToMigrate.push(err);
+          failedToMigrate.push(mod);
           return Promise.resolve();
         }))
     })
