@@ -276,7 +276,8 @@ function infoComponent(context, props) {
         React.createElement('li', {}, t('The mods displayed in this page are valid mods, confirmed to be deployed inside the '
           + 'game\'s mods folder. If a mod is missing, try deploying your mods - if it\'s still missing - it\'s not a valid mod!', { ns: I18N_NAMESPACE })),
         React.createElement('li', {}, t('If you cannot see your manually added mod in this load order - click refresh and Vortex '
-          + 'should be able to pick it up as long as it has a valid manifest.xml file.', { ns: I18N_NAMESPACE })))));
+          + 'should be able to pick it up as long as it has a valid manifest.xml file.', { ns: I18N_NAMESPACE })),
+        React.createElement('li', {}, t('The load order file will only be picked up by the game in version 8.4 Beta 5 and above', { ns: I18N_NAMESPACE })))));
 }
 
 function resolveGameVersion(discoveryPath) {
@@ -354,6 +355,21 @@ function main(context) {
     callback: (loadOrder) => writeLOToFile(context.api, loadOrder),
   });
 
+  context.registerAction('generic-load-order-icons', 200, 'open-ext', {}, 'View Load Order File', async () => {
+    const discoveryPath = getDiscoveryPath(context.api);
+    util.opn(path.join(discoveryPath, streamingAssetsPath(), 'Mods')).catch(err => null);
+  });
+
+  const refreshOnDeployEvent = (profileId) => {
+    const state = context.api.getState();
+    const prof = selectors.profileById(state, profileId);
+    if (refreshFunc !== undefined && prof?.gameId === GAME_ID) {
+      refreshFunc();
+    }
+
+    return Promise.resolve();
+  };
+
   context.once(() => {
     context.api.onAsync('will-deploy', async (profileId, deployment) => {
       const state = context.api.store.getState();
@@ -381,13 +397,8 @@ function main(context) {
         : Promise.resolve();
     });
 
-    context.api.onAsync('did-deploy', async (profileId, deployment) => {
-      const state = context.api.getState();
-      const prof = selectors.profileById(state, profileId);
-      if (refreshFunc !== undefined && prof?.gameId === GAME_ID) {
-        refreshFunc();
-      }
-    });
+    context.api.onAsync('did-deploy', refreshOnDeployEvent);
+    context.api.onAsync('did-purge', refreshOnDeployEvent);
   });
 
   return true;
