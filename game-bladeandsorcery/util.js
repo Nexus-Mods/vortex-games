@@ -1,7 +1,7 @@
 const path = require('path');
 const semver = require('semver');
 const rjson = require('relaxed-json');
-const { actions, fs, log, selectors, util } = require('vortex-api');
+const { fs, log, util } = require('vortex-api');
 
 const { GAME_ID } = require('./common');
 

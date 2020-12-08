@@ -99,13 +99,18 @@ async function getDeployedManaged(context, modType) {
   const deploymentManifest = await util.getManifest(context.api, modType, GAME_ID);
   const gameManifestFiles = deploymentManifest.files.filter(entry =>
     path.basename(entry.relPath).toLowerCase() === MOD_MANIFEST);
-  return Promise.map(gameManifestFiles, async manifest => {
-    const modName = await getJSONElement(path.join(deployPath, manifest.relPath), 'Name');
-    return {
-      modName,
-      modId: manifest.source,
+  return Promise.reduce(gameManifestFiles, async (accum, manifest) => {
+    try {
+      const modName = await getJSONElement(path.join(deployPath, manifest.relPath), 'Name');
+      accum.push({ modName, modId: manifest.source });
+    } catch (err) {
+      // The only way this can occur is if the user had manipulated the file
+      //  in staging if using symlinks or he had moved/removed the file in
+      //  the mod's folder completely.
+      log('error', 'manifest is missing', err);
     }
-  })
+    return accum;
+  }, []);
     
 }
 
@@ -254,7 +259,6 @@ async function preSort(context, items, direction, refreshType) {
   }
 }
 
-let prevLoadOrder;
 function infoComponent(context, props) {
   const t = context.api.translate;
   return React.createElement(BS.Panel, { id: 'loadorderinfo' },
