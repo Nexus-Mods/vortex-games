@@ -51,7 +51,7 @@ async function installOfficialMod(files,
     path.basename(file).toLowerCase() === MOD_MANIFEST);
 
   const createInstructions = (manifestFile) =>
-    getModName(destinationPath, manifestFile, 'Name', undefined)
+    getModName(path.join(destinationPath, manifestFile), 'Name', undefined)
       .then(async manifestModName => {
         const isUsedModName = usedModNames.find(modName => modName === manifestModName) !== undefined;
         const idx = manifestFile.indexOf(path.basename(manifestFile));

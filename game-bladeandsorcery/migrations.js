@@ -3,7 +3,7 @@ const path = require('path');
 const semver = require('semver');
 
 const { GAME_ID, MOD_MANIFEST } = require('./common');
-const { isOfficialModType, getJSONElement, streamingAssetsPath } = require('./util');
+const { isOfficialModType, getModName, streamingAssetsPath } = require('./util');
 
 const { actions, fs, log, selectors, util } = require('vortex-api');
 
@@ -120,7 +120,7 @@ function migrateMod020(api, mod) {
       return Promise.reject(new util.ProcessCanceled('Cannot migrate'));
     }
 
-    return getJSONElement(manifestFiles[0], 'Name')
+    return getModName(manifestFiles[0], 'Name')
       .then(modName => {
         const newPath = path.join(modPath, modName);
         const directories = allEntries.filter(entry => path.extname(path.basename(entry)) === '')

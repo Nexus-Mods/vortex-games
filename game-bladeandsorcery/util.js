@@ -34,11 +34,10 @@ async function getJSONElement(filePath, element) {
     });
 }
 
-async function getModName(destination, modFile, element, ext) {
-  const modFilePath = path.join(destination, modFile);
+async function getModName(manifestFilePath, element, ext) {
   let modName;
   try {
-    modName = await getJSONElement(modFilePath, element);
+    modName = await getJSONElement(manifestFilePath, element);
   } catch (err) {
     return Promise.reject(err);
   }

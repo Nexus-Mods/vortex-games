@@ -8,7 +8,7 @@ const { testModInstaller, installMulleMod, installOfficialMod } = require('./ins
 
 const { migrate010, migrate020 } = require('./migrations');
 
-const { isOfficialModType, streamingAssetsPath, getJSONElement,
+const { isOfficialModType, streamingAssetsPath, getModName,
         getGameVersion, getMinModVersion, getDiscoveryPath } = require('./util');
 
 const React = require('react');
@@ -101,7 +101,7 @@ async function getDeployedManaged(context, modType) {
     path.basename(entry.relPath).toLowerCase() === MOD_MANIFEST);
   return Promise.reduce(gameManifestFiles, async (accum, manifest) => {
     try {
-      const modName = await getJSONElement(path.join(deployPath, manifest.relPath), 'Name');
+      const modName = await getModName(path.join(deployPath, manifest.relPath), 'Name');
       accum.push({ modName, modId: manifest.source });
     } catch (err) {
       // The only way this can occur is if the user had manipulated the file
