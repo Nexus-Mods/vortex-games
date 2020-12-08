@@ -88,11 +88,13 @@ async function installOfficialMod(files,
           return Promise.reject(err);
         }
 
-        instructions.push({
-          type: 'attribute',
-          key: 'maxGameVersion',
-          value: semver.coerce(modVersion.modVersion).version,
-        })
+        if (semver.satisfies(uniApp.getVersion(), '>=1.4.0')) {
+          instructions.push({
+            type: 'attribute',
+            key: 'maxGameVersion',
+            value: semver.coerce(modVersion.modVersion).version,
+          })
+        }
 
         const modTypeInstr = {
           type: 'setmodtype',

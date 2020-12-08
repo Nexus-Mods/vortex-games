@@ -3,6 +3,9 @@ const path = require('path');
 const { actions, fs, FlexLayout, log, selectors, util } = require('vortex-api');
 const semver = require('semver');
 
+const { app, remote } = require('electron');
+const uniApp = app || remote.app;
+
 const { GAME_ID, I18N_NAMESPACE, MOD_MANIFEST } = require('./common');
 const { testModInstaller, installMulleMod, installOfficialMod } = require('./installers');
 
@@ -276,6 +279,17 @@ function infoComponent(context, props) {
           + 'should be able to pick it up as long as it has a valid manifest.xml file.', { ns: I18N_NAMESPACE })))));
 }
 
+function resolveGameVersion(discoveryPath) {
+  if (semver.satisfies(uniApp.getVersion(), '<1.4.0')) {
+    return Promise.reject(new util.ProcessCanceled('not supported in older Vortex versions'));
+  }
+  return getMinModVersion(discoveryPath)
+    .then(minVer => {
+      const coerced = semver.coerce(minVer.version);
+      return Promise.resolve(coerced.version);
+    })
+}
+
 function main(context) {
   const getLegacyDestination = () => {
     return path.join(getDiscoveryPath(context.api), streamingAssetsPath());
@@ -291,7 +305,7 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: () => path.join(streamingAssetsPath(), 'Mods'),
-    getGameVersion: (discoveryPath) => getMinModVersion(discoveryPath).then(minVer => Promise.resolve(semver.coerce(minVer.version).version)),
+    getGameVersion: resolveGameVersion,
     logo: 'gameart.jpg',
     executable: () => 'BladeAndSorcery.exe',
     requiredFiles: ['BladeAndSorcery.exe'],
