@@ -324,7 +324,7 @@ function installMenuMod(files,
     }
 
     const instances = inputFiles.filter(file => path.basename(file) === fileName);
-    if (instances.length > 0) {
+    if (instances.length > 1) {
       // We have multiple instances of the same menu config file - mod author probably included
       //  a backup file to restore vanilla state, or perhaps this is a variant mod which we 
       //  can't currently support.
