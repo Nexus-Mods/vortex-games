@@ -7,7 +7,7 @@ const { isOfficialModType, getModName, streamingAssetsPath } = require('./util')
 
 const { actions, fs, log, selectors, util } = require('vortex-api');
 
-const _SHOULD_MIGRATE = true;
+let _SHOULD_MIGRATE = true;
 function migrate010(api, oldVersion) {
   if (semver.gte(oldVersion, '0.1.0')) {
     return Promise.resolve();
