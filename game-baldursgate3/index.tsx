@@ -574,7 +574,7 @@ function makePreSort(api: types.IExtensionApi) {
 
           const manifestEntry = manifest.files.find(entry => entry.relPath === fileName);
           const mod = manifestEntry !== undefined
-            ? state.persistent.mods[GAME_ID][manifestEntry.source]
+            ? state.persistent.mods[GAME_ID]?.[manifestEntry.source]
             : undefined;
 
           let modInfo = existingItem?.data;
