@@ -1,4 +1,5 @@
 const Promise = require('bluebird');
+const path = require('path');
 const { util } = require('vortex-api');
 const winapi = require('winapi-bindings');
 
@@ -60,6 +61,16 @@ let tools = [
     relative: true,
     exclusive: true,
     defaultPrimary: true,
+  },
+  {
+    id: 'bodyslide',
+    name: 'BodySlide',
+    executable: () => path.join('Data', 'CalienteTools', 'BodySlide', 'BodySlide x64.exe'),
+    requiredFiles: [
+      path.join('Data', 'CalienteTools', 'BodySlide', 'BodySlide x64.exe'),
+    ],
+    relative: true,
+    logo: 'auto',
   },
 ];
 
