@@ -28,8 +28,7 @@ class CustomItemRenderer extends React.Component {
   renderAddendum(props) {
     // Extra stuff we want to add to the LO entry.
     //  Currently renders the open directory button for
-    const { item, order, mods } = props;
-    const managedModKeys = Object.keys(mods);
+    const { item, order } = props;
     const isLocked = !!order[item.id]?.locked;
 
     const renderLock = () => {
@@ -40,13 +39,13 @@ class CustomItemRenderer extends React.Component {
       return React.createElement(tooltip.Icon, { name: 'dialog-info', tooltip: 'Not managed by Vortex' });
     }
 
+    const isExternal = this.isExternal(props, item.id);
+
     return (this.isItemInvalid(item))
       ? this.renderOpenDirButton(props)
       : (isLocked)
         ? renderLock()
-        : !managedModKeys.includes(item.id)
-          ? renderInfo()
-          : null
+        : isExternal ? renderInfo() : null;
   }
 
   // TODO: move all style configuration into a stylesheet
@@ -209,6 +208,20 @@ class CustomItemRenderer extends React.Component {
     }
 
     onSetLoadOrderEntry(profile.id, item.id, entry);
+  }
+
+  isExternal(props, subModId) {
+    const { mods } = props;
+    const modIds = Object.keys(mods);
+    if (modIds.includes(subModId)) {
+      return false;
+    }
+
+    const id = modIds.find(modId => {
+      const subModIds = util.getSafe(mods[modId], ['attributes', 'subModIds'], []);
+      return (subModIds.includes(subModId)) ? true : false;
+    });
+    return (id === undefined);
   }
 
   setRef (ref, props) {
