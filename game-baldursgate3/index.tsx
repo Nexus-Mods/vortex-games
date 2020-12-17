@@ -258,16 +258,16 @@ async function writeLoadOrder(api: types.IExtensionApi,
   try {
     const modSettings = await readModSettings(api);
 
-    const region = findNode(modSettings.save.region, 'ModuleSettings');
-    const root = findNode(region.node, 'root');
-    const modsNode = findNode(root.children[0].node, 'Mods');
-    const loNode = findNode(root.children[0].node, 'ModOrder');
+    const region = findNode(modSettings?.save?.region, 'ModuleSettings');
+    const root = findNode(region?.node, 'root');
+    const modsNode = findNode(root?.children?.[0]?.node, 'Mods');
+    const loNode = findNode(root?.children?.[0]?.node, 'ModOrder') ?? { children: [] };
     if ((loNode.children === undefined) || ((loNode.children[0] as any) === '')) {
       loNode.children = [{ node: [] }];
     }
     // drop all nodes except for the game entry
-    const descriptionNodes = modsNode.children[0].node.filter(iter =>
-      iter.attribute.find(attr => (attr.$.id === 'Name') && (attr.$.value === 'Gustav')));
+    const descriptionNodes = modsNode?.children?.[0]?.node?.filter?.(iter =>
+      iter.attribute.find(attr => (attr.$.id === 'Name') && (attr.$.value === 'Gustav'))) ?? [];
 
     const enabledPaks = Object.keys(loadOrder)
         .filter(key => !!loadOrder[key].data?.uuid
@@ -493,12 +493,12 @@ async function writeModSettings(api: types.IExtensionApi, data: IModSettings): P
 
 async function readStoredLO(api: types.IExtensionApi) {
   const modSettings = await readModSettings(api);
-  const config = findNode(modSettings.save?.region, 'ModuleSettings');
+  const config = findNode(modSettings?.save?.region, 'ModuleSettings');
   const configRoot = findNode(config?.node, 'root');
   const modOrderRoot = findNode(configRoot?.children?.[0]?.node, 'ModOrder');
-  const modsRoot = findNode(configRoot.children?.[0]?.node, 'Mods');
-  const modOrderNodes = modOrderRoot.children?.[0]?.node ?? [];
-  const modNodes = modsRoot.children?.[0]?.node ?? [];
+  const modsRoot = findNode(configRoot?.children?.[0]?.node, 'Mods');
+  const modOrderNodes = modOrderRoot?.children?.[0]?.node ?? [];
+  const modNodes = modsRoot?.children?.[0]?.node ?? [];
 
   const modOrder = modOrderNodes.map(node => findNode(node.attribute, 'UUID').$?.value);
 
@@ -614,24 +614,31 @@ function makePreSort(api: types.IExtensionApi) {
       });
     }
 
-    const modSettings = await readModSettings(api);
-    const config = findNode(modSettings.save?.region, 'ModuleSettings');
-    const configRoot = findNode(config?.node, 'root');
-    const modOrderRoot = findNode(configRoot?.children?.[0]?.node, 'ModOrder');
-    const modOrderNodes = modOrderRoot.children?.[0]?.node ?? [];
-    const modOrder = modOrderNodes.map(node => findNode(node.attribute, 'UUID').$?.value);
+    try {
+      const modSettings = await readModSettings(api);
+      const config = findNode(modSettings?.save?.region, 'ModuleSettings');
+      const configRoot = findNode(config?.node, 'root');
+      const modOrderRoot = findNode(configRoot?.children?.[0]?.node, 'ModOrder');
+      const modOrderNodes = modOrderRoot?.children?.[0]?.node ?? [];
+      const modOrder = modOrderNodes.map(node => findNode(node.attribute, 'UUID').$?.value);
 
-    storedLO = (updateType !== 'refresh')
-      ? result.sort((lhs, rhs) => items.indexOf(lhs) - items.indexOf(rhs))
-      : result.sort((lhs, rhs) => {
-        // A refresh suggests that we're either deploying or the user decided to refresh
-        //  the list forcefully - in both cases we're more intrested in the LO specifed
-        //  by the mod list file rather than what we stored in our state as we assume
-        //  that the LO had already been saved to file.
-        const lhsIdx = modOrder.findIndex(i => i === lhs.data.uuid);
-        const rhsIdx = modOrder.findIndex(i => i === rhs.data.uuid);
-        return lhsIdx - rhsIdx;
+      storedLO = (updateType !== 'refresh')
+        ? result.sort((lhs, rhs) => items.indexOf(lhs) - items.indexOf(rhs))
+        : result.sort((lhs, rhs) => {
+          // A refresh suggests that we're either deploying or the user decided to refresh
+          //  the list forcefully - in both cases we're more intrested in the LO specifed
+          //  by the mod list file rather than what we stored in our state as we assume
+          //  that the LO had already been saved to file.
+          const lhsIdx = modOrder.findIndex(i => i === lhs.data.uuid);
+          const rhsIdx = modOrder.findIndex(i => i === rhs.data.uuid);
+          return lhsIdx - rhsIdx;
+        });
+    } catch (err) {
+      api.showErrorNotification('Failed to read modsettings.lsx', err, {
+        allowReport: false,
+        message: 'Please run the game at least once and create a profile in-game',
       });
+    }
 
     return storedLO;
   };
