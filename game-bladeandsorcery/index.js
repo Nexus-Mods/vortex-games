@@ -162,10 +162,14 @@ async function readLOFromFile(api) {
   const loFilePath = await ensureLOFile(discoveryPath);
   const data = await fs.readFileAsync(loFilePath, { encoding: 'utf8' });
   try {
-    const lo = JSON.parse(data);
-    return (Array.isArray(lo))
-      ? Promise.resolve(lo)
-      : Promise.reject(new util.DataInvalid('Invalid load order file'));
+    const lo = JSON.parse(data).modNames;
+    const formatted = lo.reduce((accum, iter) => {
+      accum.push({
+        name: iter,
+      })
+      return accum;
+    }, []);
+    return Promise.resolve(formatted);
   } catch (err) {
     log('error', 'failed to parse BaS load order file', err);
     return Promise.reject(new util.DataInvalid('Invalid load order file'));
@@ -176,15 +180,14 @@ async function writeLOToFile(api, loadOrder) {
   const discoveryPath = getDiscoveryPath(api);
   const loFilePath = await ensureLOFile(discoveryPath);
   const loKeys = Object.keys(loadOrder).sort((a, b) => loadOrder[a].pos - loadOrder[b].pos);
-  const loData = loKeys.reduce((accum, iter) => {
+  const modNames = loKeys.reduce((accum, iter) => {
     const loName = loadOrder[iter].data.name;
-    accum.push({
-      name: loName,
-      manifest: path.join(loName, MOD_MANIFEST),
-    });
+    accum.push(loName);
     return accum;
   }, []);
-
+  const loData = {
+    modNames,
+  }
   return fs.writeFileAsync(loFilePath, JSON.stringify(loData, undefined, 2), { encoding: 'utf8' });
 }
 
@@ -358,6 +361,10 @@ function main(context) {
   context.registerAction('generic-load-order-icons', 200, 'open-ext', {}, 'View Load Order File', async () => {
     const discoveryPath = getDiscoveryPath(context.api);
     util.opn(path.join(discoveryPath, streamingAssetsPath(), 'Mods')).catch(err => null);
+  }, () => {
+    const state = context.api.getState();
+    const activeGameId = selectors.activeGameId(state);
+    return (activeGameId === GAME_ID);
   });
 
   const refreshOnDeployEvent = (profileId) => {

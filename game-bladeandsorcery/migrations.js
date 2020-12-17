@@ -117,7 +117,7 @@ function migrateMod020(api, mod) {
       //  mod's installationPath, then we assume that the mod is already installed
       //  correctly - which is possible if the user updates from a very old version
       //  of this extension.
-      return Promise.reject(new util.ProcessCanceled('Cannot migrate'));
+      return Promise.reject(new util.ProcessCanceled(`Cannot migrate: ${path.basename(modPath)}`));
     }
 
     return getModName(manifestFiles[0], 'Name')
