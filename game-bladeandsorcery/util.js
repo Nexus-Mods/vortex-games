@@ -57,13 +57,8 @@ async function getModName(manifestFilePath, element, ext) {
 function findGameConfig(discoveryPath) {
   const findConfig = (searchPath) => fs.readdirAsync(searchPath)
     .catch(err => {
-      const warnAndContinue = () => {
-        log('warn', 'missing BAS game directory', searchPath);
-        return Promise.resolve([]);
-      };
-
       return ['ENOENT', 'ENOTFOUND'].includes(err.code)
-        ? warnAndContinue()
+        ? Promise.resolve([])
         : Promise.reject(err);
     })
     .then(entries => {
@@ -130,7 +125,7 @@ function getDiscoveryPath(api) {
   if ((discovery === undefined) || (discovery.path === undefined)) {
     // should never happen and if it does it will cause errors elsewhere as well
     log('error', 'bladeandsorcery was not discovered');
-    return '.';
+    return undefined;
   }
 
   return discovery.path;

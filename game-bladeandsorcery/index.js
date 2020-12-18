@@ -82,6 +82,9 @@ async function prepareForModding(discovery, api) {
 
 async function getOfficialModType(api) {
   const discoveryPath = getDiscoveryPath(api);
+  if (discoveryPath === undefined) {
+    return Promise.reject(new Error('Game is not discovered'));
+  }
   let gameVersion;
   try {
     gameVersion = await getGameVersion(discoveryPath);
@@ -146,6 +149,9 @@ async function getDeployedExternal(context, managedNames, loKeys) {
   return Promise.resolve(modNames);
 }
 
+const emptyLO = {
+  modNames: [],
+};
 async function ensureLOFile(discoveryPath) {
   // It really doesn't matter what modType we're using, the loadorder
   //  file can only be loaded by 8.4 and above which will always expect it to
@@ -153,15 +159,20 @@ async function ensureLOFile(discoveryPath) {
   const loFilePath = path.join(discoveryPath, streamingAssetsPath(), 'Mods', LOAD_ORDER_FILENAME);
   return fs.statAsync(loFilePath)
     .then(() => Promise.resolve(loFilePath))
-    .catch(err => fs.writeFileAsync(loFilePath, '', { encoding: 'utf8' })
+    .catch(err => fs.ensureDirWritableAsync(path.dirname(loFilePath))
+      .then(() => fs.writeFileAsync(loFilePath, JSON.stringify(emptyLO, undefined, 2), { encoding: 'utf8' }))
       .then(() => Promise.resolve(loFilePath)));
 }
 
 async function readLOFromFile(api) {
   const discoveryPath = getDiscoveryPath(api);
-  const loFilePath = await ensureLOFile(discoveryPath);
-  const data = await fs.readFileAsync(loFilePath, { encoding: 'utf8' });
+  if (discoveryPath === undefined) {
+    return Promise.reject(new Error('Game is not discovered'));
+  }
+
   try {
+    const loFilePath = await ensureLOFile(discoveryPath);
+    const data = await fs.readFileAsync(loFilePath, { encoding: 'utf8' });
     const lo = JSON.parse(data).modNames;
     const formatted = lo.reduce((accum, iter) => {
       accum.push({
@@ -172,17 +183,36 @@ async function readLOFromFile(api) {
     return Promise.resolve(formatted);
   } catch (err) {
     log('error', 'failed to parse BaS load order file', err);
-    return Promise.reject(new util.DataInvalid('Invalid load order file'));
+    return Promise.reject(err);
   }
 }
 
 async function writeLOToFile(api, loadOrder) {
   const discoveryPath = getDiscoveryPath(api);
-  const loFilePath = await ensureLOFile(discoveryPath);
+  if (discoveryPath === undefined) {
+    return Promise.reject(new Error('Game is not discovered'));
+  }
+
+  let loFilePath;
+  try {
+    loFilePath = await ensureLOFile(discoveryPath);
+  } catch (err) {
+    return Promise.reject(err);
+  }
   const loKeys = Object.keys(loadOrder).sort((a, b) => loadOrder[a].pos - loadOrder[b].pos);
   const modNames = loKeys.reduce((accum, iter) => {
-    const loName = loadOrder[iter].data.name;
-    accum.push(loName);
+    const loName = loadOrder[iter].data?.name;
+    if (loName !== undefined) {
+      accum.push(loName);
+    } else {
+      // The display item should've been enhanced to contain
+      //  the mod's name/Id as expected by the game. We do this
+      //  during presort which will ALWAYS run before the writeLOToFile
+      //  function is called. If the lo item doesn't have the name property
+      //  then it's an invalid mod and we don't want it written to the file.
+      log('error', 'invalid loadorder mod data', iter);
+    }
+
     return accum;
   }, []);
   const loData = {
@@ -195,10 +225,22 @@ async function preSort(context, items, direction, refreshType) {
   const state = context.api.store.getState();
   const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
   const activeProfile = selectors.activeProfile(state);
+
   const toLOPage = (itemList) => Promise.resolve(itemList);
+  const toDisplayItem = (modName, modId) => ({
+    id: (modId !== undefined) ? modId : modName,
+    external: (modId !== undefined) ? false : true,
+    name: modName,
+    imgUrl: (mods[modId]?.attributes?.pictureUrl !== undefined)
+      ? mods[modId].attributes.pictureUrl
+      : `${__dirname}/gameart.jpg`,
+    data: {
+      name: modName,
+    }
+  });
 
   if (activeProfile === undefined) {
-    return toLOPage(items);
+    return toLOPage(items.map(item => toDisplayItem(item.name, item.id)));
   }
 
   let targetModType;
@@ -207,18 +249,8 @@ async function preSort(context, items, direction, refreshType) {
   } catch (err) {
     // The game.json file must be missing...
     log('error', 'failed to ascertain current official modType', err);
-    return Promise.resolve(items);
+    return Promise.resolve(items.map(item => toDisplayItem(item.name, item.id)));
   }
-
-  const toDisplayItem = (modName, modId) => ({
-    id: (modId !== undefined) ? modId : modName,
-    external: (modId !== undefined) ? false : true,
-    name: modName,
-    imgUrl: `${__dirname}/gameart.jpg`,
-    data: {
-      name: modName,
-    }
-  });
 
   const managedMods = await getDeployedManaged(context, targetModType);
   const managedItems = managedMods.map(item => toDisplayItem(item.modName, item.modId))
@@ -355,11 +387,22 @@ function main(context) {
     gameArtURL: `${__dirname}/gameart.jpg`,
     preSort: (items, direction, refreshType) => preSort(context, items, direction, refreshType),
     displayCheckboxes: false,
-    callback: (loadOrder) => writeLOToFile(context.api, loadOrder),
+    callback: (loadOrder) => {
+      try {
+        writeLOToFile(context.api, loadOrder)
+      } catch (err) {
+        context.api.showErrorNotification('failed to write to load order file', err,
+          { allowReport: ['EPERM', 'EISDIR'].includes(err.code) });
+      }
+    },
   });
 
   context.registerAction('generic-load-order-icons', 200, 'open-ext', {}, 'View Load Order File', async () => {
     const discoveryPath = getDiscoveryPath(context.api);
+    if (discoveryPath === undefined) {
+      log('error', 'Game is not discovered');
+      return;
+    }
     util.opn(path.join(discoveryPath, streamingAssetsPath(), 'Mods')).catch(err => null);
   }, () => {
     const state = context.api.getState();

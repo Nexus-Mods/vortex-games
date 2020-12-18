@@ -29,6 +29,9 @@ async function installOfficialMod(files,
   let minModVersion;
   let gameVersion;
   const discoveryPath = getDiscoveryPath(api);
+  if (discoveryPath === undefined) {
+    return Promise.reject(new Error('Game is not discovered'));
+  }
   try {
     gameVersion = await getGameVersion(discoveryPath);
     minModVersion = await getMinModVersion(discoveryPath);
