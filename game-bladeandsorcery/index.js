@@ -392,7 +392,7 @@ function main(context) {
         writeLOToFile(context.api, loadOrder)
       } catch (err) {
         context.api.showErrorNotification('failed to write to load order file', err,
-          { allowReport: ['EPERM', 'EISDIR'].includes(err.code) });
+          { allowReport: !['EPERM', 'EISDIR'].includes(err.code) });
       }
     },
   });
