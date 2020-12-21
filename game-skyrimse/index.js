@@ -1,3 +1,4 @@
+const path = require('path');
 const { util } = require('vortex-api');
 const winapi = require('winapi-bindings');
 
@@ -54,10 +55,21 @@ const tools = [
     executable: () => 'skse64_loader.exe',
     requiredFiles: [
       'skse64_loader.exe',
+      'SkyrimSE.exe',
     ],
     relative: true,
     exclusive: true,
     defaultPrimary: true,
+  },
+  {
+    id: 'bodyslide',
+    name: 'BodySlide',
+    executable: () => path.join('Data', 'CalienteTools', 'BodySlide', 'BodySlide x64.exe'),
+    requiredFiles: [
+      path.join('Data', 'CalienteTools', 'BodySlide', 'BodySlide x64.exe'),
+    ],
+    relative: true,
+    logo: 'auto',
   },
 ];
 

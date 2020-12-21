@@ -45,6 +45,7 @@ let tools = [
     executable: () => 'fose_loader.exe',
     requiredFiles: [
       'fose_loader.exe',
+      'falloutlauncher.exe',
     ],
     relative: true,
     exclusive: true,

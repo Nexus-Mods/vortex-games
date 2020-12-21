@@ -45,6 +45,7 @@ let tools = [
     executable: () => 'nvse_loader.exe',
     requiredFiles: [
       'nvse_loader.exe',
+      'FalloutNV.exe',
     ],
     relative: true,
     exclusive: true,

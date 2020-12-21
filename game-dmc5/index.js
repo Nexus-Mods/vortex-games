@@ -274,6 +274,9 @@ function walkAsync(dir) {
       });
     });
   })
+  .catch(err => ['EPERM', 'ENOENT'].includes(err.code)
+    ? Promise.resolve(entries)
+    : Promise.reject(err))
   .then(() => Promise.resolve(entries));
 }
 
@@ -570,6 +573,11 @@ function main(context) {
     return Promise.each(mods, mod => {
       const modFolder = path.join(stagingFolder, mod);
       return walkAsync(modFolder)
+        .catch(err => {
+          context.api.showErrorNotification('failed to read mod folder', err,
+            { allowReport: !['EPERM', 'ENOENT'].includes(err.code) });
+          return Promise.resolve([]);
+        })
         .then(entries => {
           const relFilePaths = entries.map(entry => entry.replace(modFolder + path.sep, ''));
           const wildCards = relFilePaths.map(fileEntry => fileEntry.replace(/\\/g, '/'))
@@ -645,6 +653,11 @@ function main(context) {
         return Promise.each(mods, mod => {
           const modFolder = path.join(stagingFolder, mod.installationPath);
           return walkAsync(modFolder)
+            .catch(err => {
+              context.api.showErrorNotification('failed to read mod folder', err,
+                { allowReport: !['EPERM', 'ENOENT'].includes(err.code) });
+              return Promise.resolve([]);
+            })
             .then(entries => {
               const relFilePaths = entries.map(entry => entry.replace(modFolder + path.sep, ''));
               const wildCards = relFilePaths.map(fileEntry => fileEntry.replace(/\\/g, '/'))

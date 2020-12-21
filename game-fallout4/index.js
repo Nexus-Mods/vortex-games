@@ -1,4 +1,5 @@
 const Promise = require('bluebird');
+const path = require('path');
 const { util } = require('vortex-api');
 const winapi = require('winapi-bindings');
 
@@ -44,11 +45,22 @@ let tools = [
     executable: () => 'f4se_loader.exe',
     requiredFiles: [
       'f4se_loader.exe',
+      'Fallout4.exe',
     ],
     relative: true,
     exclusive: true,
     defaultPrimary: true
   },
+  {
+    id: 'bodyslide',
+    name: 'BodySlide',
+    executable: () => path.join('Data', 'Tools', 'BodySlide', 'BodySlide x64.exe'),
+    requiredFiles: [
+      path.join('Data', 'Tools', 'BodySlide', 'BodySlide x64.exe'),
+    ],
+    relative: true,
+    logo: 'auto',
+  }
 ];
 
 function main(context) {
