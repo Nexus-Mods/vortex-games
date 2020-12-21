@@ -68,14 +68,10 @@ async function ensureModType(discovery, api) {
     : Promise.resolve();
 }
 
-async function prepareForModding(discovery, api) {
-  try {
-    await createModDirectories(discovery);
-    await ensureLOFile(discovery.path);
-    await ensureModType(discovery, api);
-  } catch (err) {
-    return Promise.reject(err);
-  }
+function prepareForModding(discovery, api) {
+  return createModDirectories(discovery)
+    .then(() => ensureLOFile(discovery.path))
+    .then(() => ensureModType(discovery, api));
 }
 
 async function getOfficialModType(api) {
