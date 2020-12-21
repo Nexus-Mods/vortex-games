@@ -34,11 +34,9 @@ function findGame() {
 function createModDirectories(discovery) {
   const createDir = (filePath) => fs.ensureDirWritableAsync(filePath);
   const streamingPath = path.join(discovery.path, streamingAssetsPath());
-  return Promise.all([
-    createDir(streamingPath),
-    createDir(streamingPath, 'Mods'),
-    createDir(streamingPath, 'Default'),
-  ]);
+  return createDir(streamingPath)
+    .then(() => createDir(streamingPath, 'Mods'))
+    .then(() => createDir(streamingPath, 'Default'));
 }
 
 async function purgeMods(discovery, api) {
