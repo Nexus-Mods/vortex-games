@@ -143,7 +143,8 @@ function migrateMod020(api, mod) {
             // migration failed, cleanup all newly created dirs and files
             const dirs = newDirs.sort((a, b) => b.length - a.length);
             return Promise.each([...newFiles, ...dirs], entry =>
-              fs.removeAsync(entry)).then(() => Promise.reject(err))
+              fs.removeAsync(entry).catch(() => Promise.resolve()))
+            .then(() => Promise.reject(err))
           })
           .then(() => Promise.each(files, file => fs.removeAsync(file.src)))
           .then(() => Promise.each(directories, dir => fs.removeAsync(dir.src)))
