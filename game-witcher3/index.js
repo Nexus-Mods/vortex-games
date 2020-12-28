@@ -483,8 +483,8 @@ function prepareForModding(context, discovery) {
     ],
   });
 
-  const scriptMergerPath = util.getSafe(discovery, ['tools', SCRIPT_MERGER_ID, 'path'],
-    path.join(discovery.path, 'WitcherScriptMerger', 'WitcherScriptMerger.exe'));
+  const defaultWSMFilePath = path.join(discovery.path, 'WitcherScriptMerger', 'WitcherScriptMerger.exe');
+  const scriptMergerPath = util.getSafe(discovery, ['tools', SCRIPT_MERGER_ID, 'path'], defaultWSMFilePath);
 
   const findScriptMerger = (error) => {
     log('error', 'failed to download/install script merger', error);
@@ -501,7 +501,10 @@ function prepareForModding(context, discovery) {
   return Promise.all([
     ensurePath(path.join(discovery.path, 'Mods')),
     ensurePath(path.join(discovery.path, 'DLC')),
-    ensurePath(path.dirname(scriptMergerPath)),
+    ensurePath(path.dirname(scriptMergerPath))
+      .catch(err => (err.code === 'EINVAL') // The filepath is invalid, revert to default.
+        ? ensurePath(path.dirname(defaultWSMFilePath))
+        : Promise.reject(err)),
     ensurePath(path.dirname(getLoadOrderFilePath()))])
       .then(() => merger.default(context)
         .catch(err => (err instanceof util.UserCanceled)
