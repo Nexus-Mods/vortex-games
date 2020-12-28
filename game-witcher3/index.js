@@ -1188,7 +1188,9 @@ function main(context) {
       setINIStruct(context, loadOrder, updateType)
         .then(() => writeToModSettings())
         .catch(err => {
-          context.api.showErrorNotification('Failed to modify load order file', err);
+          const userCanceled = err instanceof util.UserCanceled;
+          context.api.showErrorNotification('Failed to modify load order file', err,
+           { allowReport: !userCanceled });
           return;
         });
     },
@@ -1216,7 +1218,11 @@ function main(context) {
               (!!refreshFunc) ? refreshFunc() : null;
               return Promise.resolve();
             })
-            .catch(err => context.api.showErrorNotification('Failed to cleanup load order file', err));
+            .catch(err => {
+              const userCanceled = err instanceof util.UserCanceled;
+              context.api.showErrorNotification('Failed to cleanup load order file', err,
+                { allowReport: !userCanceled })
+            });
         } else {
           const filePath = getLoadOrderFilePath();
           fs.removeAsync(filePath)
@@ -1305,7 +1311,9 @@ function main(context) {
           return Promise.resolve();
         })
         .catch(err => {
-          context.api.showErrorNotification('Failed to modify load order file', err);
+          const userCanceled = err instanceof util.UserCanceled;
+          context.api.showErrorNotification('Failed to modify load order file', err,
+           { allowReport: !userCanceled });
           return Promise.resolve();
         });
     });
