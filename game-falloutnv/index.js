@@ -13,7 +13,7 @@ function findGame() {
     }
     return Promise.resolve(instPath.value);
   } catch (err) {
-    return util.steam.findByName('Fallout: New Vegas')
+    return util.steam.findByName('Fallout: New Vegas.*')
       .then(game => game.gamePath);
   }
 }
