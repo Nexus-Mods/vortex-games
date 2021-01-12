@@ -46,8 +46,8 @@ async function getModName(manifestFilePath, element, ext) {
     return Promise.reject(new util.DataInvalid(`"${element}" JSON element is missing`));
   }
 
-  // remove all characters except for characters and numbers.
-  modName = modName.replace(/[^a-zA-Z0-9]+/g, '');
+  // remove all characters except for letters, numbers, whitespace, hyphens, and underscores.
+  modName = modName.replace(/[^\w\d\s-_]+/g, '');
 
   return ext !== undefined
     ? Promise.resolve(path.basename(modName, ext))
