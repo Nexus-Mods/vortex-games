@@ -16,7 +16,7 @@ function testModInstaller(files, gameId, fileName) {
     (files.find(file => path.basename(file).toLowerCase() === fileName) !== undefined);
   return Promise.resolve({
     supported,
-    requiredFiles: [],
+    requiredFiles: files.filter(f => path.basename(f).toLowerCase() === MOD_MANIFEST),
   });
 }
 
@@ -35,20 +35,36 @@ async function installOfficialMod(files,
   try {
     gameVersion = await getGameVersion(discoveryPath);
     minModVersion = await getMinModVersion(discoveryPath);
+    try {
+      const relPath = files.find(f => path.basename(f).toLowerCase() === MOD_MANIFEST);
+      // just validating if the name is valid
+      await getModName(path.join(destinationPath, relPath), 'Name');
+    } catch (err) {
+      // invalid mod name, refuse installation
+      return {
+        instructions: [
+          {
+            type: 'error',
+            value: 'fatal',
+            source: 'This mod is not compatible with Blade&Sorcery version 8.4 and newer.',
+          },
+        ],
+      };
+    }
     minModVersion.version = minModVersion.version.toString().replace(',', '.');
   }
   catch (err) {
     if (err.message.indexOf('Missing config file.') !== -1) {
       api.showErrorNotification('Missing config file', 'Please run the game at least once to ensure it '
         + 'generates all required game files; alternatively re-install the game.', { allowReport: false });
-      return Promise.reject(new util.ProcessCanceled('Missing config file.'))
+      throw new util.ProcessCanceled('Missing config file.');
     }
 
-    return Promise.reject(err);
+    throw err;
   }
 
   if (minModVersion === undefined) {
-    return Promise.reject(new util.DataInvalid('Failed to identify game version'));
+    throw new util.DataInvalid('Failed to identify game version');
   }
 
   const usedModNames = [];

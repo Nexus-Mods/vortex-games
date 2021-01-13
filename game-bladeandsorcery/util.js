@@ -35,26 +35,23 @@ async function getJSONElement(filePath, element) {
 }
 
 async function getModName(manifestFilePath, element, ext) {
-  let modName;
-  try {
-    modName = await getJSONElement(manifestFilePath, element);
-  } catch (err) {
-    return Promise.reject(err);
-  }
+  let modName = await getJSONElement(manifestFilePath, element);
 
   if (modName === undefined) {
-    return Promise.reject(new util.DataInvalid(`"${element}" JSON element is missing`));
+    throw new util.DataInvalid(`"${element}" JSON element is missing`);
   }
 
-  // remove all characters except for characters and numbers.
-  modName = modName.replace(/[^a-zA-Z0-9]+/g, '');
+  if (!util.isFilenameValid(modName)) {
+    throw new util.DataInvalid(
+      "Mod name invalid. Starting with game version 8.4, mod names have to be valid file names.");
+  }
 
-  return ext !== undefined
-    ? Promise.resolve(path.basename(modName, ext))
-    : Promise.resolve(modName);
+  return (ext !== undefined)
+    ? path.basename(modName, ext)
+    : modName;
 }
 
-function findGameConfig(discoveryPath) {
+async function findGameConfig(discoveryPath) {
   const findConfig = (searchPath) => fs.readdirAsync(searchPath)
     .catch(err => {
       return ['ENOENT', 'ENOTFOUND'].includes(err.code)
@@ -74,25 +71,24 @@ function findGameConfig(discoveryPath) {
 }
 
 async function getGameVersion(discoveryPath) {
-  try {
-    const configFile = await findGameConfig(discoveryPath);
-    let gameVersion = await getJSONElement(configFile, 'gameVersion');
-    gameVersion = gameVersion.toString().replace(',', '.');
-    return Promise.resolve(gameVersion);
-  } catch (err) {
-    return Promise.reject(err);
-  }
+  const configFile = await findGameConfig(discoveryPath);
+  let gameVersion = await getJSONElement(configFile, 'gameVersion');
+  return gameVersion.toString().replace(',', '.');
 }
 
 async function getMinModVersion(discoveryPath) {
-  return findGameConfig(discoveryPath).then(configFile => {
-    return getJSONElement(configFile, 'minModVersion')
-    .then(version => { return { version, majorOnly: false } })
-    .catch(err => (err.message.indexOf('JSON element is missing') !== -1)
-      ? getJSONElement(configFile, 'gameVersion')
-          .then(version => { return { version, majorOnly: true } })
-      : Promise.reject(err));
-  });
+  const configFile = await findGameConfig(discoveryPath);
+  try {
+    const version = await getJSONElement(configFile, 'minModVersion');
+    return { version, majorOnly: false };
+  } catch (err) {
+    if (err.message.indexOf('JSON element is missing') !== -1) {
+      const version = await getJSONElement(configFile, 'gameVersion');
+      return { version, majorOnly: true };
+    } else {
+      throw err;
+    }
+  }
 }
 
 async function checkModGameVersion(destination, minModVersion, modFile) {
