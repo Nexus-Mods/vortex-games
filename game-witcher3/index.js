@@ -800,6 +800,13 @@ async function preSort(context, items, direction, updateType) {
 }
 
 function findModFolder(installationPath, mod) {
+  if (!installationPath || !mod?.installationPath) {
+    const errMessage = !installationPath
+      ? 'Game is not discovered'
+      : 'Failed to resolve mod installation path';
+    return Promise.reject(new Error(errMessage));
+  }
+
   const expectedModNameLocation = (mod.type !== 'witcher3menumodroot')
     ? path.join(installationPath, mod.installationPath)
     : path.join(installationPath, mod.installationPath, 'Mods');
