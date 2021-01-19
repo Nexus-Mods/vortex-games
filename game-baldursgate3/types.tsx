@@ -7,6 +7,7 @@ export interface IPakInfo {
   folder: string;
   author: string;
   description: string;
+  isGUI: boolean;
 }
 
 export interface ILoadOrderEntry {

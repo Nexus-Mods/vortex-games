@@ -13,7 +13,7 @@ function findGame() {
     }
     return Promise.resolve(instPath.value);
   } catch (err) {
-    return util.steam.findByName('Fallout: New Vegas')
+    return util.steam.findByName('Fallout: New Vegas.*')
       .then(game => game.gamePath);
   }
 }
@@ -45,6 +45,7 @@ let tools = [
     executable: () => 'nvse_loader.exe',
     requiredFiles: [
       'nvse_loader.exe',
+      'FalloutNV.exe',
     ],
     relative: true,
     exclusive: true,

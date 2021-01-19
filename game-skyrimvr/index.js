@@ -45,6 +45,7 @@ const tools = [
     executable: () => 'sksevr_loader.exe',
     requiredFiles: [
       'sksevr_loader.exe',
+      'SkyrimVR.exe',
     ],
     relative: true,
     exclusive: true,

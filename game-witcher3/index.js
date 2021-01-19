@@ -312,22 +312,75 @@ function installMenuMod(files,
   //  all other mod files are to be installed as usual.
   const filtered = files.filter(file => path.extname(path.basename(file)) !== '');
   const inputFiles = filtered.filter(file => file.indexOf(CONFIG_MATRIX_REL_PATH) !== -1);
-  const otherFiles = filtered.filter(file => !inputFiles.includes(file));
+  const uniqueInput = inputFiles.reduce((accum, iter) => {
+    // Some mods tend to include a backup file meant for the user to restore
+    //  his game to vanilla (obvs we only want to apply the non-backup).
+    const fileName = path.basename(iter);
+
+    if (accum.find(entry => path.basename(entry) === fileName) !== undefined) {
+      // This config file has already been added to the accumulator.
+      //  Ignore this instance.
+      return accum;
+    }
+
+    const instances = inputFiles.filter(file => path.basename(file) === fileName);
+    if (instances.length > 1) {
+      // We have multiple instances of the same menu config file - mod author probably included
+      //  a backup file to restore vanilla state, or perhaps this is a variant mod which we 
+      //  can't currently support.
+      // It's difficult for us to correctly identify the correct file but we're going to
+      //  try and guess based on whether the config file has a "backup" folder segment
+      //  otherwise we just add the first file instance (I'm going to regret adding this aren't I ?)
+      if (iter.toLowerCase().indexOf('backup') === -1) {
+        // We're going to assume that this is the right file.
+        accum.push(iter);
+      }
+    } else {
+      // This is a unique menu configuration file - add it.
+      accum.push(iter);
+    }
+    return accum;
+  }, []);
+
+  let otherFiles = filtered.filter(file => !inputFiles.includes(file));
   const inputFileDestination = CONFIG_MATRIX_REL_PATH;
 
   // Get the mod's root folder.
-  const idx = inputFiles[0].split(path.sep).indexOf('bin');
+  const binIdx = uniqueInput[0].split(path.sep).indexOf('bin');
+
+  // Refers to files located inside the archive's 'Mods' directory.
+  //  This array can very well be empty if a mods folder doesn't exist
+  const modFiles = otherFiles.filter(file =>
+    file.toLowerCase().split(path.sep).includes('mods'));
+
+  const modsIdx = (modFiles.length > 0)
+    ? modFiles[0].toLowerCase().split(path.sep).indexOf('mods')
+    : -1;
+  const modNames = (modsIdx !== -1)
+    ? modFiles.reduce((accum, iter) => {
+      const modName = iter.split(path.sep).splice(modsIdx + 1, 1).join();
+      if (!accum.includes(modName)) {
+        accum.push(modName);
+      }
+      return accum;
+    }, [])
+    : [];
+  // The presence of a mods folder indicates that this mod may provide
+  //  several mod entries.
+  if (modFiles.length > 0) {
+    otherFiles = otherFiles.filter(file => !modFiles.includes(file));
+  };
 
   // We're hoping that the mod author has included the mod name in the archive's
   //  structure - if he didn't - we're going to use the destination path instead.
-  const modName = (idx > 0)
-    ? inputFiles[0].split(path.sep)[idx - 1]
+  const modName = (binIdx > 0)
+    ? inputFiles[0].split(path.sep)[binIdx - 1]
     : ('mod' + path.basename(destinationPath, '.installing')).replace(/\s/g, '');
 
   const trimmedFiles = otherFiles.map(file => {
     const source = file;
     let relPath = file.split(path.sep)
-                      .slice(idx);
+                      .slice(binIdx);
     if (relPath[0] === undefined) {
       // This file must've been inside the root of the archive;
       //  deploy as is.
@@ -351,13 +404,23 @@ function installMenuMod(files,
     destination,
   });
 
-  const inputInstructions = inputFiles.map(file =>
+  const inputInstructions = uniqueInput.map(file =>
     toCopyInstruction(file, path.join(inputFileDestination, path.basename(file))));
 
   const otherInstructions = trimmedFiles.map(file =>
     toCopyInstruction(file.source, file.relPath));
 
-  const instructions = [].concat(inputInstructions, otherInstructions);
+  const modFileInstructions = modFiles.map(file =>
+    toCopyInstruction(file, file));
+
+  const instructions = [].concat(inputInstructions, otherInstructions, modFileInstructions);
+  if (modNames.length > 0) {
+    instructions.push({
+      type: 'attribute',
+      key: 'modComponents',
+      value: modNames,
+    });
+  }
   return Promise.resolve({ instructions });
 }
 
@@ -420,8 +483,8 @@ function prepareForModding(context, discovery) {
     ],
   });
 
-  const scriptMergerPath = util.getSafe(discovery, ['tools', SCRIPT_MERGER_ID, 'path'],
-    path.join(discovery.path, 'WitcherScriptMerger', 'WitcherScriptMerger.exe'));
+  const defaultWSMFilePath = path.join(discovery.path, 'WitcherScriptMerger', 'WitcherScriptMerger.exe');
+  const scriptMergerPath = util.getSafe(discovery, ['tools', SCRIPT_MERGER_ID, 'path'], defaultWSMFilePath);
 
   const findScriptMerger = (error) => {
     log('error', 'failed to download/install script merger', error);
@@ -438,7 +501,10 @@ function prepareForModding(context, discovery) {
   return Promise.all([
     ensurePath(path.join(discovery.path, 'Mods')),
     ensurePath(path.join(discovery.path, 'DLC')),
-    ensurePath(path.dirname(scriptMergerPath)),
+    ensurePath(path.dirname(scriptMergerPath))
+      .catch(err => (err.code === 'EINVAL') // The filepath is invalid, revert to default.
+        ? ensurePath(path.dirname(defaultWSMFilePath))
+        : Promise.reject(err)),
     ensurePath(path.dirname(getLoadOrderFilePath()))])
       .then(() => merger.default(context)
         .catch(err => (err instanceof util.UserCanceled)
@@ -734,6 +800,13 @@ async function preSort(context, items, direction, updateType) {
 }
 
 function findModFolder(installationPath, mod) {
+  if (!installationPath || !mod?.installationPath) {
+    const errMessage = !installationPath
+      ? 'Game is not discovered'
+      : 'Failed to resolve mod installation path';
+    return Promise.reject(new Error(errMessage));
+  }
+
   const expectedModNameLocation = (mod.type !== 'witcher3menumodroot')
     ? path.join(installationPath, mod.installationPath)
     : path.join(installationPath, mod.installationPath, 'Mods');
@@ -745,9 +818,15 @@ function getManagedModNames(context, mods) {
   const installationPath = selectors.installPathForGame(context.api.store.getState(), GAME_ID);
   return Promise.reduce(mods, (accum, mod) => findModFolder(installationPath, mod)
     .then(modName => {
-      accum.push({
-        id: mod.id,
-        name: modName,
+      const modComponents = util.getSafe(mod, ['attributes', 'modComponents'], []);
+      if (modComponents.length === 0) {
+        modComponents.push(modName);
+      }
+      [...modComponents].forEach(key => {
+        accum.push({
+          id: mod.id,
+          name: key,
+        })
       })
       return Promise.resolve(accum);
     })
@@ -1119,7 +1198,9 @@ function main(context) {
       setINIStruct(context, loadOrder, updateType)
         .then(() => writeToModSettings())
         .catch(err => {
-          context.api.showErrorNotification('Failed to modify load order file', err);
+          const userCanceled = err instanceof util.UserCanceled;
+          context.api.showErrorNotification('Failed to modify load order file', err,
+           { allowReport: !userCanceled });
           return;
         });
     },
@@ -1147,7 +1228,11 @@ function main(context) {
               (!!refreshFunc) ? refreshFunc() : null;
               return Promise.resolve();
             })
-            .catch(err => context.api.showErrorNotification('Failed to cleanup load order file', err));
+            .catch(err => {
+              const userCanceled = err instanceof util.UserCanceled;
+              context.api.showErrorNotification('Failed to cleanup load order file', err,
+                { allowReport: !userCanceled })
+            });
         } else {
           const filePath = getLoadOrderFilePath();
           fs.removeAsync(filePath)
@@ -1236,7 +1321,9 @@ function main(context) {
           return Promise.resolve();
         })
         .catch(err => {
-          context.api.showErrorNotification('Failed to modify load order file', err);
+          const userCanceled = err instanceof util.UserCanceled;
+          context.api.showErrorNotification('Failed to modify load order file', err,
+           { allowReport: !userCanceled });
           return Promise.resolve();
         });
     });

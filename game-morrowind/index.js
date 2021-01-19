@@ -3,7 +3,7 @@ const { util } = require('vortex-api');
 const winapi = require('winapi-bindings');
 
 const MORROWIND_ID = 'morrowind';
-const STEAMAPP_ID = '1172380';
+const STEAMAPP_ID = '22320';
 const GOGAPP_ID = '1435828767';
 
 function findGame() {

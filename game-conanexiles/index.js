@@ -11,7 +11,7 @@ function toWordExp(input) {
 }
 
 function queryPath() {
-  return util.GameStoreHelper.findByAppId([STEAMAPP_ID])
+  return util.GameStoreHelper.findByAppId([STEAMAPP_ID.toString()])
     .then(game => game.gamePath);
 }
 

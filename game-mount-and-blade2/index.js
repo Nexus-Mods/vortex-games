@@ -6,6 +6,8 @@ const path = require('path');
 const { actions, fs, log, selectors, FlexLayout, util } = require('vortex-api');
 const { parseXmlString } = require('libxmljs');
 const CustomItemRenderer = require('./customItemRenderer');
+const { SUBMOD_FILE, GAME_ID } = require('./common');
+const { migrate026 } = require('./migrations');
 
 const APPUNI = app || remote.app;
 const LAUNCHER_EXEC = path.join('bin', 'Win64_Shipping_Client', 'TaleWorlds.MountAndBlade.Launcher.exe');
@@ -19,8 +21,6 @@ const LAUNCHER_DATA = {
 let STORE_ID;
 let CACHE = {};
 
-// Nexus Mods id for the game.
-const GAME_ID = 'mountandblade2bannerlord';
 const STEAMAPP_ID = 261550;
 const EPICAPP_ID = 'Chickadee';
 const MODULES = 'Modules';
@@ -46,10 +46,6 @@ const PARAMS_TEMPLATE = ['/{{gameMode}}', '_MODULES_{{subModIds}}*_MODULES_'];
 
 // The relative path to the actual game executable, not the launcher.
 const BANNERLORD_EXEC = path.join('bin', 'Win64_Shipping_Client', 'Bannerlord.exe');
-
-// Bannerlord mods have this file in their root.
-//  Casing is actually "SubModule.xml"
-const SUBMOD_FILE = "submodule.xml";
 
 async function walkAsync(dir, levelsDeep = 2) {
   let entries = [];
@@ -383,13 +379,16 @@ async function installSubModules(files, destinationPath) {
     const segments = file.split(path.sep);
     return path.extname(segments[segments.length - 1]) !== '';
   });
+  const subModIds = [];
   const subMods = filtered.filter(file => path.basename(file).toLowerCase() === SUBMOD_FILE);
   return Promise.reduce(subMods, async (accum, modFile) => {
     const segments = modFile.split(path.sep).filter(seg => !!seg);
+    const subModId = await getElementValue(path.join(destinationPath, modFile), 'Id');
     const modName = (segments.length > 1)
       ? segments[segments.length - 2]
-      : await getElementValue(modFile, 'Id');
+      : subModId;
 
+    subModIds.push(subModId);
     const idx = modFile.toLowerCase().indexOf(SUBMOD_FILE);
     // Filter the mod files for this specific submodule.
     const subModFiles = filtered.filter(file => file.slice(0, idx) == modFile.slice(0, idx));
@@ -400,7 +399,14 @@ async function installSubModules(files, destinationPath) {
     }));
     return accum.concat(instructions);
   }, [])
-  .then(merged => Promise.resolve({ instructions: merged }));
+  .then(merged => {
+    const subModIdsAttr = {
+      type: 'attribute',
+      key: 'subModIds',
+      value: subModIds,
+    }
+    return Promise.resolve({ instructions: [].concat(merged, [subModIdsAttr]) })
+  });
 }
 
 function ensureOfficialLauncher(context, discovery) {
@@ -604,7 +610,7 @@ function tSort(subModIds, allowLocked = false, loadOrder = undefined) {
         continue;
       }
 
-      if (!visited[dep]) {
+      if (!visited[dep] && !lockedSubMods.includes(dep)) {
         if (!Object.keys(graph).includes(dep)) {
           CACHE[node].invalid.missing.push(dep);
         } else {
@@ -643,6 +649,19 @@ function tSort(subModIds, allowLocked = false, loadOrder = undefined) {
     tamperedResult.splice(pos, 0, [subModId]);
   });
   return tamperedResult;
+}
+
+function isExternal(context, subModId) {
+  const state = context.api.getState();
+  const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
+  const modIds = Object.keys(mods);
+  modIds.forEach(modId => {
+    const subModIds = util.getSafe(mods[modId], ['attributes', 'subModIds'], []);
+    if (subModIds.includes(subModId)) {
+      return false;
+    }
+  })
+  return true;
 }
 
 async function preSort(context, items, direction) {
@@ -719,7 +738,7 @@ async function preSort(context, items, direction) {
     id: CACHE[key].vortexId,
     name: CACHE[key].subModName,
     imgUrl: `${__dirname}/gameart.jpg`,
-    external: true,
+    external: isExternal(context, CACHE[key].vortexId),
     official: OFFICIAL_MODULES.has(key),
   }))
     .sort((a, b) => (loadOrder[a.id]?.pos || getNextPos(a.id)) - (loadOrder[b.id]?.pos || getNextPos(b.id)))
@@ -742,7 +761,7 @@ async function preSort(context, items, direction) {
       id: CACHE[key].vortexId,
       name: CACHE[key].subModName,
       imgUrl: `${__dirname}/gameart.jpg`,
-      external: unknownExt.includes(key),
+      external: isExternal(context, CACHE[key].vortexId),
       official: OFFICIAL_MODULES.has(key),
     }));
 
@@ -830,11 +849,16 @@ function main(context) {
     itemRenderer: CustomItemRenderer.default,
   });
 
-  // We currently have only one mod on NM and it is a root mod.
   context.registerInstaller('bannerlordrootmod', 20, testRootMod, installRootMod);
 
   // Installs one or more submodules.
   context.registerInstaller('bannerlordsubmodules', 25, testForSubmodules, installSubModules);
+
+  // A very simple migration that intends to add the subModIds attribute
+  //  to mods that act as "mod packs". This migration is non-invasive and will
+  //  not report any errors. Side effects of the migration not working correctly
+  //  will not affect the user's existing environment.
+  context.registerMigration(old => migrate026(context.api, old));
 
   context.registerAction('generic-load-order-icons', 200,
     _IS_SORTING ? 'spinner' : 'loot-sort', {}, 'Auto Sort', async () => {
