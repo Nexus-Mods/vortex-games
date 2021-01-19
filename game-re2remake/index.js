@@ -34,6 +34,9 @@ function findGame() {
 }
 
 function prepareForModding(discovery, api) {
+  if (api.ext.addReEngineGame === undefined) {
+    return Promise.reject(new Error('re-engine-wrapper dependency is not loaded!'));
+  }
   api.ext.addReEngineGame({
     gameMode: GAME_ID,
     bmsScriptPaths: {
@@ -88,6 +91,46 @@ async function installContent(files,
 function migrate020(api, oldVersion) {
   if (semver.gte(oldVersion || '0.0.1', '0.2.0')) {
     return Promise.resolve();
+  }
+
+  const mods = util.getSafe(api.getState(), ['persistent', 'mods', GAME_ID], {});
+  if (Object.keys(mods).length === 0) {
+    return Promise.resolve();
+  }
+
+  if (api.ext.migrateReEngineGame === undefined) {
+    log('error', 're-engine-wrapper is not loaded - failed to migrate the invalidation cache');
+    return new Promise((resolve) => {
+      return api.sendNotification({
+        type: 'warning',
+        message: api.translate('Resident Evil 2 mods need to be re-installed',
+          { ns: I18N_NAMESPACE }),
+        noDismiss: true,
+        actions: [
+          {
+            title: 'More',
+            action: () => {
+              api.showDialog('info', 'Resident Evil 2 (2019)', {
+                text: 'Vortex\'s Resident Evil 2 modding pattern has been enhanced to better support '
+                    + 'the game\'s modding requirements.\n\nVortex attempted to automatically migrate '
+                    + 'your existing invalidation cache but was unsuccessful - unfortunately this means '
+                    + 'you will have to re-install all of your RE2 mods in order to continue managing them with Vortex.\n\n'
+                    + 'We are sorry for the inconvenience.',
+              }, [
+                { label: 'Close' },
+              ]);
+            },
+          },
+          {
+            title: 'Understood',
+            action: dismiss => {
+              dismiss();
+              resolve();
+            }
+          }
+        ],
+      });
+    });
   }
 
   return new Promise((resolve, reject) => {

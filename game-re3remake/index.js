@@ -30,6 +30,9 @@ function findGame() {
 }
 
 function prepareForModding(discovery, api) {
+  if (api.ext.addReEngineGame === undefined) {
+    return Promise.reject(new Error('re-engine-wrapper dependency is not loaded!'));
+  }
   api.ext.addReEngineGame({
     gameMode: GAME_ID,
     bmsScriptPaths: {
