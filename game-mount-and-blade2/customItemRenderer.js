@@ -15,6 +15,11 @@ class CustomItemRenderer extends React.Component {
       offset: { x: 0, y: 0 },
     }
     this.mMounted = false;
+
+    this.renderAddendum = this.renderAddendum.bind(this);
+    this.renderInvalidEntry = this.renderInvalidEntry.bind(this);
+    this.renderEntry = this.renderEntry.bind(this);
+    this.renderContextMenu = this.renderContextMenu.bind(this);
   }
 
   componentDidMount() {
@@ -25,10 +30,10 @@ class CustomItemRenderer extends React.Component {
     this.mMounted = false;
   }
 
-  renderAddendum(props) {
+  renderAddendum() {
     // Extra stuff we want to add to the LO entry.
     //  Currently renders the open directory button for
-    const { item, order } = props;
+    const { item, order } = this.props;
     const isLocked = !!order[item.id]?.locked;
 
     const renderLock = () => {
@@ -39,10 +44,10 @@ class CustomItemRenderer extends React.Component {
       return React.createElement(tooltip.Icon, { name: 'dialog-info', tooltip: 'Not managed by Vortex' });
     }
 
-    const isExternal = this.isExternal(props, item.id);
+    const isExternal = this.isExternal(item.id);
 
     return (this.isItemInvalid(item))
-      ? this.renderOpenDirButton(props)
+      ? this.renderOpenDirButton()
       : (isLocked)
         ? renderLock()
         : isExternal ? renderInfo() : null;
@@ -63,13 +68,14 @@ class CustomItemRenderer extends React.Component {
     React.createElement('p', {}, item.name));
   }
 
-  renderEntry(props) {
-    const { item, order } = props;
+  renderEntry(item) {
+    const { order } = this.props;
     const isEnabled = !!order[item.id]?.locked || order[item.id].enabled;
     return React.createElement(BS.Checkbox, {
       checked: isEnabled,
       disabled: !!item?.locked,
-      onChange: (evt) => this.onStatusChange(evt, props)}, item.name);
+      onChange: this.onStatusChange
+    }, item.name);
   }
 
   renderInvalidEntry(item) {
@@ -82,8 +88,8 @@ class CustomItemRenderer extends React.Component {
       disabled: true }, item.name, ' ', reasonElement());
   }
 
-  onLock(props, lock) {
-    const { profile, order, item, onSetLoadOrderEntry } = props;
+  onLock = (lock) => {
+    const { profile, order, item, onSetLoadOrderEntry } = this.props;
     const entry = {
       pos: order[item.id].pos,
       enabled: order[item.id].enabled,
@@ -93,9 +99,9 @@ class CustomItemRenderer extends React.Component {
     onSetLoadOrderEntry(profile.id, item.id, entry);
   }
 
-  renderContextMenu(state, props) {
-    const { order, item } = props;
-    const { contextMenuVisible, offset } = state;
+  renderContextMenu() {
+    const { order, item } = this.props;
+    const { contextMenuVisible, offset } = this.state;
     return React.createElement(ContextMenu, {
       key: 'mnb2-context-menu',
       position: offset,
@@ -107,11 +113,18 @@ class CustomItemRenderer extends React.Component {
       },
       instanceId: item.id,
       actions: [
-        { title: 'Lock', show: (order[item.id]?.locked === false), action: () => this.onLock(props, true) },
-        { title: 'Unlock', show: !!order[item.id]?.locked, action: () => this.onLock(props, false) },
+        { title: 'Lock', show: (order[item.id]?.locked === false), action: () => this.onLock(true) },
+        { title: 'Unlock', show: !!order[item.id]?.locked, action: () => this.onLock(false) },
       ],
     })
   }
+
+  onRightClick = (evt) => {
+    this.setState({
+      contextMenuVisible: !this.state.contextMenuVisible,
+      offset: { x: evt.clientX, y: evt.clientY },
+    });
+  };
 
   render() {
     const { order, className, item } = this.props;
@@ -127,13 +140,10 @@ class CustomItemRenderer extends React.Component {
     const key = `${item.name}-${position}`;
     const result = React.createElement(BS.ListGroupItem, {
       className: 'load-order-entry',
-      ref: (ref) => this.setRef(ref, this.props),
+      ref: this.setRef,
       key,
       style: { height: '48px' },
-      onContextMenu: (evt) => this.setState({
-        contextMenuVisible: !this.state.contextMenuVisible,
-        offset: { x: evt.clientX, y: evt.clientY },
-      }),
+      onContextMenu: this.onRightClick,
     },
     React.createElement(FlexLayout, { type: 'row', height: '20px' },
       React.createElement(FlexLayout.Flex, {
@@ -150,14 +160,14 @@ class CustomItemRenderer extends React.Component {
         ? this.renderInvalidEntry(item)
         : (item.official)
           ? this.renderOfficialEntry(item)
-          : this.renderEntry(this.props)
+          : this.renderEntry(item)
         ),
       React.createElement(FlexLayout.Flex, {
         style: {
           display: 'flex',
           justifyContent: 'flex-end',
         }
-      }, this.renderAddendum(this.props)), this.renderContextMenu(this.state, this.props)));
+      }, this.renderAddendum()), this.renderContextMenu()));
     return result;
   }
 
@@ -186,8 +196,8 @@ class CustomItemRenderer extends React.Component {
     return undefined;
   }
 
-  renderOpenDirButton(props) {
-    const { item, mods, modsPath, installPath } = props;
+  renderOpenDirButton = () => {
+    const { item, mods, modsPath, installPath } = this.props;
     const managedModKeys = Object.keys(mods);
     const itemPath = managedModKeys.includes(item.id)
       ? path.join(installPath, mods[item.id].installationPath)
@@ -199,8 +209,8 @@ class CustomItemRenderer extends React.Component {
       onClick: () => util.opn(itemPath).catch(err => null) });
   }
 
-  onStatusChange(evt, props) {
-    const { profile, order, item, onSetLoadOrderEntry } = props;
+  onStatusChange = (evt) => {
+    const { profile, order, item, onSetLoadOrderEntry } = this.props;
     const entry = {
       pos: order[item.id].pos,
       enabled: evt.target.checked,
@@ -210,8 +220,8 @@ class CustomItemRenderer extends React.Component {
     onSetLoadOrderEntry(profile.id, item.id, entry);
   }
 
-  isExternal(props, subModId) {
-    const { mods } = props;
+  isExternal = (subModId) => {
+    const { mods } = this.props;
     const modIds = Object.keys(mods);
     if (modIds.includes(subModId)) {
       return false;
@@ -224,8 +234,8 @@ class CustomItemRenderer extends React.Component {
     return (id === undefined);
   }
 
-  setRef (ref, props) {
-    return props.onRef(ref);
+  setRef = (ref) => {
+    return this.props.onRef(ref);
   }
 }
 
