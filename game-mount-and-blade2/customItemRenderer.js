@@ -20,6 +20,8 @@ class CustomItemRenderer extends React.Component {
     this.renderInvalidEntry = this.renderInvalidEntry.bind(this);
     this.renderEntry = this.renderEntry.bind(this);
     this.renderContextMenu = this.renderContextMenu.bind(this);
+    this.renderOpenDirButton = this.renderOpenDirButton.bind(this);
+    this.renderIncompatibleIcon = this.renderIncompatibleIcon.bind(this);
   }
 
   componentDidMount() {
@@ -36,21 +38,25 @@ class CustomItemRenderer extends React.Component {
     const { item, order } = this.props;
     const isLocked = !!order[item.id]?.locked;
 
-    const renderLock = () => {
-      return React.createElement(tooltip.Icon, { name: 'locked', tooltip: 'Entry is locked in position' });
-    }
+    const renderLock = () => (isLocked)
+      ? React.createElement(tooltip.Icon, { name: 'locked', tooltip: 'Entry is locked in position' })
+      : null;
+
+    const renderExternalIcon = () => this.isExternal(item.id)
+      ? React.createElement(tooltip.Icon, { name: 'dialog-info', tooltip: 'Not managed by Vortex' })
+      : null;
 
     const renderInfo = () => {
-      return React.createElement(tooltip.Icon, { name: 'dialog-info', tooltip: 'Not managed by Vortex' });
+      return React.createElement(React.Fragment, {},
+        renderLock(),
+        renderExternalIcon(),
+        this.renderIncompatibleIcon(item),
+      );
     }
-
-    const isExternal = this.isExternal(item.id);
 
     return (this.isItemInvalid(item))
       ? this.renderOpenDirButton()
-      : (isLocked)
-        ? renderLock()
-        : isExternal ? renderInfo() : null;
+      : renderInfo();
   }
 
   // TODO: move all style configuration into a stylesheet
@@ -171,11 +177,25 @@ class CustomItemRenderer extends React.Component {
     return result;
   }
 
+  isIncompabile(item) {
+    const indexPath = path.join(__dirname, 'index.js');
+    const validFunc = mnb2extension.dynreq(indexPath).getValidationInfo;
+    const infoObj = validFunc(item.id);
+    return (infoObj.incompatibleDeps.length > 0);
+  }
+
   isItemInvalid(item) {
     const indexPath = path.join(__dirname, 'index.js');
     const validFunc = mnb2extension.dynreq(indexPath).getValidationInfo;
     const infoObj = validFunc(item.id);
     return ((infoObj.missing.length > 0) || (infoObj.cyclic.length > 0));
+  }
+
+  getItemIncompatibilities(item) {
+    const indexPath = path.join(__dirname, 'index.js');
+    const validFunc = mnb2extension.dynreq(indexPath).getValidationInfo;
+    const infoObj = validFunc(item.id);
+    return infoObj?.incompatible || [];
   }
 
   itemInvalidReason(item) {
@@ -196,7 +216,21 @@ class CustomItemRenderer extends React.Component {
     return undefined;
   }
 
-  renderOpenDirButton = () => {
+  renderIncompatibleIcon(item) {
+    const incomp = this.getItemIncompatibilities(item)
+      .map(inst => `Requires ${inst.depId} (${inst.requiredVersion}) - but - (${inst.currentVersion}) is installed`);
+
+    return (incomp.length > 0)
+      ? React.createElement(tooltip.Icon, {
+          style: {
+            color: 'yellow',
+          },
+          name: 'feedback-warning',
+          tooltip: incomp.join('\n')})
+      : null;
+  }
+
+  renderOpenDirButton() {
     const { item, mods, modsPath, installPath } = this.props;
     const managedModKeys = Object.keys(mods);
     const itemPath = managedModKeys.includes(item.id)
