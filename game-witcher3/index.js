@@ -454,21 +454,20 @@ function testDLC(instructions) {
     instruction => !!instruction.destination && instruction.destination.toLowerCase().startsWith('dlc' + path.sep)) !== undefined);
 }
 
-function prepareForModding(context, discovery) {
+function notifyMissingScriptMerger(api) {
   const notifId = 'missing-script-merger';
-  const api = context.api;
-  const missingScriptMerger = () => api.sendNotification({
+  api.sendNotification({
     id: notifId,
     type: 'info',
-    message: api.translate('Witcher 3 script merger not installed/configured', { ns: I18N_NAMESPACE }),
+    message: api.translate('Witcher 3 script merger is missing/misconfigured', { ns: I18N_NAMESPACE }),
     allowSuppress: true,
     actions: [
       {
         title: 'More',
         action: () => {
-          api.showDialog('info', 'Witcher 3', {
-            bbcode: api.translate('Vortex was unable to install the script merger automatically. Unfortunately the tool needs to be downloaded and configured manually. '
-              + '[url=https://wiki.nexusmods.com/index.php/Tool_Setup:_Witcher_3_Script_Merger]find out more about how to configure it as a tool for use in Vortex.[/url][br][/br]'
+          api.showDialog('info', 'Witcher 3 Script Merger', {
+            bbcode: api.translate('Vortex is unable to resolve the Script Merger\'s location. The tool needs to be downloaded and configured manually. '
+              + '[url=https://wiki.nexusmods.com/index.php/Tool_Setup:_Witcher_3_Script_Merger]Find out more about how to configure it as a tool for use in Vortex.[/url][br][/br][br][/br]'
               + 'Note: While script merging works well with the vast majority of mods, there is no guarantee for a satisfying outcome in every single case.', { ns: I18N_NAMESPACE }),
           }, [
             { label: 'Cancel', action: () => {
@@ -482,14 +481,16 @@ function prepareForModding(context, discovery) {
       },
     ],
   });
+}
 
+function prepareForModding(context, discovery) {
   const defaultWSMFilePath = path.join(discovery.path, 'WitcherScriptMerger', 'WitcherScriptMerger.exe');
   const scriptMergerPath = util.getSafe(discovery, ['tools', SCRIPT_MERGER_ID, 'path'], defaultWSMFilePath);
 
   const findScriptMerger = (error) => {
     log('error', 'failed to download/install script merger', error);
     return fs.statAsync(scriptMergerPath)
-      .catch(() => missingScriptMerger())
+      .catch(() => notifyMissingScriptMerger(context.api))
   };
 
   const ensurePath = (dirpath) =>
@@ -525,8 +526,8 @@ function getScriptMergerTool(api) {
 function runScriptMerger(api) {
   const tool = getScriptMergerTool(api);
   if (tool?.path === undefined) {
-    const error = new util.SetupError('Witcher Script Merger is not configured correctly');
-    api.showErrorNotification('Failed to run tool', error, { allowReport: false });
+    notifyMissingScriptMerger(api);
+    return Promise.resolve();
   }
 
   return api.runExecutable(tool.path, [], { suggestDeploy: true })
@@ -898,8 +899,8 @@ function infoComponent(context, props) {
 
 function queryScriptMerge(context, reason) {
   const state = context.api.store.getState();
-  const hasW3MergeScript = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID, 'tools', SCRIPT_MERGER_ID], undefined);
-  if (!!hasW3MergeScript && !!hasW3MergeScript.path) {
+  const scriptMergerTool = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID, 'tools', SCRIPT_MERGER_ID], undefined);
+  if (!!scriptMergerTool?.path) {
     context.api.sendNotification({
       id: 'witcher3-merge',
       type: 'warning',
@@ -926,6 +927,8 @@ function queryScriptMerge(context, reason) {
         }
       ],
     });
+  } else {
+    notifyMissingScriptMerger(context.api);
   }
 }
 
@@ -1283,7 +1286,7 @@ function main(context) {
         return Promise.resolve();
       }
 
-      if (prevDeployment !== deployment) {
+      if (JSON.stringify(prevDeployment) !== JSON.stringify(deployment)) {
         prevDeployment = deployment;
         queryScriptMerge(context, 'Your mods state/load order has changed since the last time you ran '
           + 'the script merger. You may want to run the merger tool and check whether any new script conflicts are '
