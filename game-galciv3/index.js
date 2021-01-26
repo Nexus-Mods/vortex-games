@@ -42,23 +42,6 @@ function dirExists(dirPath) {
     .catch(() => Promise.resolve(false));
 }
 
-function prepareForModding(api) {
-  const missingModPath = () => {
-      api.sendNotification({
-      type: 'error',
-      title: 'Missing mods path',
-      message: 'Please run the game at least once',
-    })
-    return Promise.reject(new util.ProcessCanceled('Mods directory doesn\'t exist'));
-  };
-  const defaultModFolder = path.join(modPath(), 'Factions');
-  const crusadeModFolder = path.join(crusadeModPath(), 'Factions');
-  return Promise.all([dirExists(defaultModFolder), dirExists(crusadeModFolder)])
-    .then(res => (res[0] || res[1])
-      ? Promise.resolve()
-      : missingModPath());
-}
-
 function installContent(files) {
   // We rely on mod authors to properly pack their mods and include.
   //  the mod folder within the archive
@@ -67,7 +50,6 @@ function installContent(files) {
   const filtered = files.filter(file => !file.endsWith(path.sep));
   const factionFiles = filtered.filter(file => file.endsWith(FACTION_EXT));
   const nonFactionFiles = filtered.filter(file => !file.endsWith(FACTION_EXT));
-  
   const instructions = nonFactionFiles.map(file => {
     return {
       type: 'copy',
@@ -100,13 +82,20 @@ function main(context) {
     name: 'Galactic Civilizations III',
     mergeMods: true,
     queryPath: findGame,
-    queryModPath: modPath,
+    queryModPath: () => {
+      const crusadePath = crusadeModPath();
+      try {
+        fs.statSync(crusadePath);
+        return crusadePath;
+      } catch (err) {
+        return modPath();
+      }
+    },
     logo: 'gameart.jpg',
     executable: () => 'GalCiv3.exe',
     requiredFiles: [
       'GalCiv3.exe',
     ],
-    setup: () => prepareForModding(context.api),
     environment: {
       SteamAPPId: STEAM_ID.toString(),
     },
@@ -117,8 +106,7 @@ function main(context) {
 
   context.registerInstaller('galciv3installer', 25, testSupportedContent, installContent);
   context.registerModType('galciv3crusade', 25, (gameId) => (gameId === GAME_ID),
-    () => crusadeModPath(), (instructions) => dirExists(path.join(crusadeModPath(), 'Factions'))
-      .then(res => Promise.resolve(res)));
+    () => crusadeModPath(), () => dirExists(crusadeModPath()));
 
   context.once(() => {
     let displayNotification = false;
