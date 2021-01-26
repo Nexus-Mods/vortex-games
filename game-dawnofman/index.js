@@ -81,7 +81,8 @@ function prepareForModding(discovery) {
 }
 
 function endsWithPattern(instructions, pattern) {
-  return Promise.resolve(instructions.find(inst => inst.source.endsWith(pattern)) !== undefined);
+  return Promise.resolve(instructions.find(inst =>
+    ((!!inst?.destination) && inst.destination.endsWith(pattern))) !== undefined);
 }
 
 function installSceneMod(files, destinationPath) {
