@@ -52,8 +52,10 @@ function getLoadOrderFilePath() {
 function writeToModSettings() {
   const filePath = getLoadOrderFilePath();
   const parser = new IniParser.default(new IniParser.WinapiFormat());
-  return fs.removeAsync(filePath).then(() => fs.writeFileAsync(filePath, '', { encoding:'utf8' }))
-    .then(() => parser.read(filePath)).then(ini => {
+  return fs.removeAsync(filePath)
+    .then(() => fs.writeFileAsync(filePath, '', { encoding:'utf8' }))
+    .then(() => parser.read(filePath))
+    .then(ini => {
       return Promise.each(Object.keys(_INI_STRUCT), (key) => {
         ini.data[key] = {
           Enabled: _INI_STRUCT[key].Enabled,
@@ -198,16 +200,6 @@ function getElementValues(context, pattern) {
     .catch(err => (err.code === 'ENOENT') // No merge file? - no problem.
       ? Promise.resolve([])
       : Promise.reject(new util.DataInvalid(`Failed to parse ${MERGE_INV_MANIFEST}: ${err}`)))
-}
-
-function getUnificationPatch(context) {
-  const state = context.api.store.getState();
-  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID]);
-  const uniPatchPath = path.join(discovery.path, 'Mods', UNI_PATCH);
-  return fs.statAsync(uniPatchPath)
-    .then(() => Promise.resolve(UNI_PATCH))
-    .catch(() => Promise.resolve(undefined));
-
 }
 
 function getMergedModNames(context) {
@@ -656,7 +648,6 @@ function genEntryActions (context, item, minPriority) {
           }
           if (itemKey !== undefined) {
             _INI_STRUCT[itemKey].Priority = parseInt(wantedPriority);
-
           } else {
             log('error', 'Failed to set priority - mod is not in ini struct', { modId: item.id });
           }
@@ -723,7 +714,7 @@ async function preSort(context, items, direction, updateType) {
 
   const lockedManualMods = allMods.manual.filter(entry => entry.startsWith(LOCKED_PREFIX));
   const readableNames = {
-    'mod0000____CompilationTrigger': 'Unification/Community Patch',
+    [UNI_PATCH]: 'Unification/Community Patch',
   };
 
   const lockedEntries = [].concat(allMods.merged, lockedManualMods)
