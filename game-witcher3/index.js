@@ -799,9 +799,9 @@ function findModFolder(installationPath, mod) {
     return Promise.reject(new Error(errMessage));
   }
 
-  const expectedModNameLocation = (mod.type !== 'witcher3menumodroot')
-    ? path.join(installationPath, mod.installationPath)
-    : path.join(installationPath, mod.installationPath, 'Mods');
+  const expectedModNameLocation = ['witcher3menumodroot', 'witcher3tl'].includes(mod.type)
+    ? path.join(installationPath, mod.installationPath, 'Mods')
+    : path.join(installationPath, mod.installationPath);
   return fs.readdirAsync(expectedModNameLocation)
     .then(entries => Promise.resolve(entries[0]));
 }
