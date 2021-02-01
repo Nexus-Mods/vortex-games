@@ -104,14 +104,19 @@ async function getDeployedManaged(context, modType) {
       const modName = await getModName(path.join(deployPath, manifest.relPath), 'Name');
       accum.push({ modName, modId: manifest.source });
     } catch (err) {
-      // The only way this can occur is if the user had manipulated the file
+      // The can occur if the user had manipulated the file
       //  in staging if using symlinks or he had moved/removed the file in
       //  the mod's folder completely.
-      log('error', 'manifest is missing', err);
+      // Since game version 8.4 this can also happen if the name in the manifest is
+      // no longer valid.
+      context.api.showErrorNotification('Manifest is missing or invalid', err, {
+        id: `bas-invalid-manifest-${manifest.relPath}`,
+        allowReport: false,
+        message: manifest.relPath,
+      });
     }
     return accum;
   }, []);
-    
 }
 
 async function getDeployedExternal(context, managedNames, loKeys) {

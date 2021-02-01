@@ -5,6 +5,8 @@ const Promise = require('bluebird');
 const path = require('path');
 const { actions, fs, log, selectors, FlexLayout, util } = require('vortex-api');
 const { parseXmlString } = require('libxmljs');
+const semver = require('semver');
+
 const CustomItemRenderer = require('./customItemRenderer');
 const { SUBMOD_FILE, GAME_ID } = require('./common');
 const { migrate026 } = require('./migrations');
@@ -107,16 +109,46 @@ async function getDeployedSubModPaths(context) {
 
 async function getDeployedModData(context, subModuleFilePaths) {
   const managedIds = await getManagedIds(context);
+  const getCleanVersion = (subModId, unsanitized) => {
+    if (!unsanitized) {
+      log('debug', 'failed to sanitize/coerce version', { subModId, unsanitized });
+      return undefined;
+    }
+    try {
+      const sanitized = unsanitized.replace(/[a-z]|[A-Z]/g, '');
+      const coerced = semver.coerce(sanitized);
+      return coerced.version;
+    } catch (err) {
+      log('debug', 'failed to sanitize/coerce version', { subModId, unsanitized, error: err.message });
+      return undefined;
+    }
+  };
+
   return Promise.reduce(subModuleFilePaths, async (accum, subModFile) => {
     try {
       const subModData = await getXMLData(subModFile);
       const subModId = subModData.get('//Id').attr('value').value();
+      const subModVerData = subModData.get('//Version').attr('value').value();
+      const subModVer = getCleanVersion(subModId, subModVerData);
       const managedEntry = managedIds.find(entry => entry.subModId === subModId);
       const isMultiplayer = (!!subModData.get(`//${XML_EL_MULTIPLAYER}`));
       const depNodes = subModData.find('//DependedModule');
       let dependencies = [];
       try {
-        dependencies = depNodes.map(depNode => depNode.attr('Id').value());
+        dependencies = depNodes.map(depNode => {
+          let depVersion;
+          const depId = depNode.attr('Id').value();
+          try {
+            const unsanitized = depNode.attr('DependentVersion').value();
+            depVersion = getCleanVersion(subModId, unsanitized);
+          } catch (err) {
+            // DependentVersion is an optional attribute, it's not a big deal if
+            //  it's missing.
+            log('debug', 'failed to resolve dependency version', { subModId, error: err.message });
+          }
+
+          return { depId, depVersion };
+        });
       } catch (err) {
         log('debug', 'submodule has no dependencies or is invalid', err);
       }
@@ -125,6 +157,7 @@ async function getDeployedModData(context, subModuleFilePaths) {
       accum[subModId] = {
         subModId,
         subModName,
+        subModVer,
         subModFile,
         vortexId: !!managedEntry ? managedEntry.vortexId : subModId,
         isOfficial: OFFICIAL_MODULES.has(subModId),
@@ -132,8 +165,14 @@ async function getDeployedModData(context, subModuleFilePaths) {
         isMultiplayer,
         dependencies,
         invalid: {
-          cyclic: [], // Will hold the submod ids of any detected cyclic dependencies.
-          missing: [], // Will hold the submod ids of any missing dependencies.
+          // Will hold the submod ids of any detected cyclic dependencies.
+          cyclic: [],
+
+          // Will hold the submod ids of any missing dependencies.
+          missing: [],
+
+          // Will hold the submod ids of supposedly incompatible dependencies (version-wise)
+          incompatibleDeps: [],
         },
       };
     } catch(err) {
@@ -554,9 +593,11 @@ function getValidationInfo(modVortexId) {
   const subModId = Object.keys(CACHE).find(key => CACHE[key].vortexId === modVortexId);
   const cyclic = util.getSafe(CACHE[subModId], ['invalid', 'cyclic'], []);
   const missing = util.getSafe(CACHE[subModId], ['invalid', 'missing'], []);
+  const incompatible = util.getSafe(CACHE[subModId], ['invalid', 'incompatibleDeps'], []);
   return {
     cyclic,
     missing,
+    incompatible,
   }
 }
 
@@ -564,6 +605,7 @@ function tSort(subModIds, allowLocked = false, loadOrder = undefined) {
   // Topological sort - we need to:
   //  - Identify cyclic dependencies.
   //  - Identify missing dependencies.
+  //  - We will try to identify incompatible dependencies (version-wise)
 
   // These are manually locked mod entries.
   const lockedSubMods = (!!loadOrder)
@@ -577,8 +619,9 @@ function tSort(subModIds, allowLocked = false, loadOrder = undefined) {
   const alphabetical = subModIds.filter(subMod => !lockedSubMods.includes(subMod))
                                 .sort();
   const graph = alphabetical.reduce((accum, entry) => {
+    const depIds = [...CACHE[entry].dependencies].map(dep => dep.depId);
     // Create the node graph.
-    accum[entry] = CACHE[entry].dependencies.sort();
+    accum[entry] = depIds.sort();
     return accum;
   }, {});
 
@@ -608,6 +651,27 @@ function tSort(subModIds, allowLocked = false, loadOrder = undefined) {
         visited[node] = true;
         processing[node] = false;
         continue;
+      }
+
+      const incompatibleDeps = CACHE[node].invalid.incompatibleDeps;
+      const incDep = incompatibleDeps.find(d => d.depId === dep);
+      if (Object.keys(graph).includes(dep) && (incDep === undefined)) {
+        const depVer = CACHE[dep].subModVer;
+        const depInst = CACHE[node].dependencies.find(d => d.depId === dep);
+        try {
+          const match = semver.satisfies(depInst.depVersion, depVer);
+          if (!match && !!depInst?.depVersion && !!depVer) {
+            CACHE[node].invalid.incompatibleDeps.push({
+              depId: dep,
+              requiredVersion: depInst.depVersion,
+              currentVersion: depVer,
+            });
+          }
+        } catch (err) {
+          // Ok so we didn't manage to compare the versions, we log this and
+          //  continue.
+          log('debug', 'failed to compare versions', err);
+        }
       }
 
       if (!visited[dep] && !lockedSubMods.includes(dep)) {
