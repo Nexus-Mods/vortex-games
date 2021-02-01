@@ -1112,6 +1112,17 @@ function main(context) {
     return discovery.path;
   };
 
+  const openTW3DocPath = () => {
+    const docPath = path.join(appUni.getPath('documents'), 'The Witcher 3');
+    util.opn(docPath).catch(() => null);
+  };
+
+  const isTW3 = () => {
+    const state = context.api.getState();
+    const gameMode = selectors.activeGameId(state);
+    return (gameMode === GAME_ID);
+  }
+
   context.registerInstaller('witcher3tl', 25, testSupportedTL, installTL);
   context.registerInstaller('witcher3content', 50, testSupportedContent, installContent);
   context.registerInstaller('witcher3menumodroot', 20, testMenuModRoot, installMenuMod);
@@ -1127,14 +1138,10 @@ function main(context) {
     (filePath, mergeDir) => merge(filePath, mergeDir, context), 'witcher3menumodroot');
 
   context.registerAction('mod-icons', 300, 'open-ext', {},
-                         'Open TW3 Documents Folder', () => {
-    const docPath = path.join(appUni.getPath('documents'), 'The Witcher 3');
-    util.opn(docPath).catch(() => null);
-  }, () => {
-    const state = context.api.getState();
-    const gameMode = selectors.activeGameId(state);
-    return (gameMode === GAME_ID);
-  })
+                         'Open TW3 Documents Folder', openTW3DocPath, isTW3);
+
+  context.registerAction('generic-load-order-icons', 300, 'open-ext', {},
+                         'Open TW3 Documents Folder', openTW3DocPath, isTW3);
 
   context.registerAction('generic-load-order-icons', 100, 'loot-sort', {}, 'Reset Priorities',
     () => {
