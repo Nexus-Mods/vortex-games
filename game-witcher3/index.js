@@ -57,6 +57,15 @@ function writeToModSettings() {
     .then(() => parser.read(filePath))
     .then(ini => {
       return Promise.each(Object.keys(_INI_STRUCT), (key) => {
+        if (_INI_STRUCT?.[key]?.Enabled === undefined) {
+          // It's possible for the user to run multiple operations at once,
+          //  causing the static ini structure to be modified
+          //  elsewhere while we're attempting to write to file. The user must've been
+          //  modifying the load order while deploying. This should
+          //  make sure we don't attempt to write any invalid mod entries.
+          //  https://github.com/Nexus-Mods/Vortex/issues/8437
+          return Promise.resolve();
+        }
         ini.data[key] = {
           Enabled: _INI_STRUCT[key].Enabled,
           Priority: _INI_STRUCT[key].Priority,
