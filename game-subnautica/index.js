@@ -1,6 +1,6 @@
 function main(context) {
   context.registerGameStub('subnautica', {
-    name: 'Subnautica',
+    name: 'Game: Subnautica',
     modId: 202,
   });
 }
