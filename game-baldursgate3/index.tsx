@@ -557,7 +557,14 @@ function makePreSort(api: types.IExtensionApi) {
       paks = [];
     }
 
-    const manifest = await util.getManifest(api, '', GAME_ID);
+    let manifest;
+    try {
+      manifest = await util.getManifest(api, '', GAME_ID);
+    } catch (err) {
+      const allowReport = !['EPERM'].includes(err.code);
+      api.showErrorNotification('Failed to read deployment manifest', err, { allowReport });
+      return items;
+    }
 
     const result: any[] = [];
 
