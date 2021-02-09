@@ -68,8 +68,13 @@ function testSupported(files, gameId) {
   });
 }
 
-function prepareForModding(discovery) {
-  return fs.ensureDirWritableAsync(modulesModPath(), () => Promise.resolve());
+async function prepareForModding(discovery) {
+  try {
+    await fs.ensureDirWritableAsync(modulesModPath());
+    await fs.ensureDirWritableAsync(overrideModPath());
+  } catch (err) {
+    return Promise.reject(err);
+  }
 }
 
 function main(context) {
@@ -89,6 +94,10 @@ function main(context) {
 
   // This installer will only support mods with .mod files.
   context.registerInstaller('moduleinstaller', 25, testSupported, install);
+
+  context.registerModType('nwn2-override-mod', 25, (gameId) => gameId === GAME_ID,
+    () => overrideModPath(),
+    () => Promise.resolve(false), { name: 'NWN2 Override Mod' });
 
   return true;
 }
