@@ -90,13 +90,12 @@ async function getMergerVersion(context) {
     return Promise.resolve(undefined);
   }
 
-  if (merger?.mergerVersion !== undefined) {
-    return Promise.resolve(merger.mergerVersion);
-  }
-
   if (!!merger?.path) {
     return fs.statAsync(merger.path)
       .then(() => {
+        if (merger?.mergerVersion !== undefined) {
+          return Promise.resolve(merger.mergerVersion);
+        }
         const execVersion = getVersion(merger.path);
         if (!!execVersion) {
           const trimmedVersion = execVersion.split('.').slice(0, 3).join('.');
