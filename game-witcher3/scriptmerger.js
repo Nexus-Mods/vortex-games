@@ -2,6 +2,7 @@ const https = require('https');
 const path = require('path');
 const _ = require('lodash');
 const url = require('url');
+const { Builder, parseStringPromise } = require('xml2js');
 const semver = require('semver');
 const getVersion = require('exe-version').default;
 const { actions, fs, log, util } = require('vortex-api');
@@ -10,6 +11,8 @@ const RELEASE_CUTOFF = '0.6.5';
 const GITHUB_URL = 'https://api.github.com/repos/IDCs/WitcherScriptMerger';
 const MERGER_RELPATH = 'WitcherScriptMerger';
 const MERGER_ID = 'W3ScriptMerger';
+
+const MERGER_CONFIG_FILE = 'WitcherScriptMerger.exe.config';
 
 const { getHash, MD5ComparisonError } = require('./common');
 
@@ -385,10 +388,41 @@ async function setUpMerger(context, mergerVersion, newPath) {
     };
   newToolDetails.path = path.join(newPath, 'WitcherScriptMerger.exe');
   newToolDetails.workingDirectory = newPath;
+  await setMergerConfig(discovery.path, newPath);
   context.api.store.dispatch(actions.addDiscoveredTool('witcher3', MERGER_ID, newToolDetails, true));
   return Promise.resolve();
 }
 
+async function setMergerConfig(gameRootPath, scriptMergerPath) {
+  const findIndex = (nodes, id) => {
+    return nodes?.findIndex(iter => iter.$?.key === id) ?? undefined;
+  };
+
+  const configFilePath = path.join(scriptMergerPath, MERGER_CONFIG_FILE);
+  try {
+    const data = await fs.readFileAsync(configFilePath, { encoding: 'utf8' });
+    const config = await parseStringPromise(data);
+    const replaceElement = (id, replacement) => {
+      const idx = findIndex(config?.configuration?.appSettings?.[0]?.add, id);
+      if (idx !== undefined) {
+        config.configuration.appSettings[0].add[idx].$ = { key: id, value: replacement };
+      }
+    };
+
+    replaceElement('GameDirectory', gameRootPath);
+    replaceElement('VanillaScriptsDirectory', path.join(gameRootPath, 'content', 'content0', 'scripts'));
+    replaceElement('ModsDirectory', path.join(gameRootPath, 'mods'));
+    const builder = new Builder();
+    const xml = builder.buildObject(config);
+    await fs.writeFileAsync(configFilePath, xml);
+  } catch (err) {
+    // Guess the user will have to set up the merger configuration
+    //  through the merger directly.
+    return;
+  }
+}
+
 module.exports = {
-  default: downloadScriptMerger,
+  downloadScriptMerger,
+  setMergerConfig,
 };

@@ -5,7 +5,7 @@ const { actions, fs, FlexLayout, log, selectors, util } = require('vortex-api');
 const { parseXmlString } = require('libxmljs');
 const { app, remote } = require('electron');
 
-const merger = require('./scriptmerger');
+const { downloadScriptMerger, setMergerConfig } = require('./scriptmerger');
 const menuMod = require('./menumod');
 const { GAME_ID, INPUT_XML_FILENAME, PART_SUFFIX } = require('./common');
 
@@ -508,7 +508,7 @@ function prepareForModding(context, discovery) {
         ? ensurePath(path.dirname(defaultWSMFilePath))
         : Promise.reject(err)),
     ensurePath(path.dirname(getLoadOrderFilePath()))])
-      .then(() => merger.default(context)
+      .then(() => downloadScriptMerger(context)
         .catch(err => (err instanceof util.UserCanceled)
           ? Promise.resolve()
           : findScriptMerger(err)));
