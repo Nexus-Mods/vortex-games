@@ -748,7 +748,7 @@ function main(context: types.IExtensionContext) {
 
     context.api.onAsync('did-deploy', (profileId: string, deployment) => {
       const profile = selectors.profileById(context.api.getState(), profileId);
-      if ((profile.gameId === GAME_ID) && (forceRefresh !== undefined)) {
+      if ((profile?.gameId === GAME_ID) && (forceRefresh !== undefined)) {
         forceRefresh();
       }
       return Promise.resolve();
