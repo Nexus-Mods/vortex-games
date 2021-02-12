@@ -37,16 +37,19 @@ function prepareForModding(discovery, api) {
   if (api.ext.addReEngineGame === undefined) {
     return Promise.reject(new Error('re-engine-wrapper dependency is not loaded!'));
   }
-  api.ext.addReEngineGame({
-    gameMode: GAME_ID,
-    bmsScriptPaths: {
-      invalidation: INVAL_SCRIPT,
-      revalidation: REVAL_SCRIPT,
-      extract: BMS_SCRIPT,
-    },
-    fileListPath: ORIGINAL_FILE_LIST,
-  });
-  return fs.ensureDirWritableAsync(path.join(discovery.path, 'natives'), () => Promise.resolve());
+  return new Promise((resolve, reject) => {
+    api.ext.addReEngineGame({
+      gameMode: GAME_ID,
+      bmsScriptPaths: {
+        invalidation: INVAL_SCRIPT,
+        revalidation: REVAL_SCRIPT,
+        extract: BMS_SCRIPT,
+      },
+      fileListPath: ORIGINAL_FILE_LIST,
+    }, err => (err === undefined)
+      ? resolve()
+      : reject(err));
+  }).then(() => fs.ensureDirWritableAsync(path.join(discovery.path, 'natives')));
 }
 
 function testSupportedContent(files, gameId) {
