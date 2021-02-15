@@ -181,7 +181,7 @@ function main(context) {
     id: GAME_ID,
     name: 'Dragon\'s Dogma',
     mergeMods: true,
-    mergeArchive: filePath => filePath.toLowerCase().endsWith(path.join('rom', 'game_main.arc')),
+    mergeArchive: filePath => path.extname(filePath) === '.arc',
     queryPath: findGame,
     queryModPath: modPath,
     logo: 'gameart.jpg',
