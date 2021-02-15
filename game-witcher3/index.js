@@ -1284,7 +1284,10 @@ function main(context) {
         return Promise.resolve();
       }
 
-      return menuMod.onWillDeploy(context.api, deployment, activeProfile);
+      return menuMod.onWillDeploy(context.api, deployment, activeProfile)
+        .catch(err => (err instanceof util.UserCanceled)
+          ? Promise.resolve()
+          : Promise.reject(err));
     });
     context.api.onAsync('did-deploy', (profileId, deployment) => {
       const state = context.api.store.getState();
