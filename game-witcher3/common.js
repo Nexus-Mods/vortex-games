@@ -1,6 +1,7 @@
 const crypto = require('crypto');
+const { app, remote } = require('electron');
+const path = require('path');
 const { fs } = require('vortex-api');
-
 class MD5ComparisonError extends Error {
   constructor(message, file) {
     super(message);
@@ -31,7 +32,7 @@ function calcHashImpl(filePath) {
   });
 }
 
-function calcHash(filePath, tries = 3) {
+function getHash(filePath, tries = 3) {
   return calcHashImpl(filePath)
     .catch(err => {
       if (['EMFILE', 'EBADF'].includes(err['code']) && (tries > 0)) {
@@ -42,16 +43,33 @@ function calcHash(filePath, tries = 3) {
     });
 }
 
-exports.MD5ComparisonError = MD5ComparisonError;
+const uniApp = app || remote.app;
+function getLoadOrderFilePath() {
+  return path.join(uniApp.getPath('documents'), 'The Witcher 3', LOAD_ORDER_FILENAME);
+}
 
-exports.getHash = calcHash;
-
-exports.GAME_ID = 'witcher3';
+const GAME_ID = 'witcher3';
 
 // File used by some mods to define hotkey/input mapping
-exports.INPUT_XML_FILENAME = 'input.xml';
+const INPUT_XML_FILENAME = 'input.xml';
 
 // The W3MM menu mod pattern seems to enforce a modding pattern
 //  where {filename}.part.txt holds a diff of what needs to be
 //  added to the original file - we're going to use this pattern as well. 
-exports.PART_SUFFIX = '.part.txt';
+const PART_SUFFIX = '.part.txt';
+
+const SCRIPT_MERGER_ID = 'W3ScriptMerger';
+const MERGE_INV_MANIFEST = 'MergeInventory.xml';
+const LOAD_ORDER_FILENAME = 'mods.settings';
+
+module.exports = {
+  GAME_ID,
+  LOAD_ORDER_FILENAME,
+  MERGE_INV_MANIFEST,
+  SCRIPT_MERGER_ID,
+  INPUT_XML_FILENAME,
+  PART_SUFFIX,
+  getHash,
+  getLoadOrderFilePath,
+  MD5ComparisonError,
+}

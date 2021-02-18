@@ -7,7 +7,10 @@ const { app, remote } = require('electron');
 
 const { downloadScriptMerger, setMergerConfig } = require('./scriptmerger');
 const menuMod = require('./menumod');
-const { GAME_ID, INPUT_XML_FILENAME, PART_SUFFIX } = require('./common');
+const { GAME_ID, INPUT_XML_FILENAME, LOAD_ORDER_FILENAME, getLoadOrderFilePath,
+        PART_SUFFIX, SCRIPT_MERGER_ID, MERGE_INV_MANIFEST } = require('./common');
+
+const { storeToProfile, restoreFromProfile } = require('./mergeBackup');
 
 const React = require('react');
 const BS = require('react-bootstrap');
@@ -15,11 +18,7 @@ const BS = require('react-bootstrap');
 const IniParser = require('vortex-parse-ini');
 
 const appUni = app || remote.app;
-
-const SCRIPT_MERGER_ID = 'W3ScriptMerger';
 const I18N_NAMESPACE = 'game-witcher3';
-const MERGE_INV_MANIFEST = 'MergeInventory.xml';
-const LOAD_ORDER_FILENAME = 'mods.settings';
 
 const UNI_PATCH = 'mod0000____CompilationTrigger';
 const LOCKED_PREFIX = 'mod0000__';
@@ -44,10 +43,6 @@ const tools = [
     ],
   }
 ]
-
-function getLoadOrderFilePath() {
-  return path.join(appUni.getPath('documents'), 'The Witcher 3', LOAD_ORDER_FILENAME);
-}
 
 function writeToModSettings() {
   const filePath = getLoadOrderFilePath();
@@ -1185,6 +1180,36 @@ function main(context) {
       return gameMode === GAME_ID;
     });
 
+  context.registerAction('generic-load-order-icons', 300, 'open-ext', {},
+    'Store Profile', () => {
+      const state = context.api.getState();
+      const profile = selectors.activeProfile(state);
+      try {
+        storeToProfile(context, profile.id)
+      } catch (err) {
+        context.api.showErrorNotification('Failed to store profile', err);
+      }
+    }, isTW3);
+
+  context.registerAction('generic-load-order-icons', 300, 'open-ext', {},
+  'Restore Profile', () => {
+    const state = context.api.getState();
+    const profile = selectors.activeProfile(state);
+    try {
+      restoreFromProfile(context, profile.id)
+    } catch (err) {
+      context.api.showErrorNotification('Failed to store profile', err);
+    }
+  }, isTW3);
+
+  context.registerProfileFeature(
+    'local_merges', 'boolean', 'settings', 'Script Merges',
+    'This profile has its own script merges',
+    () => {
+      const activeGameId = selectors.activeGameId(context.api.getState());
+      return activeGameId === GAME_ID;
+    });
+
   const invalidModTypes = ['witcher3menumoddocuments'];
   context.registerLoadOrderPage({
     gameId: GAME_ID,
@@ -1270,11 +1295,19 @@ function main(context) {
 
   let prevDeployment = [];
   context.once(() => {
-    context.api.events.on('gamemode-activated', (gameMode) => {
+    context.api.events.on('gamemode-activated', async (gameMode) => {
       if (gameMode !== GAME_ID) {
         // Just in case the script merger notification is still
         //  present.
         context.api.dismissNotification('witcher3-merge');
+      } else {
+        const state = context.api.getState();
+        const lastProfId = selectors.lastActiveProfileForGame(state, gameMode);
+        const activeProf = selectors.activeProfile(state);
+        if (lastProfId !== activeProf?.id) {
+          await storeToProfile(context, lastProfId);
+          await restoreFromProfile(context, activeProf?.id)
+        }
       }
     });
     context.api.onAsync('will-deploy', (profileId, deployment) => {
@@ -1341,8 +1374,24 @@ function main(context) {
         });
     });
     context.api.events.on('profile-will-change', (newProfileId) => {
-      revertLOFile(context);
+      const state = context.api.getState();
+      const profile = selectors.profileById(state, newProfileId);
+      if (profile?.gameId !== GAME_ID) {
+        return;
+      }
+      const lastProfId = selectors.lastActiveProfileForGame(state, profile.gameId);
+      storeToProfile(context, lastProfId);
     });
+
+    context.api.events.on('profile-did-change', (newProfileId) => {
+      const state = context.api.getState();
+      const profile = selectors.profileById(state, newProfileId);
+      if (profile?.gameId !== GAME_ID) {
+        return;
+      }
+      restoreFromProfile(context, profile.id);
+    });
+
     context.api.events.on('purge-mods', () => {
       revertLOFile(context);
     });

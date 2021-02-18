@@ -10,11 +10,10 @@ const { actions, fs, log, util } = require('vortex-api');
 const RELEASE_CUTOFF = '0.6.5';
 const GITHUB_URL = 'https://api.github.com/repos/IDCs/WitcherScriptMerger';
 const MERGER_RELPATH = 'WitcherScriptMerger';
-const MERGER_ID = 'W3ScriptMerger';
 
 const MERGER_CONFIG_FILE = 'WitcherScriptMerger.exe.config';
 
-const { getHash, MD5ComparisonError } = require('./common');
+const { getHash, MD5ComparisonError, SCRIPT_MERGER_ID } = require('./common');
 
 function query(baseUrl, request) {
   return new Promise((resolve, reject) => {
@@ -103,7 +102,7 @@ async function getMergerVersion(context) {
         if (!!execVersion) {
           const trimmedVersion = execVersion.split('.').slice(0, 3).join('.');
           const newToolDetails = { ...merger, mergerVersion: trimmedVersion };
-          context.api.store.dispatch(actions.addDiscoveredTool('witcher3', MERGER_ID, newToolDetails, true));
+          context.api.store.dispatch(actions.addDiscoveredTool('witcher3', SCRIPT_MERGER_ID, newToolDetails, true));
           return Promise.resolve(trimmedVersion);
         }
       })
@@ -377,7 +376,7 @@ async function setUpMerger(context, mergerVersion, newPath) {
   const newToolDetails = (!!currentDetails)
     ? { ...currentDetails, mergerVersion }
     : {
-      id: MERGER_ID,
+      id: SCRIPT_MERGER_ID,
       name: 'W3 Script Merger',
       logo: 'WitcherScriptMerger.jpg',
       executable: () => 'WitcherScriptMerger.exe',
@@ -389,8 +388,23 @@ async function setUpMerger(context, mergerVersion, newPath) {
   newToolDetails.path = path.join(newPath, 'WitcherScriptMerger.exe');
   newToolDetails.workingDirectory = newPath;
   await setMergerConfig(discovery.path, newPath);
-  context.api.store.dispatch(actions.addDiscoveredTool('witcher3', MERGER_ID, newToolDetails, true));
+  context.api.store.dispatch(actions.addDiscoveredTool('witcher3', SCRIPT_MERGER_ID, newToolDetails, true));
   return Promise.resolve();
+}
+
+async function getMergedModName(scriptMergerPath) {
+  const configFilePath = path.join(scriptMergerPath, MERGER_CONFIG_FILE);
+  try {
+    const data = await fs.readFileAsync(configFilePath, { encoding: 'utf8' });
+    const config = await parseStringPromise(data);
+    const configItems = config?.configuration?.appSettings?.[0]?.add;
+    const MergedModName = configItems?.find(item => item.$?.key === 'MergedModName') ?? undefined;
+    if (MergedModName) {
+      return MergedModName.$.value;
+    }
+  } catch (err) {
+    return undefined;
+  }
 }
 
 async function setMergerConfig(gameRootPath, scriptMergerPath) {
@@ -425,4 +439,5 @@ async function setMergerConfig(gameRootPath, scriptMergerPath) {
 module.exports = {
   downloadScriptMerger,
   setMergerConfig,
+  getMergedModName,
 };
