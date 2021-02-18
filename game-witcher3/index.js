@@ -1180,31 +1180,9 @@ function main(context) {
       return gameMode === GAME_ID;
     });
 
-  context.registerAction('generic-load-order-icons', 300, 'open-ext', {},
-    'Store Profile', () => {
-      const state = context.api.getState();
-      const profile = selectors.activeProfile(state);
-      try {
-        storeToProfile(context, profile.id)
-      } catch (err) {
-        context.api.showErrorNotification('Failed to store profile', err);
-      }
-    }, isTW3);
-
-  context.registerAction('generic-load-order-icons', 300, 'open-ext', {},
-  'Restore Profile', () => {
-    const state = context.api.getState();
-    const profile = selectors.activeProfile(state);
-    try {
-      restoreFromProfile(context, profile.id)
-    } catch (err) {
-      context.api.showErrorNotification('Failed to store profile', err);
-    }
-  }, isTW3);
-
   context.registerProfileFeature(
-    'local_merges', 'boolean', 'settings', 'Script Merges',
-    'This profile has its own script merges',
+    'local_merges', 'boolean', 'settings', 'Profile Data',
+    'This profile will store and restore profile specific data (merged scripts, loadorder, etc)',
     () => {
       const activeGameId = selectors.activeGameId(context.api.getState());
       return activeGameId === GAME_ID;
