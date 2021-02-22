@@ -1,5 +1,12 @@
 function main(context) {
-  context.registerGameStub('subnautica', {
+  context.registerGameStub({
+    id: 'subnautica',
+    executable: null,
+    mergeMods: false,
+    name: 'Subnautica',
+    queryModPath: () => 'QMods',
+    requiredFiles: [],
+  }, {
     name: 'Game: Subnautica',
     modId: 202,
   });
