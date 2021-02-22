@@ -199,7 +199,7 @@ function validate(prev, cur) {
 }
 
 async function deserializeLoadOrder(api, gameId) {
-
+  // Get the path to the game.
   const state = api.store.getState();
   const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', gameId]);
   if (!discovery || !discovery.path) return Promise.reject('The game could not be discovered.');
@@ -208,20 +208,25 @@ async function deserializeLoadOrder(api, gameId) {
   let folders = [];
   const modsPath = path.join(discovery.path, getModsPath(gameId));
   try {
-    const dir = await fs.readdirAsync(modsPath);
-    folders = await dir.reduce(async (prev, cur) => {
-      if (!!path.extname(cur)) return prev;
-      const statPath = path.join(modsPath, cur, `${cur}${MOD_EXT}`);
+    // Get everything in the mods folder located in the game directory. 
+    const modFolders = await fs.readdirAsync(modsPath);
+    // Iterate through the results of the folder scan.
+    for (let idx in modFolders) {
+      const entry = modFolders[idx];
       try {
+        // Check we're looking at a folder.
+        const folderStat = await fs.statAsync(path.join(modsPath, entry));
+        if (!folderStat.isDirectory) continue;
+        // Check for the XComMod file named correctly.
+        const statPath = path.join(modsPath, entry, `${entry}${MOD_EXT}`);
         await fs.statAsync(statPath);
-        prev.push(cur);
-        return prev;
+        folders.push(entry);
       }
       catch (err) {
         if (err.code !== 'ENOENT') log('warn', 'Error checking for XComMod file in mod folder', err);
-        return prev;
+        continue;
       }
-    }, []);
+    }
   }
   catch(err) {
     log('error', `Error reading ${gameId} mods folder`, err);
@@ -240,10 +245,12 @@ async function deserializeLoadOrder(api, gameId) {
   // If we have the game on Steam, also get the Steam Workshop mods.
   let workshopMods = [];
   if (discovery.path.toLowerCase().includes('steamapps')) {
+    // Find the workshop content path
     const steamApps = discovery.path.substr(0, discovery.path.indexOf('common'));
     const workshopDir = path.join(steamApps, 'workshop', 'content', STEAMAPP_ID);
     try {
       const folders = await fs.readdirAsync(workshopDir);
+      // Iterate through each resulting folder looking for XComMod files.
       workshopMods = await folders.filter(f => !path.extname(f)).reduce(async (prev, cur) => {
         const wsModPath = path.join(workshopDir, cur);
         const wsModDir = await fs.readdirAsync(wsModPath).catch(() => []);
@@ -265,6 +272,7 @@ async function deserializeLoadOrder(api, gameId) {
     const arr = file.split('\n');
     const active = arr.filter(line => line.startsWith('ActiveMods='));
     const names = active.map(mod => mod.replace('ActiveMods=', '').replace(/"/g,''));
+    // Only shown enabled mods that actually have a folder.
     enabledMods = names.filter(name => folders.includes(name));
   }
   catch(err) {
