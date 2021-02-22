@@ -728,7 +728,50 @@ function isExternal(context, subModId) {
   return true;
 }
 
-async function preSort(context, items, direction) {
+let refreshFunc;
+async function refreshCacheOnEvent(context, profileId) {
+  CACHE = {};
+  if (profileId === undefined) {
+    return Promise.resolve();
+  }
+  const state = context.api.store.getState();
+  const activeProfile = selectors.activeProfile(state);
+  const deployProfile = selectors.profileById(state, profileId);
+  if ((activeProfile?.gameId !== deployProfile?.gameId) || (activeProfile?.gameId !== GAME_ID)) {
+    // Deployment event seems to be executed for a profile other
+    //  than the currently active one. Not going to continue.
+    return Promise.resolve();
+  }
+
+  try {
+    const deployedSubModules = await getDeployedSubModPaths(context);
+    CACHE = await getDeployedModData(context, deployedSubModules);
+  } catch (err) {
+    // ProcessCanceled means that we were unable to scan for deployed
+    //  subModules, probably because game discovery is incomplete.
+    // It's beyond the scope of this function to report discovery
+    //  related issues.
+    return (err instanceof util.ProcessCanceled)
+      ? Promise.resolve()
+      : Promise.reject(err);
+  }
+
+  const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profileId], {});
+
+  // We're going to do a quick tSort at this point - not going to
+  //  change the user's load order, but this will highlight any
+  //  cyclic or missing dependencies.
+  const modIds = Object.keys(CACHE);
+  const sorted = tSort(modIds, true, loadOrder);
+
+  if (refreshFunc !== undefined) {
+    refreshFunc();
+  }
+
+  return refreshGameParams(context, loadOrder);
+}
+
+async function preSort(context, items, direction, updateType) {
   const state = context.api.store.getState();
   const activeProfile = selectors.activeProfile(state);
   if (activeProfile?.id === undefined || activeProfile?.gameId !== GAME_ID) {
@@ -736,7 +779,17 @@ async function preSort(context, items, direction) {
     return items;
   }
 
-  const modIds = Object.keys(CACHE);
+  let modIds = Object.keys(CACHE);
+  if (items.length > 0 && modIds.length === 0) {
+    // Cache hasn't been populated yet.
+    try {
+      // Refresh the cache.
+      await refreshCacheOnEvent(context, activeProfile.id);
+      modIds = Object.keys(CACHE);
+    } catch (err) {
+      return Promise.reject(err);
+    }
+  }
 
   // Locked ids are always at the top of the list as all
   //  other modules depend on these.
@@ -899,7 +952,6 @@ function main(context) {
     },
   });
 
-  let refreshFunc;
   // Register the LO page.
   context.registerLoadOrderPage({
     gameId: GAME_ID,
@@ -1000,62 +1052,18 @@ function main(context) {
     return (gameId === GAME_ID);
   });
 
-  const refreshCacheOnEvent = async (profileId) => {
-    CACHE = {};
-    if (profileId === undefined) {
-      return Promise.resolve();
-    }
-    const state = context.api.store.getState();
-    const activeProfile = selectors.activeProfile(state);
-    const deployProfile = selectors.profileById(state, profileId);
-    if (!!activeProfile && !!deployProfile && (deployProfile.id !== activeProfile.id)) {
-      // Deployment event seems to be executed for a profile other
-      //  than the currently active one. Not going to continue.
-      return Promise.resolve();
-    }
-
-    if (activeProfile?.gameId !== GAME_ID) {
-      // Different game
-      return Promise.resolve();
-    }
-
-    try {
-      const deployedSubModules = await getDeployedSubModPaths(context);
-      CACHE = await getDeployedModData(context, deployedSubModules);
-    } catch (err) {
-      // ProcessCanceled means that we were unable to scan for deployed
-      //  subModules, probably because game discovery is incomplete.
-      // It's beyond the scope of this function to report discovery
-      //  related issues.
-      return (err instanceof util.ProcessCanceled)
-        ? Promise.resolve()
-        : Promise.reject(err);
-    }
-
-    const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
-
-    // We're going to do a quick tSort at this point - not going to
-    //  change the user's load order, but this will highlight any
-    //  cyclic or missing dependencies.
-    const modIds = Object.keys(CACHE);
-    const sorted = tSort(modIds, true, loadOrder);
-
-    if (!!refreshFunc) {
-      refreshFunc();
-    }
-
-    return refreshGameParams(context, loadOrder);
-  }
-
   context.once(() => {
     context.api.onAsync('did-deploy', async (profileId, deployment) =>
-      refreshCacheOnEvent(profileId));
+      refreshCacheOnEvent(context, profileId));
 
     context.api.onAsync('did-purge', async (profileId) =>
-      refreshCacheOnEvent(profileId));
+      refreshCacheOnEvent(context, profileId));
 
-    context.api.events.on('profile-did-change', (profileId) =>
-      refreshCacheOnEvent(profileId));
+    context.api.events.on('gamemode-activated', (gameMode) => {
+      const state = context.api.getState();
+      const prof = selectors.activeProfile(state);
+      refreshCacheOnEvent(context, prof?.id);
+    });
 
     context.api.onAsync('added-files', async (profileId, files) => {
       const state = context.api.store.getState();
