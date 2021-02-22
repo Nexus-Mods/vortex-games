@@ -209,7 +209,19 @@ async function deserializeLoadOrder(api, gameId) {
   const modsPath = path.join(discovery.path, getModsPath(gameId));
   try {
     const dir = await fs.readdirAsync(modsPath);
-    folders = dir.filter(d => !path.extname(d));
+    folders = await dir.reduce(async (prev, cur) => {
+      if (!!path.extname(cur)) return prev;
+      const statPath = path.join(modsPath, cur, `${cur}${MOD_EXT}`);
+      try {
+        await fs.statAsync(statPath);
+        prev.push(cur);
+        return prev;
+      }
+      catch (err) {
+        if (err.code !== 'ENOENT') log('warn', 'Error checking for XComMod file in mod folder', err);
+        return prev;
+      }
+    }, []);
   }
   catch(err) {
     log('error', `Error reading ${gameId} mods folder`, err);
