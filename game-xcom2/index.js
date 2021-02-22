@@ -216,7 +216,7 @@ async function deserializeLoadOrder(api, gameId) {
       try {
         // Check we're looking at a folder.
         const folderStat = await fs.statAsync(path.join(modsPath, entry));
-        if (!folderStat.isDirectory) continue;
+        if (!folderStat.isDirectory()) continue;
         // Check for the XComMod file named correctly.
         const statPath = path.join(modsPath, entry, `${entry}${MOD_EXT}`);
         await fs.statAsync(statPath);
