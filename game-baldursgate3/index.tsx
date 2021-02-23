@@ -415,8 +415,9 @@ function findNode<T extends IXmlNode<{ id: string }>, U>(nodes: T[], id: string)
 
 async function isGUIMod(pakPath: string): Promise<boolean> {
   const res = await divine('list-package', { source: pakPath });
-  const lines = res.stdout.split('\n');
-  return lines.find(line => line.toLowerCase().startsWith('public/game/gui')) !== undefined;
+  const lines = res.stdout.split('\n').map(line => line.trim()).filter(line => line.length !== 0);
+  const nonGUI = lines.find(line => !line.toLowerCase().startsWith('public/game/gui'));
+  return nonGUI === undefined;
 }
 
 async function extractPakInfo(pakPath: string): Promise<IPakInfo> {
