@@ -36,7 +36,7 @@ function getHash(filePath, tries = 3) {
   return calcHashImpl(filePath)
     .catch(err => {
       if (['EMFILE', 'EBADF'].includes(err['code']) && (tries > 0)) {
-        return calcHash(filePath, tries - 1);
+        return getHash(filePath, tries - 1);
       } else {
         return Promise.reject(err);
       }
