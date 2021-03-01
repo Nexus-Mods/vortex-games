@@ -10,6 +10,8 @@ const menuMod = require('./menumod');
 const { GAME_ID, INPUT_XML_FILENAME, LOAD_ORDER_FILENAME, getLoadOrderFilePath,
         PART_SUFFIX, SCRIPT_MERGER_ID, MERGE_INV_MANIFEST } = require('./common');
 
+const { testSupportedMixed, installMixed } = require('./installers');
+
 const { storeToProfile, restoreFromProfile } = require('./mergeBackup');
 
 const React = require('react');
@@ -1121,21 +1123,25 @@ function main(context) {
     util.opn(docPath).catch(() => null);
   };
 
-  const isTW3 = () => {
+  const isTW3 = (gameId = undefined) => {
+    if (gameId !== undefined) {
+      return (gameId === GAME_ID);
+    }
     const state = context.api.getState();
     const gameMode = selectors.activeGameId(state);
     return (gameMode === GAME_ID);
   }
 
   context.registerInstaller('witcher3tl', 25, testSupportedTL, installTL);
+  context.registerInstaller('witcher3mixed', 30, testSupportedMixed, installMixed);
   context.registerInstaller('witcher3content', 50, testSupportedContent, installContent);
   context.registerInstaller('witcher3menumodroot', 20, testMenuModRoot, installMenuMod);
   context.registerInstaller('scriptmergerdummy', 15, scriptMergerTest, (files) => scriptMergerDummyInstaller(context, files));
 
-  context.registerModType('witcher3tl', 25, gameId => gameId === 'witcher3', getTLPath, testTL);
-  context.registerModType('witcher3dlc', 25, gameId => gameId === 'witcher3', getDLCPath, testDLC);
-  context.registerModType('witcher3menumodroot', 20, gameId => gameId === 'witcher3', getTLPath, testMenuModRoot);
-  context.registerModType('witcher3menumoddocuments', 60, gameId => gameId === 'witcher3',
+  context.registerModType('witcher3tl', 25, isTW3, getTLPath, testTL);
+  context.registerModType('witcher3dlc', 25, isTW3, getDLCPath, testDLC);
+  context.registerModType('witcher3menumodroot', 20, isTW3, getTLPath, testMenuModRoot);
+  context.registerModType('witcher3menumoddocuments', 60, isTW3,
     (game) => path.join(appUni.getPath('documents'), 'The Witcher 3'), () => Promise.resolve(false));
 
   context.registerMerge(canMerge,

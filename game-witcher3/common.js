@@ -62,7 +62,10 @@ const SCRIPT_MERGER_ID = 'W3ScriptMerger';
 const MERGE_INV_MANIFEST = 'MergeInventory.xml';
 const LOAD_ORDER_FILENAME = 'mods.settings';
 
+const CONFIG_MATRIX_REL_PATH = path.join('bin', 'config', 'r4game', 'user_config_matrix', 'pc');
+
 module.exports = {
+  CONFIG_MATRIX_REL_PATH,
   GAME_ID,
   LOAD_ORDER_FILENAME,
   MERGE_INV_MANIFEST,
