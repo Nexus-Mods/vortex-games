@@ -209,10 +209,10 @@ function reportInvalidMod(context, files) {
     context.api.showDialog('question', 'Invalid mod', {
       text: context.api.translate('This mod does not fit the expected packaging pattern '
         + 'for this game, and probably will not install correctly. Are you sure you want '
-        + 'to proceed ?', { ns: I18N_NAMESPACE }),
+        + 'to proceed?', { ns: I18N_NAMESPACE }),
     }, [
-      { label: 'Proceed', action: () => resolve() },
       { label: 'Cancel', action: () => reject(new util.ProcessCanceled()) },
+      { label: 'Proceed', action: () => resolve() },
     ]);
   })
 
