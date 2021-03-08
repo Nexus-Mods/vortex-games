@@ -249,15 +249,17 @@ async function deserializeLoadOrder(api, gameId) {
     const steamApps = discovery.path.substr(0, discovery.path.indexOf('common'));
     const workshopDir = path.join(steamApps, 'workshop', 'content', STEAMAPP_ID);
     try {
-      const folders = await fs.readdirAsync(workshopDir);
+      const entries = await fs.readdirAsync(workshopDir);
+      const folders = entries.filter(f => !path.extname(f));
       // Iterate through each resulting folder looking for XComMod files.
-      workshopMods = await folders.filter(f => !path.extname(f)).reduce(async (prev, cur) => {
+      workshopMods = await folders.reduce(async (prevP, cur) => {
+        const prev = await prevP;
         const wsModPath = path.join(workshopDir, cur);
         const wsModDir = await fs.readdirAsync(wsModPath).catch(() => []);
         const modFile = wsModDir.find(file => path.extname(file).toLowerCase() === MOD_EXT.toLowerCase());
         if (modFile) prev.push(path.basename(modFile, MOD_EXT));
         return prev;
-      }, []);
+      }, Promise.resolve([]));
     }
     catch(err) {
       if (err.code !== 'ENOENT') log('warn', `Error reading workshop mods for ${gameId}`, err);
