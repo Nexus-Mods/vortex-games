@@ -23,6 +23,7 @@ const NATIVES_DIR = 'natives' + path.sep;
 const GAME_PAK_FILE = 're_chunk_000.pak';
 const GAME_ID = 'devilmaycry5';
 const STEAM_ID = 601150;
+const MIGRATION_FILE = path.join(util.getVortexPath('temp'), GAME_ID + '_needsMigration');
 
 function findGame() {
   return util.steam.findByAppId(STEAM_ID.toString())
@@ -33,27 +34,26 @@ function prepareForModding(discovery, api) {
   if (api.ext.addReEngineGame === undefined) {
     return Promise.reject(new Error('re-engine-wrapper dependency is not loaded!'));
   }
-  
-  return new Promise((resolve, reject) => {
-    api.ext.addReEngineGame({
-      gameMode: GAME_ID,
-      bmsScriptPaths: {
-        invalidation: INVAL_SCRIPT,
-        revalidation: REVAL_SCRIPT,
-        extract: BMS_SCRIPT,
-      },
-      fileListPath: ORIGINAL_FILE_LIST,
-    }, err => (err === undefined)
-      ? resolve()
-      : reject(err));
-  }).then(() => fs.ensureDirWritableAsync(path.join(discovery.path, 'natives')));
+  return fs.statAsync(MIGRATION_FILE)
+    .then(() => migrateToReWrapper(api))
+    .catch(err => new Promise((resolve, reject) => {
+      api.ext.addReEngineGame({
+        gameMode: GAME_ID,
+        bmsScriptPaths: {
+          invalidation: INVAL_SCRIPT,
+          revalidation: REVAL_SCRIPT,
+          extract: BMS_SCRIPT,
+        },
+        fileListPath: ORIGINAL_FILE_LIST,
+      }, err => (err === undefined)
+        ? resolve()
+        : reject(err));
+    }))
+    .then(() => fs.removeAsync(MIGRATION_FILE).catch(err => Promise.resolve()))
+    .then(() => fs.ensureDirWritableAsync(path.join(discovery.path, 'natives')));
 }
 
-function migrate010(api, oldVersion) {
-  if (semver.gte(oldVersion || '0.0.1', '0.1.0')) {
-    return Promise.resolve();
-  }
-
+function migrateToReWrapper(api) {
   const mods = util.getSafe(api.getState(), ['persistent', 'mods', GAME_ID], {});
   if (Object.keys(mods).length === 0) {
     return Promise.resolve();
@@ -109,6 +109,17 @@ function migrate010(api, oldVersion) {
         : resolve();
     });
   });
+}
+
+function migrate010(oldVersion) {
+  if (semver.gte(oldVersion || '0.0.1', '0.1.0')) {
+    return Promise.resolve();
+  }
+
+  return fs.writeFileAsync(MIGRATION_FILE, 'temporaryfile')
+    .catch(err => ['EEXIST'].includes(err.code)
+      ? Promise.resolve()
+      : Promise.reject(err));
 }
 
 async function installQBMS(files, destinationPath, gameId, progressDelegate) {
@@ -167,7 +178,7 @@ function main(context) {
     setup: (discovery) => prepareForModding(discovery, context.api),
   });
 
-  context.registerMigration(old => migrate010(context.api, old));
+  context.registerMigration(migrate010);
 
   context.registerInstaller('dmc5qbmsmod', 25, testSupportedContent, installQBMS);
 }
