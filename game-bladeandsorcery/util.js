@@ -35,7 +35,32 @@ async function getJSONElement(filePath, element) {
 }
 
 async function getModName(manifestFilePath, element, ext) {
-  let modName = await getJSONElement(manifestFilePath, element);
+  // The game itself is expecting the folder name of the mod
+  //  to be added to the load order file - the game does not read the manifest
+  //  which will probably have to change one day if some sort of mod dependencies
+  //  system is needed (cross that bridge when we get to it)
+  //
+  //  In 8.4 bundled assets need to specify the exact location of their assets.
+  //  Our understanding of the bundler was that it automatically generates the
+  //  manifest file using the paths they defined for their assets, but apparently
+  //  that's only partly true as the mod author needs to copy/paste the resulting
+  //  folder names into the manifest file's name property (which gives them the
+  //  chance to change the name to whatever they want) e.g.
+  //  https://www.nexusmods.com/bladeandsorcery/mods/3064
+  //
+  //  Hence we have no choice but to temporarily dumb down how we ascertain the
+  //  mod's name and use whatever folder name the mod authors included in their
+  //  archive - if there is one.
+  //
+  //  tldr: we're putting this hack in because mod authors appear to
+  //  modify the name of the mod in the manifest file, creating a mismatch between
+  //  asset paths and the manifest.
+  const folderName = path.basename(path.dirname(manifestFilePath));
+  let modName = (path.extname(folderName) === '.installing')
+    // The mod's files are distributed looseley - no folder - read manifest.
+    ? await getJSONElement(manifestFilePath, element)
+    // The mod author included a mod folder - use that as the mod name.
+    : folderName;
 
   if (modName === undefined) {
     throw new util.DataInvalid(`"${element}" JSON element is missing`);

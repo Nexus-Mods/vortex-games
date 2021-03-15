@@ -249,10 +249,16 @@ async function onDidDeploy(api, deployment, activeProfile) {
       .then(() => populateCache(api, activeProfile))
       .then(() => writeCacheToFiles(api, activeProfile))
       .then(() => menuMod(activeProfile.name))
+      .catch(err => (err instanceof util.UserCanceled)
+        ? Promise.resolve()
+        : Promise.reject(err))
   } else {
     return ensureMenuMod(api, activeProfile)
       .then(() => writeCacheToFiles(api, activeProfile))
-      .then(() => menuMod(activeProfile.name));
+      .then(() => menuMod(activeProfile.name))
+      .catch(err => (err instanceof util.UserCanceled)
+        ? Promise.resolve()
+        : Promise.reject(err));
   }
 
 
@@ -418,6 +424,7 @@ async function writeCacheToFiles(api, profile) {
 
         return Promise.reject(err);
       }
+      return Promise.reject(err);
     });
 }
 

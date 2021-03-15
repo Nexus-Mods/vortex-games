@@ -174,6 +174,15 @@ function migrate101(api, oldVersion) {
   });
 }
 
+// merging archives is considerably slower than replacing them, if we did it for all arc files,
+// deployment can take several minutes even with just a handful of mods. Thus we have to be
+// picky regarding which archives it actually makes sense to merge. So the question is:
+// is it likely multiple mods will try to edit the same archive *and* work alongside each other
+// if merged. E.g. texture/mesh replacers affecting the same armor wouldn't.
+// I further found that merging bbsrpg_core.arc somehow breaks the number one mod on the site,
+// haven't figured out why yet.
+const mergeNames = [ 'game_main.arc'/*, 'bbsrpg_core.arc', 'bbs_rpg.arc'*/ ];
+
 function main(context) {
   context.requireExtension('mtframework-arc-support');
 
@@ -181,7 +190,7 @@ function main(context) {
     id: GAME_ID,
     name: 'Dragon\'s Dogma',
     mergeMods: true,
-    mergeArchive: filePath => filePath.toLowerCase().endsWith(path.join('rom', 'game_main.arc')),
+    mergeArchive: filePath => mergeNames.includes(path.basename(filePath.toLowerCase())),
     queryPath: findGame,
     queryModPath: modPath,
     logo: 'gameart.jpg',
@@ -209,10 +218,10 @@ function reportInvalidMod(context, files) {
     context.api.showDialog('question', 'Invalid mod', {
       text: context.api.translate('This mod does not fit the expected packaging pattern '
         + 'for this game, and probably will not install correctly. Are you sure you want '
-        + 'to proceed ?', { ns: I18N_NAMESPACE }),
+        + 'to proceed?', { ns: I18N_NAMESPACE }),
     }, [
-      { label: 'Proceed', action: () => resolve() },
       { label: 'Cancel', action: () => reject(new util.ProcessCanceled()) },
+      { label: 'Proceed', action: () => resolve() },
     ]);
   })
 
