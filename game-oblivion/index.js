@@ -1,7 +1,11 @@
 const Promise = require('bluebird');
+const path = require('path');
 const { util } = require('vortex-api');
 const winapi = require('winapi-bindings');
 
+const MS_ID = 'BethesdaSoftworks.TESOblivion-PC';
+
+let _XBOX_PASS = false;
 function findGame() {
   try {
     const instPath = winapi.RegGetValue(
@@ -14,7 +18,11 @@ function findGame() {
     return Promise.resolve(instPath.value);
   } catch (err) {
     return util.steam.findByName('The Elder Scrolls IV: Oblivion')
-      .then(game => game.gamePath);
+      .catch(err => util.GameStoreHelper.findByAppId([MS_ID], 'xbox')
+        .tap(() => _XBOX_PASS = true))
+      .then(game => (_XBOX_PASS)
+        ? path.join(game.gamePath, 'Oblivion GOTY English')
+        : game.gamePath);
   }
 }
 
@@ -50,6 +58,20 @@ let tools = [
   },
 ];
 
+function requiresLauncher(gamePath) {
+  return (_XBOX_PASS)
+    ? Promise.resolve({
+      launcher: 'xbox',
+      addInfo: {
+        appId: MS_ID,
+        parameters: [
+          { appExecName: 'Game' },
+        ],
+      }
+    })
+    : Promise.resolve(undefined);
+}
+
 function main(context) {
   context.registerGame({
     id: 'oblivion',
@@ -63,6 +85,7 @@ function main(context) {
     requiredFiles: [
       'oblivion.exe',
     ],
+    requiresLauncher,
     environment: {
       SteamAPPId: '22330',
     },
