@@ -21,6 +21,9 @@ function findGame() {
       .catch(err => util.GameStoreHelper.findByAppId([MS_ID], 'xbox')
         .tap(() => _XBOX_PASS = true))
       .then(game => (_XBOX_PASS)
+        // The xbox pass variant has a different file structure; we're naively
+        //  assuming that all XBOX copies (regardless of locale) will contain
+        //  the English variant as well (fingers crossed)
         ? path.join(game.gamePath, 'Oblivion GOTY English')
         : game.gamePath);
   }
