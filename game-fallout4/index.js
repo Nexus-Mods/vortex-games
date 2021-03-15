@@ -3,6 +3,8 @@ const path = require('path');
 const { util } = require('vortex-api');
 const winapi = require('winapi-bindings');
 
+const MS_ID = 'BethesdaSoftworks.Fallout4-PC';
+let _XBOX_PASS = false;
 function findGame() {
   try {
     const instPath = winapi.RegGetValue(
@@ -15,6 +17,8 @@ function findGame() {
     return Promise.resolve(instPath.value);
   } catch (err) {
     return util.steam.findByName('Fallout 4')
+      .catch(() => util.GameStoreHelper.findByAppId([MS_ID], 'xbox')
+        .tap(() => _XBOX_PASS = true))
       .then(game => game.gamePath);
   }
 }
@@ -63,6 +67,20 @@ let tools = [
   }
 ];
 
+function requiresLauncher(gamePath) {
+  return (_XBOX_PASS)
+    ? Promise.resolve({
+      launcher: 'xbox',
+      addInfo: {
+        appId: MS_ID,
+        parameters: [
+          { appExecName: 'Game' },
+        ],
+      }
+    })
+    : Promise.resolve(undefined);
+}
+
 function main(context) {
   context.registerGame({
     id: 'fallout4',
@@ -76,6 +94,7 @@ function main(context) {
     requiredFiles: [
       'Fallout4.exe',
     ],
+    requiresLauncher,
     environment: {
       SteamAPPId: '377160',
     },
