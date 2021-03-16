@@ -1,0 +1,46 @@
+idstring "KPKA"
+get VERSION long
+get FILES long
+get DUMMY0 long
+
+set FILESTART longlong 0
+set TOTAL_INVALID long 0
+
+log TEMPORARY_FILE 0 0
+open "." TEMPORARY_FILE 1
+
+for i = 0 < FILES
+  savepos FILESTART 0
+  get NAME_CRC_L long 0
+  get NAME_CRC_U long 0
+  get OFFSET longlong 0
+  get ZSIZE longlong 0
+  get SIZE longlong 0
+  get FLAG longlong 0
+  get DUMMY2 long 0
+  get DUMMY3 long 0
+  namecrc NAME NAME_CRC_L "filtered.list" 32
+
+  strlen NAMEL NAME
+  getVarChr T NAME 0
+  if T == 48
+    continue
+  else
+    put FILESTART longlong 1
+    put NAME_CRC_L long 1
+    put NAME_CRC_U long 1
+
+    goto FILESTART 0
+    put 0 long 0
+    put 0 long 0
+    math TOTAL_INVALID + 1
+    get OFFSET longlong 0
+    get ZSIZE longlong 0
+    get SIZE longlong 0
+    get FLAG longlong 0
+    get DUMMY2 long 0
+    get DUMMY3 long 0
+  endif
+next i
+
+put TOTAL_INVALID long 1

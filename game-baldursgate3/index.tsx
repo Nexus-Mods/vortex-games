@@ -233,8 +233,9 @@ function InfoPanel(props) {
         {t('Please refer to mod descriptions from mod authors to determine the right order. '
           + 'If you can\'t find any suggestions for a mod, it probably doesn\'t matter.')}
         <hr/>
-        {t('GUI mods are locked in this list because they are loaded differently by the engine '
-          + 'and can therefore not be disabled or load ordered on this screen.')}
+        {t('Some mods may be locked in this list because they are loaded differently by the engine '
+          + 'and can therefore not be load-ordered by mod managers. If you want to disable '
+          + 'such a mod, please do so on the "Mods" screen.')}
       </div>
     </div>
   );
@@ -272,7 +273,7 @@ async function writeLoadOrder(api: types.IExtensionApi,
     const enabledPaks = Object.keys(loadOrder)
         .filter(key => !!loadOrder[key].data?.uuid
                     && loadOrder[key].enabled
-                    && !loadOrder[key].data?.isGUI);
+                    && !loadOrder[key].data?.isListed);
 
     // add new nodes for the enabled mods
     for (const key of enabledPaks) {
@@ -413,10 +414,24 @@ function findNode<T extends IXmlNode<{ id: string }>, U>(nodes: T[], id: string)
   return nodes?.find(iter => iter.$.id === id) ?? undefined;
 }
 
-async function isGUIMod(pakPath: string): Promise<boolean> {
+const listCache: { [path: string]: Promise<string[]> } = {};
+
+async function listPackage(pakPath: string): Promise<string[]> {
   const res = await divine('list-package', { source: pakPath });
-  const lines = res.stdout.split('\n');
-  return lines.find(line => line.toLowerCase().startsWith('public/game/gui')) !== undefined;
+  const lines = res.stdout.split('\n').map(line => line.trim()).filter(line => line.length !== 0);
+
+  return lines;
+}
+
+async function isLOListed(pakPath: string): Promise<boolean> {
+  if (listCache[pakPath] === undefined) {
+    listCache[pakPath] = listPackage(pakPath);
+  }
+  const lines = await listCache[pakPath];
+  // const nonGUI = lines.find(line => !line.toLowerCase().startsWith('public/game/gui'));
+  const metaLSX = lines.find(line =>
+    path.basename(line.split('\t')[0]).toLowerCase() === 'meta.lsx');
+  return metaLSX === undefined;
 }
 
 async function extractPakInfo(pakPath: string): Promise<IPakInfo> {
@@ -439,7 +454,7 @@ async function extractPakInfo(pakPath: string): Promise<IPakInfo> {
     type: attr('Type', () => 'Adventure'),
     uuid: attr('UUID', () => require('uuid').v4()),
     version: attr('Version', () => '1'),
-    isGUI: await isGUIMod(pakPath),
+    isListed: await isLOListed(pakPath),
   };
 }
 
@@ -557,7 +572,14 @@ function makePreSort(api: types.IExtensionApi) {
       paks = [];
     }
 
-    const manifest = await util.getManifest(api, '', GAME_ID);
+    let manifest;
+    try {
+      manifest = await util.getManifest(api, '', GAME_ID);
+    } catch (err) {
+      const allowReport = !['EPERM'].includes(err.code);
+      api.showErrorNotification('Failed to read deployment manifest', err, { allowReport });
+      return items;
+    }
 
     const result: any[] = [];
 
@@ -602,7 +624,7 @@ function makePreSort(api: types.IExtensionApi) {
             };
           }
 
-          if (modInfo.isGUI) {
+          if (modInfo.isListed) {
             res.locked = true;
             result.unshift(res);
           } else {
@@ -741,7 +763,7 @@ function main(context: types.IExtensionContext) {
 
     context.api.onAsync('did-deploy', (profileId: string, deployment) => {
       const profile = selectors.profileById(context.api.getState(), profileId);
-      if ((profile.gameId === GAME_ID) && (forceRefresh !== undefined)) {
+      if ((profile?.gameId === GAME_ID) && (forceRefresh !== undefined)) {
         forceRefresh();
       }
       return Promise.resolve();
