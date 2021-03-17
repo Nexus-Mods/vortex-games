@@ -21,9 +21,25 @@ const ORIGINAL_FILE_LIST = path.join(__dirname, 'dmc5_pak_names_release.list');
 
 const NATIVES_DIR = 'natives' + path.sep;
 const GAME_PAK_FILE = 're_chunk_000.pak';
+const DLC_PAK_FILE = 're_dlc_000.pak';
 const GAME_ID = 'devilmaycry5';
 const STEAM_ID = 601150;
 const MIGRATION_FILE = path.join(util.getVortexPath('temp'), GAME_ID + '_needsMigration');
+
+const legacyArcNames = {
+  _native: GAME_PAK_FILE,
+  _941965: path.join('941965', DLC_PAK_FILE),
+  _940500: path.join('940500', DLC_PAK_FILE),
+  _940501: path.join('940501', DLC_PAK_FILE),
+  _941964: path.join('941964', DLC_PAK_FILE),
+  _941963: path.join('941963', DLC_PAK_FILE),
+  _941962: path.join('941962', DLC_PAK_FILE),
+  _941957: path.join('941957', DLC_PAK_FILE),
+  _941958: path.join('941958', DLC_PAK_FILE),
+  _941959: path.join('941959', DLC_PAK_FILE),
+  _941960: path.join('941960', DLC_PAK_FILE),
+  _941961: path.join('941961', DLC_PAK_FILE),
+}
 
 function findGame() {
   return util.steam.findByAppId(STEAM_ID.toString())
@@ -45,6 +61,7 @@ function prepareForModding(discovery, api) {
           extract: BMS_SCRIPT,
         },
         fileListPath: ORIGINAL_FILE_LIST,
+        legacyArcNames,
       }, err => (err === undefined)
         ? resolve()
         : reject(err));

@@ -21,9 +21,25 @@ const ORIGINAL_FILE_LIST = path.join(__dirname, 're2_pak_names_release.list');
 
 const NATIVES_DIR = 'natives' + path.sep;
 const GAME_PAK_FILE = 're_chunk_000.pak';
+const DLC_PAK_FILE = 're_dlc_000.pak';
 const GAME_ID = 'residentevil22019';
 const STEAM_ID = 883710;
 const STEAM_ID_Z = 895950;
+
+const legacyArcNames = {
+  _native: GAME_PAK_FILE,
+  _920560: path.join('920560', DLC_PAK_FILE),
+  _920561: path.join('920561', DLC_PAK_FILE),
+  _920562: path.join('920562', DLC_PAK_FILE),
+  _920563: path.join('920563', DLC_PAK_FILE),
+  _920564: path.join('920564', DLC_PAK_FILE),
+  _920565: path.join('920565', DLC_PAK_FILE),
+  _920566: path.join('920566', DLC_PAK_FILE),
+  _920567: path.join('920567', DLC_PAK_FILE),
+  _920568: path.join('920568', DLC_PAK_FILE),
+  _920569: path.join('920569', DLC_PAK_FILE),
+  _920570: path.join('920570', DLC_PAK_FILE),
+}
 
 const I18N_NAMESPACE = `game-${GAME_ID}`;
 const MIGRATION_FILE = path.join(util.getVortexPath('temp'), GAME_ID + '_needsMigration');
@@ -49,6 +65,7 @@ function prepareForModding(discovery, api) {
           extract: BMS_SCRIPT,
         },
         fileListPath: ORIGINAL_FILE_LIST,
+        legacyArcNames,
       }, err => (err === undefined)
         ? resolve()
         : reject(err));
