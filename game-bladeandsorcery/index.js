@@ -77,7 +77,7 @@ async function ensureModType(discovery, api) {
   // Aims to ensure that the user's mods are all assigned
   //  the correct modType for their game version.
   //  (We're doing this as users may jump between 8.4 and older versions)
-  const targetModType = await getOfficialModType(api);
+  const targetModType = await getOfficialModType(api, discovery);
   const state = api.store.getState();
   const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
 
@@ -99,8 +99,10 @@ function prepareForModding(discovery, api) {
     .then(() => ensureModType(discovery, api));
 }
 
-async function getOfficialModType(api) {
-  const discoveryPath = getDiscoveryPath(api);
+async function getOfficialModType(api, discovery = undefined) {
+  const discoveryPath = (discovery?.path !== undefined)
+    ? discovery.path
+    : getDiscoveryPath(api);
   if (discoveryPath === undefined) {
     return Promise.reject(new Error('Game is not discovered'));
   }
