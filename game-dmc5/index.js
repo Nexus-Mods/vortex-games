@@ -119,6 +119,7 @@ function migrateToReWrapper(api) {
         extract: BMS_SCRIPT,
       },
       fileListPath: ORIGINAL_FILE_LIST,
+      legacyArcNames,
     };
     api.ext.migrateReEngineGame(gameConfig, (err) => {
       return (err !== undefined)
