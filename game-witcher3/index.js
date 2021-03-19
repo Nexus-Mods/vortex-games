@@ -8,7 +8,7 @@ const { app, remote } = require('electron');
 const { downloadScriptMerger, setMergerConfig } = require('./scriptmerger');
 const menuMod = require('./menumod');
 const { GAME_ID, INPUT_XML_FILENAME, LOAD_ORDER_FILENAME, getLoadOrderFilePath,
-        PART_SUFFIX, SCRIPT_MERGER_ID, MERGE_INV_MANIFEST } = require('./common');
+        PART_SUFFIX, SCRIPT_MERGER_ID, MERGE_INV_MANIFEST, ResourceInaccessibleError } = require('./common');
 
 const { testSupportedMixed, installMixed } = require('./installers');
 
@@ -71,7 +71,10 @@ function writeToModSettings() {
         return Promise.resolve();
       })
       .then(() => parser.write(filePath, ini));
-    });
+    })
+    .catch(err => (err.path !== undefined && ['EPERM', 'EBUSY'].includes(err.code))
+      ? Promise.reject(new ResourceInaccessibleError(err.path))
+      : Promise.reject(err));
 }
 
 function createModSettings() {
@@ -688,7 +691,9 @@ function genEntryActions (context, item, minPriority) {
               refreshFunc();
             }
           }
-        }),
+        })
+        .catch(err => modSettingsErrorHandler(context, err,
+          'Failed to modify load order file')),
     },
   ];
 
@@ -1071,6 +1076,22 @@ function scriptMergerTest(files, gameId) {
   return Promise.resolve({ supported, requiredFiles: SCRIPT_MERGER_FILES });
 }
 
+function modSettingsErrorHandler(context, err, errMessage) {
+  let allowReport = true;
+  const userCanceled = err instanceof util.UserCanceled;
+  if (userCanceled) {
+    allowReport = false;
+  }
+  const busyResource = err instanceof ResourceInaccessibleError;
+  if (allowReport && busyResource) {
+    allowReport = err.allowReport;
+    err.message = err.errorMessage;
+  }
+
+  context.api.showErrorNotification(errMessage, err, { allowReport });
+  return;
+}
+
 function scriptMergerDummyInstaller(context, files) {
   context.api.showErrorNotification('Invalid Mod', 'It looks like you tried to install '
     + 'The Witcher 3 Script Merger, which is a tool and not a mod for The Witcher 3.\n\n'
@@ -1295,12 +1316,8 @@ function main(context) {
 
       setINIStruct(context, loadOrder, updateType)
         .then(() => writeToModSettings())
-        .catch(err => {
-          const userCanceled = err instanceof util.UserCanceled;
-          context.api.showErrorNotification('Failed to modify load order file', err,
-           { allowReport: !userCanceled });
-          return;
-        });
+        .catch(err => modSettingsErrorHandler(context, err,
+          'Failed to modify load order file'));
     },
   });
 
@@ -1326,11 +1343,8 @@ function main(context) {
               (!!refreshFunc) ? refreshFunc() : null;
               return Promise.resolve();
             })
-            .catch(err => {
-              const userCanceled = err instanceof util.UserCanceled;
-              context.api.showErrorNotification('Failed to cleanup load order file', err,
-                { allowReport: !userCanceled })
-            });
+            .catch(err => modSettingsErrorHandler(context, err,
+              'Failed to cleanup load order file'));
         } else {
           const filePath = getLoadOrderFilePath();
           fs.removeAsync(filePath)
@@ -1429,12 +1443,8 @@ function main(context) {
           (!!refreshFunc) ? refreshFunc() : null;
           return Promise.resolve();
         })
-        .catch(err => {
-          const userCanceled = err instanceof util.UserCanceled;
-          context.api.showErrorNotification('Failed to modify load order file', err,
-           { allowReport: !userCanceled });
-          return Promise.resolve();
-        });
+        .catch(err => modSettingsErrorHandler(context, err,
+          'Failed to modify load order file'));
     });
     context.api.events.on('profile-will-change', (newProfileId) => {
       const state = context.api.getState();

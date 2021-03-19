@@ -17,6 +17,31 @@ class MD5ComparisonError extends Error {
   }
 }
 
+class ResourceInaccessibleError extends Error {
+  constructor(filePath, allowReport = false) {
+    super(`"${filePath}" is being manipulated by another process`);
+    this.filePath = filePath;
+    this.isReportingAllowed = allowReport;
+  }
+
+  get isOneDrive() {
+    const segments = this.filePath.split(path.sep)
+      .filter(seg => !!seg)
+      .map(seg => seg.toLowerCase());
+    return segments.includes('onedrive');
+  }
+
+  get allowReport() {
+    return this.isReportingAllowed;
+  }
+
+  get errorMessage() {
+    return (this.isOneDrive)
+      ? this.message + ': ' + 'probably by the OneDrive service.'
+      : this.message + ': ' + 'close all applications that may be using this file.';
+    }
+}
+
 function calcHashImpl(filePath) {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash('md5');
@@ -75,4 +100,5 @@ module.exports = {
   getHash,
   getLoadOrderFilePath,
   MD5ComparisonError,
+  ResourceInaccessibleError,
 }
