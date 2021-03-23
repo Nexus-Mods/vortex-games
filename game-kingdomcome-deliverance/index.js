@@ -133,6 +133,9 @@ function refreshModList(context, discoveryPath) {
 
   const extL = input => path.extname(input).toLowerCase();
   return Promise.reduce(enabled, (accum, mod) => {
+    if (mods[mod]?.installationPath === undefined) {
+      return accum;
+    }
     const modPath = path.join(installationPath, mods[mod].installationPath);
     return walkAsync(modPath)
       .then(entries => (entries.find(fileName => ['.pak', '.cfg', '.manifest'].includes(extL(fileName))) !== undefined)
