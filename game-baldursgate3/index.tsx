@@ -667,6 +667,8 @@ function makePreSort(api: types.IExtensionApi) {
 }
 
 function main(context: types.IExtensionContext) {
+  context.registerReducer(['settings', 'baldursgate3'], reducer);
+
   context.registerGame({
     id: GAME_ID,
     name: 'Baldur\'s Gate 3',
@@ -706,8 +708,6 @@ function main(context: types.IExtensionContext) {
   });
 
   let forceRefresh: () => void;
-
-  context.registerReducer(['settings', 'baldursgate3'], reducer);
 
   context.registerInstaller('bg3-replacer', 25, testReplacer, installReplacer);
 
