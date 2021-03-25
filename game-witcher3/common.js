@@ -68,9 +68,9 @@ function getHash(filePath, tries = 3) {
     });
 }
 
-const uniApp = app || remote.app;
+const UNIAPP = app || remote.app;
 function getLoadOrderFilePath() {
-  return path.join(uniApp.getPath('documents'), 'The Witcher 3', LOAD_ORDER_FILENAME);
+  return path.join(UNIAPP.getPath('documents'), 'The Witcher 3', LOAD_ORDER_FILENAME);
 }
 
 const GAME_ID = 'witcher3';
@@ -86,7 +86,7 @@ const PART_SUFFIX = '.part.txt';
 const SCRIPT_MERGER_ID = 'W3ScriptMerger';
 const MERGE_INV_MANIFEST = 'MergeInventory.xml';
 const LOAD_ORDER_FILENAME = 'mods.settings';
-
+const I18N_NAMESPACE = 'game-witcher3';
 const CONFIG_MATRIX_REL_PATH = path.join('bin', 'config', 'r4game', 'user_config_matrix', 'pc');
 
 module.exports = {
@@ -97,6 +97,8 @@ module.exports = {
   SCRIPT_MERGER_ID,
   INPUT_XML_FILENAME,
   PART_SUFFIX,
+  I18N_NAMESPACE,
+  UNIAPP,
   getHash,
   getLoadOrderFilePath,
   MD5ComparisonError,
