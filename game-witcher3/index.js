@@ -622,10 +622,11 @@ function genEntryActions (context, item, minPriority, onSetPriority) {
           const itemKey = Object.keys(_INI_STRUCT).find(key => _INI_STRUCT[key].VK === item.id);
           const wantedPriority = result.input['w3PriorityInput'];
           if (wantedPriority <= minPriority) {
-            context.api.showErroNotification('Cannot change to locked entry Priority');
+            context.api.showErrorNotification('Cannot change to locked entry Priority');
             return resolve();
           }
           if (itemKey !== undefined) {
+            _INI_STRUCT[itemKey].Priority = parseInt(wantedPriority);
             onSetPriority(itemKey, wantedPriority);
           } else {
             log('error', 'Failed to set priority - mod is not in ini struct', { modId: item.id });
@@ -640,30 +641,6 @@ function genEntryActions (context, item, minPriority, onSetPriority) {
       show: item.locked !== true,
       title: 'Set Manual Priority',
       action: () => priorityInputDialog()
-        .then(() => writeToModSettings())
-        .then(() => {
-          const itemKey = Object.keys(_INI_STRUCT).find(key => _INI_STRUCT[key].VK === item.id);
-          if (itemKey === undefined) {
-            return Promise.resolve();
-          }
-          const state = context.api.store.getState();
-          const activeProfile = selectors.activeProfile(state);
-          const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
-          const loKey = Object.keys(loadOrder).find(key => key === item.id);
-          if (loKey !== undefined) {
-            const loEntry = loadOrder[loKey];
-            context.api.store.dispatch(actions.setLoadOrderEntry(
-              activeProfile.id, item.id, {
-                ...loEntry,
-                prefix: parseInt(_INI_STRUCT[itemKey].Priority),
-            }));
-            if (refreshFunc !== undefined) {
-              refreshFunc();
-            }
-          }
-        })
-        .catch(err => modSettingsErrorHandler(context, err,
-          'Failed to modify load order file')),
     },
   ];
 
@@ -682,22 +659,37 @@ async function preSort(context, items, direction, updateType, priorityManager) {
     return Promise.resolve([]);
   }
 
-  const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
+  let loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
   const onSetPriority = (itemKey, wantedPriority) => {
-    if (priorityManager.priorityType === 'position-based') {
-      const modId = _INI_STRUCT[itemKey].VK;
-      const loId = Object.keys(loadOrder).find(id => id === modId);
-      if (loId !== undefined) {
-        context.api.store.dispatch(actions.setLoadOrderEntry(
-          activeProfile.id, modId, {
-            ...loadOrder[loId],
-            pos: wantedPriority,
-            prefix: parseInt(wantedPriority),
-        }));
-      }
-    }
-    _INI_STRUCT[itemKey].Priority = parseInt(wantedPriority);
-  }
+    return writeToModSettings()
+      .then(() => {
+        wantedPriority = +wantedPriority;
+        const state = context.api.store.getState();
+        const activeProfile = selectors.activeProfile(state);
+        const modId = _INI_STRUCT[itemKey].VK;
+        const loEntry = loadOrder[modId];
+        const minPriority = Object.keys(loadOrder).filter(k => loadOrder[k]?.locked).length;
+        if (priorityManager.priorityType === 'position-based') {
+          context.api.store.dispatch(actions.setLoadOrderEntry(
+            activeProfile.id, modId, {
+              ...loEntry,
+              pos: (loEntry.pos < wantedPriority) ? wantedPriority : wantedPriority - 2,
+          }));
+          loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
+        } else {
+          context.api.store.dispatch(actions.setLoadOrderEntry(
+            activeProfile.id, modId, {
+              ...loEntry,
+              prefix: parseInt(_INI_STRUCT[itemKey].Priority),
+          }));
+        }
+        if (refreshFunc !== undefined) {
+          refreshFunc();
+        }
+      })
+      .catch(err => modSettingsErrorHandler(context, err,
+        'Failed to modify load order file'));
+  };
   const allMods = await getAllMods(context);
   if ((allMods.merged.length === 0) && (allMods.manual.length === 0)) {
     items.map((item, idx) => {
@@ -789,9 +781,7 @@ async function preSort(context, items, direction, updateType, priorityManager) {
         }
         return accum;
       }, []);
-  return (direction === 'descending')
-    ? Promise.resolve(preSorted.reverse())
-    : Promise.resolve(preSorted);
+  return Promise.resolve(preSorted);
 }
 
 function findModFolder(installationPath, mod) {
