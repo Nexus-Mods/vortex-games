@@ -9,6 +9,7 @@ import { getMergedModName } from './scriptmerger';
 
 type OpType = 'import' | 'export';
 interface IBaseProps {
+  api: types.IExtensionApi;
   state: types.IState;
   profile: types.IProfile;
   scriptMergerTool: types.IDiscoveredTool;
@@ -43,7 +44,7 @@ function genBaseProps(context: types.IExtensionContext, profileId: string): IBas
     return undefined;
   }
 
-  return { state, profile, scriptMergerTool, gamePath: discovery.path };
+  return { api: context.api, state, profile, scriptMergerTool, gamePath: discovery.path };
 }
 
 function getFileEntries(filePath: string): Promise<string[]> {
@@ -65,6 +66,7 @@ async function moveFile(from: string, to: string, fileName: string) {
   try {
     await copyFile(src, dest);
   } catch (err) {
+    // It's perfectly possible for the user not to have any merges yet.
     return (err.code !== 'ENOENT')
       ? Promise.reject(err)
       : Promise.resolve();
@@ -85,24 +87,50 @@ async function removeFile(filePath: string) {
 }
 
 async function copyFile(src: string, dest: string) {
-  await fs.ensureDirWritableAsync(path.dirname(dest));
-  await removeFile(dest);
-  await fs.copyAsync(src, dest);
+  try {
+    await fs.ensureDirWritableAsync(path.dirname(dest));
+    await removeFile(dest);
+    await fs.copyAsync(src, dest);
+  } catch (err) {
+    return Promise.reject(err);
+  }
 }
 
-async function moveFiles(src: string, dest: string, cleanUp: boolean = false) {
-  try {
-    const destFiles: string[] = await getFileEntries(dest);
-    destFiles.sort(sortDec);
-    for (const destFile of destFiles) {
-      await fs.removeAsync(destFile);
+async function moveFiles(src: string, dest: string, props: IBaseProps) {
+  const t = props.api.translate;
+  const removeDestFiles = async () => {
+    try {
+      const destFiles: string[] = await getFileEntries(dest);
+      destFiles.sort(sortDec);
+      for (const destFile of destFiles) {
+        await fs.removeAsync(destFile);
+      }
+    } catch (err) {
+      if (['EPERM'].includes(err.code)) {
+        return props.api.showDialog('error', 'Failed to restore merged files', {
+          bbcode: t('Vortex encountered a permissions related error while attempting '
+            + 'to replace:{{bl}}"{{filePath}}"{{bl}}'
+            + 'Please try to resolve any permissions related issues and return to this '
+            + 'dialog when you think you managed to fix it. There are a couple of things '
+            + 'you can try to fix this:[br][/br][list][*] Close/Disable any applications that may '
+            + 'interfere with Vortex\'s operations such as the game itself, the witcher script merger, '
+            + 'any external modding tools, any anti-virus software. '
+            + '[*] Ensure that your Windows user account has full read/write permissions to the file specified '
+            + '[/list]', { replace: { filePath: err.path, bl: '[br][/br][br][/br]' } }),
+        },
+        [
+          { label: 'Cancel', action: () => Promise.reject(new util.UserCanceled()) },
+          { label: 'Try Again', action: () => removeDestFiles() }
+        ])
+      } else {
+        // We failed to clean up the destination folder - we can't
+        //  continue.
+        return Promise.reject(new util.ProcessCanceled(err.message));
+      }
     }
-  } catch (err) {
-    // We failed to clean up the destination folder - we can't
-    //  continue.
-    throw new util.ProcessCanceled(err.message);
-  }
+  };
 
+  await removeDestFiles();
   const copied: string[] = [];
   try {
     const srcFiles: string[] = await getFileEntries(src);
@@ -110,17 +138,21 @@ async function moveFiles(src: string, dest: string, cleanUp: boolean = false) {
     for (const srcFile of srcFiles) {
       const relPath = path.relative(src, srcFile);
       const targetPath = path.join(dest, relPath);
-      await copyFile(srcFile, targetPath);
-      copied.push(targetPath);
-    }
-
-    if (cleanUp) {
-      // We managed to copy all the files, clean up the source
-      srcFiles.sort(sortDec);
-      for (const srcFile of srcFiles) {
-        await fs.removeAsync(srcFile);
+      try {
+        await copyFile(srcFile, targetPath);
+        copied.push(targetPath);
+      } catch (err) {
+        log('error', 'failed to move file', err);
       }
     }
+
+    // if (cleanUp) {
+    //   // We managed to copy all the files, clean up the source
+    //   srcFiles.sort(sortDec);
+    //   for (const srcFile of srcFiles) {
+    //     await fs.removeAsync(srcFile);
+    //   }
+    // }
   } catch (err) {
     if (!!err.path && !err.path.includes(dest)) {
       // We failed to clean up the source
@@ -138,10 +170,10 @@ async function moveFiles(src: string, dest: string, cleanUp: boolean = false) {
 async function handleMergedScripts(props: IBaseProps, opType: OpType) {
   const { scriptMergerTool, profile, gamePath } = props;
   if (!scriptMergerTool?.path) {
-    throw new util.NotFound('Script merging tool path');
+    return Promise.reject(new util.NotFound('Script merging tool path'));
   }
   if (!profile?.id) {
-    throw new util.ArgumentInvalid('invalid profile');
+    return Promise.reject(new util.ArgumentInvalid('invalid profile'));
   }
 
   const mergerToolDir = path.dirname(scriptMergerTool.path);
@@ -153,11 +185,11 @@ async function handleMergedScripts(props: IBaseProps, opType: OpType) {
   if (opType === 'export') {
     await moveFile(mergerToolDir, profilePath, MERGE_INV_MANIFEST);
     await moveFile(path.dirname(loarOrderFilepath), profilePath, path.basename(loarOrderFilepath));
-    await moveFiles(mergedScriptsPath, path.join(profilePath, mergedModName));
+    await moveFiles(mergedScriptsPath, path.join(profilePath, mergedModName), props);
   } else if (opType === 'import') {
     await moveFile(profilePath, mergerToolDir, MERGE_INV_MANIFEST);
     await moveFile(profilePath, path.dirname(loarOrderFilepath), path.basename(loarOrderFilepath));
-    await moveFiles(path.join(profilePath, mergedModName), mergedScriptsPath, false);
+    await moveFiles(path.join(profilePath, mergedModName), mergedScriptsPath, props);
   }
 }
 

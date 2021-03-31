@@ -1244,8 +1244,12 @@ function main(context) {
         const lastProfId = selectors.lastActiveProfileForGame(state, gameMode);
         const activeProf = selectors.activeProfile(state);
         if (lastProfId !== activeProf?.id) {
-          await storeToProfile(context, lastProfId);
-          await restoreFromProfile(context, activeProf?.id)
+          try {
+            await storeToProfile(context, lastProfId)
+              .then(() => restoreFromProfile(context, activeProf?.id));
+          } catch (err) {
+            context.api.showErrorNotification('Failed to restore profile merged files', err);
+          }
         }
       }
     });
@@ -1261,7 +1265,7 @@ function main(context) {
           ? Promise.resolve()
           : Promise.reject(err));
     });
-    context.api.onAsync('did-deploy', (profileId, deployment) => {
+    context.api.onAsync('did-deploy', async (profileId, deployment) => {
       const state = context.api.store.getState();
       const activeProfile = validateProfile(profileId, state);
       if (activeProfile === undefined) {
@@ -1308,23 +1312,19 @@ function main(context) {
         .catch(err => modSettingsErrorHandler(context, err,
           'Failed to modify load order file'));
     });
-    context.api.events.on('profile-will-change', (newProfileId) => {
+    context.api.events.on('profile-will-change', async (newProfileId) => {
       const state = context.api.getState();
       const profile = selectors.profileById(state, newProfileId);
       if (profile?.gameId !== GAME_ID) {
         return;
       }
       const lastProfId = selectors.lastActiveProfileForGame(state, profile.gameId);
-      storeToProfile(context, lastProfId);
-    });
-
-    context.api.events.on('profile-did-change', (newProfileId) => {
-      const state = context.api.getState();
-      const profile = selectors.profileById(state, newProfileId);
-      if (profile?.gameId !== GAME_ID) {
-        return;
+      try {
+        return storeToProfile(context, lastProfId)
+          .then(() => restoreFromProfile(context, profile.id));
+      } catch (err) {
+        context.api.showErrorNotification('Failed to store profile specific merged items', err);
       }
-      restoreFromProfile(context, profile.id);
     });
 
     context.api.events.on('purge-mods', () => {
