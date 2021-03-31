@@ -9,7 +9,7 @@ const { downloadScriptMerger, setMergerConfig } = require('./scriptmerger');
 const menuMod = require('./menumod');
 
 const { 
-  GAME_ID, INPUT_XML_FILENAME, LOAD_ORDER_FILENAME, getLoadOrderFilePath,
+  GAME_ID, INPUT_XML_FILENAME, LOAD_ORDER_FILENAME, getLoadOrderFilePath, getPriorityTypeBranch,
   PART_SUFFIX, SCRIPT_MERGER_ID, MERGE_INV_MANIFEST, ResourceInaccessibleError,
   UNIAPP, I18N_NAMESPACE,
 } = require('./common');
@@ -20,6 +20,9 @@ const { registerActions } = require('./iconbarActions');
 const { testSupportedMixed, installMixed } = require('./installers');
 
 const { storeToProfile, restoreFromProfile } = require('./mergeBackup');
+
+const { setPriorityType } = require('./actions');
+const { W3Reducer } = require('./reducers');
 
 const React = require('react');
 const BS = require('react-bootstrap');
@@ -1087,6 +1090,7 @@ function scriptMergerDummyInstaller(context, files) {
 }
 
 function main(context) {
+  context.registerReducer(['settings', 'loadOrder', 'rendererOptions'], W3Reducer);
   let priorityManager = undefined;
   context.registerGame({
     id: GAME_ID,
@@ -1233,7 +1237,7 @@ function main(context) {
 
   let prevDeployment = [];
   context.once(() => {
-    priorityManager = new PriorityManager(context.api, 'position-based');
+    priorityManager = new PriorityManager(context.api, 'prefix-based');
     context.api.events.on('gamemode-activated', async (gameMode) => {
       if (gameMode !== GAME_ID) {
         // Just in case the script merger notification is still
@@ -1243,6 +1247,8 @@ function main(context) {
         const state = context.api.getState();
         const lastProfId = selectors.lastActiveProfileForGame(state, gameMode);
         const activeProf = selectors.activeProfile(state);
+        const priorityType = util.getSafe(state, getPriorityTypeBranch(), 'prefix-based');
+        context.api.store.dispatch(setPriorityType(priorityType));
         if (lastProfId !== activeProf?.id) {
           try {
             await storeToProfile(context, lastProfId)
@@ -1318,6 +1324,10 @@ function main(context) {
       if (profile?.gameId !== GAME_ID) {
         return;
       }
+
+      const priorityType = util.getSafe(state, getPriorityTypeBranch(), 'prefix-based');
+      context.api.store.dispatch(setPriorityType(priorityType));
+
       const lastProfId = selectors.lastActiveProfileForGame(state, profile.gameId);
       try {
         return storeToProfile(context, lastProfId)
@@ -1325,6 +1335,17 @@ function main(context) {
       } catch (err) {
         context.api.showErrorNotification('Failed to store profile specific merged items', err);
       }
+    });
+
+    context.api.onStateChange(['settings', 'loadOrder', 'witcher3'], (prev, current) => {
+      const state = context.api.getState();
+      const activeProfile = selectors.activeProfile(state);
+      if (activeProfile?.gameId !== GAME_ID || priorityManager === undefined) {
+        return;
+      }
+
+      const priorityType = util.getSafe(state, getPriorityTypeBranch(), 'prefix-based');
+      PriorityManager.priorityType = priorityType;
     });
 
     context.api.events.on('purge-mods', () => {

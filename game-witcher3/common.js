@@ -73,6 +73,10 @@ function getLoadOrderFilePath() {
   return path.join(UNIAPP.getPath('documents'), 'The Witcher 3', LOAD_ORDER_FILENAME);
 }
 
+function getPriorityTypeBranch() {
+  return ['settings', 'loadOrder', 'rendererOptions', 'witcher3', 'prioritytype'];
+}
+
 const GAME_ID = 'witcher3';
 
 // File used by some mods to define hotkey/input mapping
@@ -101,6 +105,7 @@ module.exports = {
   UNIAPP,
   getHash,
   getLoadOrderFilePath,
+  getPriorityTypeBranch,
   MD5ComparisonError,
   ResourceInaccessibleError,
 }

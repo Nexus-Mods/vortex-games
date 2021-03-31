@@ -1,8 +1,9 @@
 import path from 'path';
 import { actions, selectors, types, util } from 'vortex-api';
 
-import { GAME_ID, I18N_NAMESPACE, LOCKED_PREFIX, UNIAPP } from './common';
-import { PriorityManager } from './priorityManager';
+import { setPriorityType } from './actions';
+import { GAME_ID, getPriorityTypeBranch, I18N_NAMESPACE, LOCKED_PREFIX, UNIAPP } from './common';
+import { PriorityManager, PriorityType } from './priorityManager';
 
 interface IProps {
   context: types.IExtensionContext;
@@ -54,8 +55,11 @@ export const registerActions = (props: IProps) => {
         if (priorityManager === undefined) {
           return;
         } else {
-          priorityManager.priorityType = (priorityManager.priorityType === 'position-based')
-            ? 'prefix-based' : 'position-based';
+          const state = context.api.getState();
+          const priorityType: PriorityType = util.getSafe(state, getPriorityTypeBranch(), 'prefix-based');
+          const wantedType: PriorityType = (priorityType === 'prefix-based')
+            ? 'position-based' : 'prefix-based';
+          context.api.store.dispatch(setPriorityType(wantedType));
         }
     }, isTW3);
 

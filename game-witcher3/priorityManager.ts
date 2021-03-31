@@ -49,6 +49,7 @@ export class PriorityManager {
     const props: IProps = this.genProps();
     if (props === undefined) {
       this.mMaxPriority = 0;
+      return;
     }
     this.mMaxPriority = this.getMaxPriority(props);
   }

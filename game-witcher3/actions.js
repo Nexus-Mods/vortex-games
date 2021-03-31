@@ -1,0 +1,6 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.setPriorityType = void 0;
+const redux_act_1 = require("redux-act");
+exports.setPriorityType = redux_act_1.createAction('TW3_SET_PRIORITY_TYPE', type => type);
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiYWN0aW9ucy5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbImFjdGlvbnMudHMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6Ijs7O0FBQUEseUNBQXlDO0FBRTVCLFFBQUEsZUFBZSxHQUFHLHdCQUFZLENBQUMsdUJBQXVCLEVBQUUsSUFBSSxDQUFDLEVBQUUsQ0FBQyxJQUFJLENBQUMsQ0FBQyIsInNvdXJjZXNDb250ZW50IjpbImltcG9ydCB7IGNyZWF0ZUFjdGlvbiB9IGZyb20gJ3JlZHV4LWFjdCc7XHJcblxyXG5leHBvcnQgY29uc3Qgc2V0UHJpb3JpdHlUeXBlID0gY3JlYXRlQWN0aW9uKCdUVzNfU0VUX1BSSU9SSVRZX1RZUEUnLCB0eXBlID0+IHR5cGUpO1xyXG4iXX0=
