@@ -5,6 +5,8 @@ import { setPriorityType } from './actions';
 import { GAME_ID, getPriorityTypeBranch, I18N_NAMESPACE, LOCKED_PREFIX, UNIAPP } from './common';
 import { PriorityManager, PriorityType } from './priorityManager';
 
+import PriorityTypeButton from './priorityTypeButton';
+
 interface IProps {
   context: types.IExtensionContext;
   refreshFunc: () => void;
@@ -47,21 +49,8 @@ export const registerActions = (props: IProps) => {
     return (gameMode === GAME_ID);
   };
 
-  context.registerAction('generic-load-order-icons', 300, 'save', {},
-    getPriorityManager()?.priorityType === 'position-based'
-      ? 'Switch to Prefix-based'
-      : 'Switch to Position-based', () => {
-        const priorityManager = getPriorityManager();
-        if (priorityManager === undefined) {
-          return;
-        } else {
-          const state = context.api.getState();
-          const priorityType: PriorityType = util.getSafe(state, getPriorityTypeBranch(), 'prefix-based');
-          const wantedType: PriorityType = (priorityType === 'prefix-based')
-            ? 'position-based' : 'prefix-based';
-          context.api.store.dispatch(setPriorityType(wantedType));
-        }
-    }, isTW3);
+  context.registerAction('generic-load-order-icons', 300, PriorityTypeButton, {},
+    undefined, undefined, isTW3);
 
   context.registerAction('mod-icons', 300, 'open-ext', {},
                          'Open TW3 Documents Folder', openTW3DocPath, isTW3);

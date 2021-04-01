@@ -5,7 +5,7 @@ import { setPriorityType } from './actions';
 export const W3Reducer: types.IReducerSpec = {
   reducers: {
     [setPriorityType as any]: (state, payload) => {
-      return util.setSafe(state, ['witcher3', 'prioritytype'], payload);
+      return util.setSafe(state, ['prioritytype'], payload);
     },
   },
   defaults: {

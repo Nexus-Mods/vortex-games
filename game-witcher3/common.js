@@ -74,7 +74,7 @@ function getLoadOrderFilePath() {
 }
 
 function getPriorityTypeBranch() {
-  return ['settings', 'loadOrder', 'rendererOptions', 'witcher3', 'prioritytype'];
+  return ['settings', 'witcher3', 'prioritytype'];
 }
 
 const GAME_ID = 'witcher3';

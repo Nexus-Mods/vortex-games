@@ -1090,7 +1090,7 @@ function scriptMergerDummyInstaller(context, files) {
 }
 
 function main(context) {
-  context.registerReducer(['settings', 'loadOrder', 'rendererOptions'], W3Reducer);
+  context.registerReducer(['settings', 'witcher3'], W3Reducer);
   let priorityManager = undefined;
   context.registerGame({
     id: GAME_ID,
@@ -1337,7 +1337,7 @@ function main(context) {
       }
     });
 
-    context.api.onStateChange(['settings', 'loadOrder', 'witcher3'], (prev, current) => {
+    context.api.onStateChange(['settings', 'witcher3'], (prev, current) => {
       const state = context.api.getState();
       const activeProfile = selectors.activeProfile(state);
       if (activeProfile?.gameId !== GAME_ID || priorityManager === undefined) {
@@ -1345,7 +1345,7 @@ function main(context) {
       }
 
       const priorityType = util.getSafe(state, getPriorityTypeBranch(), 'prefix-based');
-      PriorityManager.priorityType = priorityType;
+      priorityManager.priorityType = priorityType;
     });
 
     context.api.events.on('purge-mods', () => {
