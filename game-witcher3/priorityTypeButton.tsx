@@ -24,7 +24,7 @@ class PriorityTypeButton extends ComponentEx<IProps, {}> {
     return (
       <ToolbarIcon
         id='switch-priority-type-button'
-        icon='savegame'
+        icon='sort-none'
         text={priorityType === 'position-based' ? t('To Prefix Based') : t('To Position Based')}
         tooltip={t('Changes priority assignment restrictions - prefix based is '
                 + 'less restrictive and allows you to manually set priorities like '
