@@ -74,7 +74,16 @@ function main(context) {
           // copy the new file back into the corresponding mod, then delete it. That way, vortex will
           // create a link to it with the correct deployment method and not ask the user any questions
           await fs.ensureDirAsync(path.dirname(targetPath));
-          await fs.copyAsync(entry.filePath, targetPath);
+          try {
+            await fs.copyAsync(entry.filePath, targetPath);
+          } catch (err) {
+            if (err.message.includes('are the same file')) {
+              // Identical file already there? smells like user tampering to me!
+              //  Either way, if the file is already there then we have no problems.
+            } else {
+              return Promise.reject(err);
+            }
+          }
           await fs.removeAsync(entry.filePath);
         }
       });
