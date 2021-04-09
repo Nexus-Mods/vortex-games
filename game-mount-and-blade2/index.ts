@@ -741,7 +741,7 @@ async function refreshCacheOnEvent(context: types.IExtensionContext,
   if (profileId === undefined) {
     return Promise.resolve();
   }
-  await metaManager.updateDependencyMap(profileId);
+
   const state = context.api.store.getState();
   const activeProfile = selectors.activeProfile(state);
   const deployProfile = selectors.profileById(state, profileId);
@@ -750,6 +750,8 @@ async function refreshCacheOnEvent(context: types.IExtensionContext,
     //  than the currently active one. Not going to continue.
     return Promise.resolve();
   }
+
+  await metaManager.updateDependencyMap(profileId);
 
   try {
     const deployedSubModules = await getDeployedSubModPaths(context);
