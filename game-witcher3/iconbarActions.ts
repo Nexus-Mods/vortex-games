@@ -50,7 +50,7 @@ export const registerActions = (props: IProps) => {
   };
 
   context.registerAction('generic-load-order-icons', 300, PriorityTypeButton, {},
-    undefined, undefined, isTW3);
+    undefined, isTW3);
 
   context.registerAction('mod-icons', 300, 'open-ext', {},
                          'Open TW3 Documents Folder', openTW3DocPath, isTW3);
