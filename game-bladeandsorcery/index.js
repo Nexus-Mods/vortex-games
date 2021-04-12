@@ -185,7 +185,15 @@ async function ensureLOFile(discoveryPath) {
   const loFilePath = path.join(discoveryPath, streamingAssetsPath(), 'Mods', LOAD_ORDER_FILENAME);
   return fs.statAsync(loFilePath)
     .then(() => Promise.resolve(loFilePath))
-    .catch(err => fs.ensureDirWritableAsync(path.dirname(loFilePath))
+    // It appears that some mods might be distributing the lo file
+    //  and if the user decides to remove it manually from the staging
+    //  folder without purging first - they're left with a symlink that
+    //  points nowhere https://github.com/Nexus-Mods/Vortex/issues/9063
+    //  So we're going to try to pre-emptively remove any lo link/file
+    //  before re-creating the file.
+    .catch(err => fs.unlinkAsync(loFilePath)
+      .catch(err2 => null)
+      .then(() => fs.ensureDirWritableAsync(path.dirname(loFilePath)))
       .then(() => fs.writeFileAsync(loFilePath, JSON.stringify(emptyLO, undefined, 2), { encoding: 'utf8' }))
       .then(() => Promise.resolve(loFilePath)));
 }
