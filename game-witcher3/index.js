@@ -947,7 +947,7 @@ function readInputFile(context, mergeDir) {
     : Promise.reject({ code: 'ENOENT', message: 'Game is not discovered' })
 }
 
-const emptyXml = '<?xml version="1.0" ?><metadata></metadata>';
+const emptyXml = '<?xml version="1.0" encoding="UTF-16"?><metadata></metadata>';
 function merge(filePath, mergeDir, context) {
   let modData;
   return fs.readFileAsync(filePath)

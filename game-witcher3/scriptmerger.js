@@ -399,11 +399,13 @@ async function getMergedModName(scriptMergerPath) {
     const config = await parseStringPromise(data);
     const configItems = config?.configuration?.appSettings?.[0]?.add;
     const MergedModName = configItems?.find(item => item.$?.key === 'MergedModName') ?? undefined;
-    if (MergedModName) {
+    if (!!MergedModName?.$?.value) {
       return MergedModName.$.value;
     }
   } catch (err) {
-    return undefined;
+    // This is probably a sign of a corrupt script merger installation....
+    log('error', 'failed to ascertain merged mod name - using "mod0000_MergedFiles"', err);
+    return 'mod0000_MergedFiles';
   }
 }
 

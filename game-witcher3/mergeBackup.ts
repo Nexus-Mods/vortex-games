@@ -176,20 +176,28 @@ async function handleMergedScripts(props: IBaseProps, opType: OpType) {
     return Promise.reject(new util.ArgumentInvalid('invalid profile'));
   }
 
-  const mergerToolDir = path.dirname(scriptMergerTool.path);
-  const profilePath: string = path.join(mergerToolDir, profile.id);
-  const loarOrderFilepath: string = getLoadOrderFilePath();
-  const mergedModName = await getMergedModName(mergerToolDir);
-  const mergedScriptsPath = path.join(gamePath, 'Mods', mergedModName);
+  try {
+    const mergerToolDir = path.dirname(scriptMergerTool.path);
+    const profilePath: string = path.join(mergerToolDir, profile.id);
+    const loarOrderFilepath: string = getLoadOrderFilePath();
+    const mergedModName = await getMergedModName(mergerToolDir);
+    const mergedScriptsPath = path.join(gamePath, 'Mods', mergedModName);
 
-  if (opType === 'export') {
-    await moveFile(mergerToolDir, profilePath, MERGE_INV_MANIFEST);
-    await moveFile(path.dirname(loarOrderFilepath), profilePath, path.basename(loarOrderFilepath));
-    await moveFiles(mergedScriptsPath, path.join(profilePath, mergedModName), props);
-  } else if (opType === 'import') {
-    await moveFile(profilePath, mergerToolDir, MERGE_INV_MANIFEST);
-    await moveFile(profilePath, path.dirname(loarOrderFilepath), path.basename(loarOrderFilepath));
-    await moveFiles(path.join(profilePath, mergedModName), mergedScriptsPath, props);
+    // Just in case it's missing.
+    await fs.ensureDirWritableAsync(mergedScriptsPath);
+
+    if (opType === 'export') {
+      await moveFile(mergerToolDir, profilePath, MERGE_INV_MANIFEST);
+      await moveFile(path.dirname(loarOrderFilepath), profilePath, path.basename(loarOrderFilepath));
+      await moveFiles(mergedScriptsPath, path.join(profilePath, mergedModName), props);
+    } else if (opType === 'import') {
+      await moveFile(profilePath, mergerToolDir, MERGE_INV_MANIFEST);
+      await moveFile(profilePath, path.dirname(loarOrderFilepath), path.basename(loarOrderFilepath));
+      await moveFiles(path.join(profilePath, mergedModName), mergedScriptsPath, props);
+    }
+  } catch (err) {
+    log('error', 'failed to store/restore merged scripts', err);
+    return Promise.reject(err);
   }
 }
 
