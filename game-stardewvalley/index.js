@@ -342,6 +342,10 @@ async function installSMAPI(files, destinationPath) {
 
   // Find the SMAPI exe file. 
   const smapiExe = updatedFiles.find(file => file.toLowerCase().endsWith(SMAPI_EXE.toLowerCase()));
+  if (smapiExe === undefined) {
+    return Promise.reject(new util.DataInvalid(`Failed to extract ${SMAPI_EXE} - download appears `
+      + 'to be corrupted; please re-download SMAPI and try again'));
+  }
   const idx = smapiExe.indexOf(path.basename(smapiExe));
 
   // Build the instructions for installation. 
