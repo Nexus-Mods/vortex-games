@@ -435,12 +435,11 @@ function main(context) {
     preSort: (items, direction, refreshType) => preSort(context, items, direction, refreshType),
     displayCheckboxes: false,
     callback: (loadOrder) => {
-      try {
-        writeLOToFile(context.api, loadOrder)
-      } catch (err) {
-        context.api.showErrorNotification('failed to write to load order file', err,
-          { allowReport: !['EPERM', 'EISDIR'].includes(err.code) });
-      }
+      writeLOToFile(context.api, loadOrder)
+        .catch(err => {
+          context.api.showErrorNotification('failed to write to load order file', err,
+            { allowReport: !['EPERM', 'EISDIR'].includes(err.code) });
+        });
     },
   });
 
