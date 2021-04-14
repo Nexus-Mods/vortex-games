@@ -33,7 +33,13 @@ export function migrate020(context, oldVersion) {
     return Promise.resolve();
   }
 
-  const modsPath = path.join(getDiscoveryPath(context.api.getState()), DATAPATH, 'VortexMods');
+  const discoveryPath = getDiscoveryPath(context.api.getState());
+  if (discoveryPath === undefined) {
+    // Game was not discovered, this is a valid use case.
+    //  User might not own the game.
+    return Promise.resolve();
+  }
+  const modsPath = path.join(discoveryPath, DATAPATH, 'VortexMods');
 
   return context.api.awaitUI()
     .then(() => fs.ensureDirWritableAsync(modsPath))
