@@ -947,7 +947,7 @@ function readInputFile(context, mergeDir) {
     : Promise.reject({ code: 'ENOENT', message: 'Game is not discovered' })
 }
 
-const emptyXml = '<?xml version="1.0" encoding="UTF-16"?><metadata></metadata>';
+const emptyXml = '<?xml version="1.0" encoding="UTF-8"?><metadata></metadata>';
 function merge(filePath, mergeDir, context) {
   let modData;
   return fs.readFileAsync(filePath)
@@ -1045,7 +1045,7 @@ function merge(filePath, mergeDir, context) {
       });
 
       return fs.writeFileAsync(path.join(mergeDir, CONFIG_MATRIX_REL_PATH, INPUT_XML_FILENAME),
-        gameIndexFile, { encoding: 'utf16le' });
+        gameIndexFile);
     })
     .catch(err => {
       log('error', 'input.xml merge failed', err);
