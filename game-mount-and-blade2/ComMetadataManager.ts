@@ -105,11 +105,21 @@ class ComMetadataManager {
   private async findSubModFiles(modPath: string) {
     let fileEntries: IEntry[] = [];
 
-    await turbowalk(modPath, entries => {
-      const filtered = entries.filter(entry => !entry.isDirectory
-        && path.basename(entry.filePath).toLowerCase() === SUBMOD_FILE);
-      fileEntries = fileEntries.concat(filtered);
-    });
+    try {
+      await turbowalk(modPath, entries => {
+        const filtered = entries.filter(entry => !entry.isDirectory
+          && path.basename(entry.filePath).toLowerCase() === SUBMOD_FILE);
+        fileEntries = fileEntries.concat(filtered);
+      }).catch(err => ['ENOENT', 'ENOTFOUND'].includes(err.code)
+        ? Promise.resolve()
+        : Promise.reject(err));
+    } catch (err) {
+      // The ability to sort the user's mods using the community
+      //  developed metadata is a nice to have - but not a big deal if
+      //  we can't do it for whatever reason.
+      log('error', 'unable to find submodule files', err);
+      return fileEntries;
+    }
 
     return fileEntries;
   }
