@@ -55,7 +55,11 @@ export class PriorityManager {
   }
 
   public getPriority = (item: types.ILoadOrderDisplayItem) => {
-    const { loadOrder, minPriority } = this.genProps();
+    const props: IProps = this.genProps();
+    const { loadOrder, minPriority } = (props === undefined)
+      ? { loadOrder: {}, minPriority: 0 }
+      : props;
+
     const itemKey = Object.keys(loadOrder).find(x => x === item.id);
     if (itemKey !== undefined) {
       if (this.mPriorityType === 'position-based') {
