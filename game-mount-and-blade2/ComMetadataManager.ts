@@ -138,7 +138,9 @@ class ComMetadataManager {
       const subModFiles = await this.findSubModFiles(modFolder);
       for (const subModFile of subModFiles) {
         const subModData: ISubModule = await this.parseSubModFile(subModFile.filePath);
-        depMap[subModData.id] = subModData;
+        if (subModData?.id !== undefined) {
+          depMap[subModData.id] = subModData;
+        }
       }
     }
 
