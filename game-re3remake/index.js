@@ -99,6 +99,7 @@ function main(context) {
   context.registerGame({
     id: GAME_ID,
     name: 'Resident Evil 3 (2020)',
+    compatible: { usvfs: false },
     logo: 'gameart.jpg',
     mergeMods: true,
     queryPath: findGame,
