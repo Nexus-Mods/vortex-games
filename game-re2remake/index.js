@@ -106,7 +106,7 @@ async function installContent(files,
     return {
       type: 'copy',
       source: file.source,
-      destination: file.destination,
+      destination: file.destination.toLowerCase(),
     }
   });
 
