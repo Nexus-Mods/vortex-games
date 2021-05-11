@@ -503,7 +503,15 @@ async function writeModSettings(api: types.IExtensionApi, data: IModSettings): P
 
   const builder = new Builder();
   const xml = builder.buildObject(data);
-  await fs.writeFileAsync(settingsPath, xml);
+  try {
+    await fs.ensureDirWritableAsync(path.dirname(settingsPath));
+    await fs.writeFileAsync(settingsPath, xml);
+  } catch (err) {
+    storedLO = [];
+    const allowReport = ['ENOENT', 'EPERM'].includes(err.code);
+    api.showErrorNotification('Failed to write mod settings', err, { allowReport });
+    return;
+  }
 }
 
 async function readStoredLO(api: types.IExtensionApi) {
