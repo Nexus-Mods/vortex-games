@@ -1333,7 +1333,7 @@ function main(context) {
 
       const lastProfId = selectors.lastActiveProfileForGame(state, profile.gameId);
       try {
-        return storeToProfile(context, lastProfId)
+        await storeToProfile(context, lastProfId)
           .then(() => restoreFromProfile(context, profile.id));
       } catch (err) {
         context.api.showErrorNotification('Failed to store profile specific merged items', err);
