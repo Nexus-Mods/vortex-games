@@ -47,7 +47,7 @@ export async function ensureLOFile(context: types.IExtensionContext,
   const targetPath = path.join(props.discovery.path, props.profile.id + '_' + LO_FILE_NAME);
   try {
     await fs.statAsync(targetPath)
-      .catch({ code: 'ENOENT' }, () => fs.writeFileAsync(targetPath, JSON.stringify({}), { encoding: 'utf8' }));
+      .catch({ code: 'ENOENT' }, () => fs.writeFileAsync(targetPath, JSON.stringify([]), { encoding: 'utf8' }));
     return targetPath;
   } catch (err) {
     return Promise.reject(err);
