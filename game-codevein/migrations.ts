@@ -1,6 +1,6 @@
 import path from 'path';
 import semver from 'semver';
-import { actions, fs, log, types, util } from 'vortex-api';
+import { actions, fs, log, selectors, types, util } from 'vortex-api';
 import { serialize } from './loadOrder';
 
 import { GAME_ID, modsRelPath } from './common';
@@ -12,17 +12,21 @@ export async function migrate100(context, oldVersion) {
   }
 
   const state = context.api.store.getState();
+  const activatorId = selectors.activatorForGame(state, GAME_ID);
+  const activator = util.getActivator(activatorId);
   const discoveryPath = util.getSafe(state,
     ['settings', 'gameMode', 'discovered', GAME_ID, 'path'], undefined);
 
-  if (discoveryPath === undefined) {
-    // Game was not discovered, this is a valid use case.
-    //  User might not own the game.
+  if (discoveryPath === undefined || activator === undefined) {
+    // Game was not discovered or a deployment method isn't set.
     return Promise.resolve();
   }
 
   const mods: { [modId: string]: types.IMod } = util.getSafe(state,
     ['persistent', 'mods', GAME_ID], {});
+  if (Object.keys(mods).length === 0) {
+    return Promise.resolve();
+  }
 
   const profiles = util.getSafe(state, ['persistent', 'profiles'], {});
   const loProfiles = Object.keys(profiles).filter(id => profiles[id]?.gameId === GAME_ID);

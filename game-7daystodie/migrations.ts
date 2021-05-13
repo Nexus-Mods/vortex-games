@@ -1,6 +1,6 @@
 import path from 'path';
 import semver from 'semver';
-import { actions, fs, types, util } from 'vortex-api';
+import { actions, fs, selectors, types, util } from 'vortex-api';
 
 import { GAME_ID, I18N_NAMESPACE, modsRelPath } from './common';
 import { serialize } from './loadOrder';
@@ -63,9 +63,9 @@ export async function migrate100(context, oldVersion): Promise<void> {
   const discoveryPath = util.getSafe(state,
     ['settings', 'gameMode', 'discovered', GAME_ID, 'path'], undefined);
 
-  if (discoveryPath === undefined) {
-    // Game was not discovered, this is a valid use case.
-    //  User might not own the game.
+  const activatorId = selectors.activatorForGame(state, GAME_ID);
+  const activator = util.getActivator(activatorId);
+  if (discoveryPath === undefined || activator === undefined) {
     return Promise.resolve();
   }
 
