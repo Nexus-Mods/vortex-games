@@ -115,14 +115,14 @@ function installContent(files,
   const instructions = files
     .filter(file => path.dirname(file.toLowerCase()).indexOf(OVERRIDE_FOLDER) !== -1 && path.extname(file) !== '')
     .map(file => {
-        // Remove all precedent folders up to the modRoot directory (including the override folder).
-        const lowerCased = file.toLowerCase();
-        const finalDestination = lowerCased.substr(lowerCased.indexOf(OVERRIDE_FOLDER) + OVERRIDE_FOLDER.length + 1);
-        return {
-          type: 'copy',
-          source: file,
-          destination: finalDestination,
-        };
+      const segments = file.split(path.sep);
+      const idx = segments.findIndex(seg => seg.toLowerCase() === OVERRIDE_FOLDER);
+      const destination = segments.slice(idx + 1).join(path.sep);
+      return {
+        type: 'copy',
+        source: file,
+        destination,
+      };
     });
 
   return Promise.resolve({ instructions });
