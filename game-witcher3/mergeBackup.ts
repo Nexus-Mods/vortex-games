@@ -2,8 +2,12 @@ import path from 'path';
 import turbowalk from 'turbowalk';
 import { actions, fs, log, selectors, types, util } from 'vortex-api';
 
-import { GAME_ID, getLoadOrderFilePath,
-         MERGE_INV_MANIFEST, SCRIPT_MERGER_ID } from './common';
+import { GAME_ID, getLoadOrderFilePath, MERGE_INV_MANIFEST,
+  SCRIPT_MERGER_ID, W3_TEMP_DATA_DIR } from './common';
+
+import { generate } from 'shortid';
+
+import { prepareFileData, restoreFileData } from './collections/util';
 
 import { getMergedModName } from './scriptmerger';
 
@@ -19,7 +23,8 @@ interface IBaseProps {
 const sortInc = (lhs: string, rhs: string) => lhs.length - rhs.length;
 const sortDec = (lhs: string, rhs: string) => rhs.length - lhs.length;
 
-function genBaseProps(context: types.IExtensionContext, profileId: string): IBaseProps {
+function genBaseProps(context: types.IExtensionContext,
+                      profileId: string, force?: boolean): IBaseProps {
   if (!profileId) {
     return undefined;
   }
@@ -29,7 +34,7 @@ function genBaseProps(context: types.IExtensionContext, profileId: string): IBas
     return undefined;
   }
 
-  const localMergedScripts: boolean = util.getSafe(state,
+  const localMergedScripts: boolean = (force) ? true : util.getSafe(state,
     ['persistent', 'profiles', profileId, 'features', 'local_merges'], false);
   if (!localMergedScripts) {
     return undefined;
@@ -167,7 +172,7 @@ async function moveFiles(src: string, dest: string, props: IBaseProps) {
   }
 }
 
-async function handleMergedScripts(props: IBaseProps, opType: OpType) {
+async function handleMergedScripts(props: IBaseProps, opType: OpType, dest?: string) {
   const { scriptMergerTool, profile, gamePath } = props;
   if (!scriptMergerTool?.path) {
     return Promise.reject(new util.NotFound('Script merging tool path'));
@@ -178,7 +183,9 @@ async function handleMergedScripts(props: IBaseProps, opType: OpType) {
 
   try {
     const mergerToolDir = path.dirname(scriptMergerTool.path);
-    const profilePath: string = path.join(mergerToolDir, profile.id);
+    const profilePath: string = (dest === undefined)
+      ? path.join(mergerToolDir, profile.id)
+      : dest;
     const loarOrderFilepath: string = getLoadOrderFilePath();
     const mergedModName = await getMergedModName(mergerToolDir);
     const mergedScriptsPath = path.join(gamePath, 'Mods', mergedModName);
@@ -217,4 +224,39 @@ export async function restoreFromProfile(context: types.IExtensionContext, profi
   }
 
   return handleMergedScripts(props, 'import');
+}
+
+export async function exportScriptMerges(context: types.IExtensionContext,
+                                         profileId: string) {
+  const props: IBaseProps = genBaseProps(context, profileId, true);
+  if (props === undefined) {
+    return;
+  }
+  try {
+    const tempPath = path.join(W3_TEMP_DATA_DIR, generate());
+    await fs.ensureDirWritableAsync(tempPath);
+    await handleMergedScripts(props, 'export', tempPath);
+    const data = await prepareFileData(tempPath);
+    return data;
+  } catch (err) {
+    return Promise.reject(err);
+  }
+}
+
+export async function importScriptMerges(context: types.IExtensionContext,
+                                         profileId: string,
+                                         fileData: Buffer) {
+  const props: IBaseProps = genBaseProps(context, profileId, true);
+  if (props === undefined) {
+    return;
+  }
+  try {
+    const tempPath = path.join(W3_TEMP_DATA_DIR, generate());
+    await fs.ensureDirWritableAsync(tempPath);
+    const data = await restoreFileData(fileData, tempPath);
+    await handleMergedScripts(props, 'import', tempPath);
+    return data;
+  } catch (err) {
+    return Promise.reject(err);
+  }
 }

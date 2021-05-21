@@ -1,11 +1,13 @@
 import path from 'path';
-import { actions, selectors, types, util } from 'vortex-api';
+import { actions, fs, selectors, types, util } from 'vortex-api';
 
 import { setPriorityType } from './actions';
 import { GAME_ID, getPriorityTypeBranch, I18N_NAMESPACE, LOCKED_PREFIX, UNIAPP } from './common';
 import { PriorityManager, PriorityType } from './priorityManager';
 
-import PriorityTypeButton from './priorityTypeButton';
+import PriorityTypeButton from './views/PriorityTypeButton';
+
+import { exportMenuMod, importMenuMod } from './menumod';
 
 interface IProps {
   context: types.IExtensionContext;

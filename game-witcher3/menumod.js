@@ -4,6 +4,10 @@ const { actions, fs, log, selectors, util } = require('vortex-api');
 const IniParser = require('vortex-parse-ini');
 const generate = require('shortid').generate;
 
+const { prepareFileData, restoreFileData } = require('./collections/util');
+
+const { getDeployment } = require('./util');
+
 const { GAME_ID, INPUT_XML_FILENAME, PART_SUFFIX } = require('./common');
 
 // most of these are invalid on windows only but it's not worth the effort allowing them elsewhere
@@ -260,8 +264,6 @@ async function onDidDeploy(api, deployment, activeProfile) {
         ? Promise.resolve()
         : Promise.reject(err));
   }
-
-
 }
 
 function sanitizeProfileName(input) {
@@ -458,10 +460,45 @@ async function ensureMenuMod(api, profile) {
   return Promise.resolve(modName);
 }
 
+async function exportMenuMod(api, profile) {
+  try {
+    const deployment = await getDeployment(api);
+    if (deployment === undefined) {
+      throw new Error('Failed to get deployment');
+    }
+    const modName = await onDidDeploy(api, deployment, profile);
+    const mods = util.getSafe(api.getState(), ['persistent', 'mods', GAME_ID], {});
+    const modId = Object.keys(mods).find(id => id === modName);
+    if (modId === undefined) {
+      throw new Error('Menu mod is missing');
+    }
+    const installPath = selectors.installPathForGame(api.getState(), GAME_ID);
+    const modPath = path.join(installPath, mods[modId].installationPath);
+    const data = await prepareFileData(modPath);
+    return data;
+  } catch (err) {
+    return Promise.reject(err);
+  }
+}
+
+async function importMenuMod(api, profile, fileData) {
+  try {
+    const modName = await ensureMenuMod(api, profile);
+    const mod = util.getSafe(api.getState(), ['persistent', 'mods', profile.gameId, modName], undefined);
+    const installPath = selectors.installPathForGame(api.getState(), GAME_ID);
+    const destPath = path.join(installPath, mod.installationPath);
+    await restoreFileData(fileData, destPath);
+  } catch (err) {
+    return Promise.reject(err);
+  }
+}
+
 module.exports = {
   default: ensureMenuMod,
   removeMod: removeMenuMod,
   getModId: menuMod,
   onDidDeploy: onDidDeploy,
   onWillDeploy: onWillDeploy,
+  exportMenuMod: exportMenuMod,
+  importMenuMod: importMenuMod,
 };

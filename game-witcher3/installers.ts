@@ -4,12 +4,14 @@ import { CONFIG_MATRIX_REL_PATH, GAME_ID } from './common';
 
 export type PrefixType = 'dlc' | 'mod';
 
-export function testSupportedMixed(files: string[], gameId: string): Promise<types.ISupportedResult> {
+export function testSupportedMixed(files: string[],
+                                   gameId: string): Promise<types.ISupportedResult> {
   if (gameId !== GAME_ID) {
     return Promise.resolve({ supported: false, requiredFiles: [] });
   }
 
-  const hasConfigMatrixFile = files.find(file => path.basename(file).toLowerCase === CONFIG_MATRIX_REL_PATH) !== undefined;
+  const hasConfigMatrixFile = files.find(file =>
+    path.basename(file).toLowerCase() === CONFIG_MATRIX_REL_PATH) !== undefined;
   if (hasConfigMatrixFile) {
     return Promise.resolve({ supported: false, requiredFiles: [] });
   }

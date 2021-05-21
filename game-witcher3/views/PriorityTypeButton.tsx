@@ -3,9 +3,9 @@ import { withTranslation } from 'react-i18next';
 import { connect } from 'react-redux';
 import { ComponentEx, ToolbarIcon, types, util } from 'vortex-api';
 
-import { setPriorityType } from './actions';
-import { getPriorityTypeBranch } from './common';
-import { PriorityType } from './priorityManager';
+import { setPriorityType } from '../actions';
+import { getPriorityTypeBranch } from '../common';
+import { PriorityType } from '../priorityManager';
 
 interface IConnectedProps {
   priorityType: PriorityType;
@@ -16,13 +16,13 @@ interface IActionProps {
 }
 
 type IProps = IConnectedProps & IActionProps;
-
+const TBI = ToolbarIcon as any;
 class PriorityTypeButton extends ComponentEx<IProps, {}> {
   public render(): JSX.Element {
     const { t, priorityType } = this.props;
 
     return (
-      <ToolbarIcon
+      <TBI
         id='switch-priority-type-button'
         icon='sort-none'
         text={priorityType === 'position-based' ? t('To Prefix Based') : t('To Position Based')}
@@ -56,5 +56,5 @@ function mapDispatchToProps(dispatch: any): IActionProps {
 
 export default
   withTranslation(['common', 'witcher3'])(
-    connect(mapStateToProps, mapDispatchToProps)(PriorityTypeButton),
+    connect(mapStateToProps, mapDispatchToProps)(PriorityTypeButton as any),
   ) as React.ComponentClass<{}>;
