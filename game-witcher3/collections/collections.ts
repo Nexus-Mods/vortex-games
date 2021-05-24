@@ -23,7 +23,7 @@ export async function genCollectionsData(context: types.IExtensionContext,
     ['persistent', 'mods', gameId], {});
   try {
     const loadOrder: ILoadOrder = await exportLoadOrder(api.getState(), includedMods, mods);
-    const menuModData = await exportMenuMod(api, profile);
+    const menuModData = await exportMenuMod(api, profile, includedMods);
     const scriptMergerTool = util.getSafe(state,
       ['settings', 'gameMode', 'discovered', GAME_ID, 'tools', SCRIPT_MERGER_ID], undefined);
     let scriptMergesData;

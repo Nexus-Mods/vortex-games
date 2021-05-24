@@ -460,9 +460,9 @@ async function ensureMenuMod(api, profile) {
   return Promise.resolve(modName);
 }
 
-async function exportMenuMod(api, profile) {
+async function exportMenuMod(api, profile, includedMods) {
   try {
-    const deployment = await getDeployment(api);
+    const deployment = await getDeployment(api, includedMods);
     if (deployment === undefined) {
       throw new Error('Failed to get deployment');
     }

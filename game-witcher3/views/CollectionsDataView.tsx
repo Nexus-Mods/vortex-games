@@ -7,7 +7,7 @@ import { connect } from 'react-redux';
 import { ComponentEx, EmptyPlaceholder, FlexLayout,
   selectors, types, Usage, util } from 'vortex-api';
 
-import { ILoadOrder, ILoadOrderEntry, IExtendedInterfaceProps } from '../collections/types';
+import { IExtendedInterfaceProps, ILoadOrder, ILoadOrderEntry } from '../collections/types';
 import { genCollectionLoadOrder } from '../collections/util';
 
 const NAMESPACE: string = 'generic-load-order-extension';
@@ -55,18 +55,30 @@ class CollectionsDataView extends ComponentEx<IProps, IComponentState> {
     return (!!sortedMods && Object.keys(sortedMods).length !== 0)
       ? (
         <div style={{ overflow: 'auto' }}>
+          <h4>{t('Witcher 3 Merged Data')}</h4>
+          <p>
+          {t('The Witcher 3 game extension executes a series of file merges for UI/menu mods '
+           + 'whenever the mods are deployed - these will be included in the collection. '
+           + '(separate from the ones done using the script '
+           + 'merger utility) To ensure that Vortex includes the correct data when '
+           + 'uploading this collection, please make sure that the mods are enabled and '
+           + 'deployed before attempting to upload the collection.')}
+          </p>
+          <p>
+          {t('Additionally - please remember that any script merges (if applicable) done '
+           + 'through the script merger utility, should be reviewed before uploading, to '
+           + 'only include merges that are necessary for the collection to function correctly. '
+           + 'Merged scripts referencing a mod that is not included in your collection will most '
+           + 'definitively cause the game to crash!')}
+          </p>
           <h4>{t('Load Order')}</h4>
           <p>
-          {t('This tab aims to display a preview of the load order for the mods that ' +
+          {t('Below is a preview of the load order for the mods that ' +
              'are included in the current collection. If you wish to modify the load ' +
              'please do so by opening the Load Order page; any changes made there ' +
              'will be reflected in this collection.')
           }
           </p>
-          <p>
-          {t('Please note: some games will require the mods to be enabled or deployed ' +
-             'in order for the load order to be generated.')}
-        </p>
           <ListGroup id='collections-load-order-list'>
             {Object.keys(sortedMods).map(this.renderModEntry)}
           </ListGroup>
