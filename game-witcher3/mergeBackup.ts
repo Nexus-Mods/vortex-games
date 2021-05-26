@@ -252,7 +252,7 @@ export async function importScriptMerges(context: types.IExtensionContext,
   }
   const res = await context.api.showDialog('question', 'Script Merges Import', {
     text: 'The collection you are importing contains script merges which the creator of '
-        + 'the collection deemed necessary for the mods to function correctly. Please note that'
+        + 'the collection deemed necessary for the mods to function correctly. Please note that '
         + 'importing these will overwrite any existing script merges you may have effectuated. '
         + 'Please ensure to back up any existing merges (if applicable/required) before '
         + 'proceeding.',
