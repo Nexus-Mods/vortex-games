@@ -48,15 +48,14 @@ export async function importLoadOrder(api: types.IExtensionApi,
 
   // The mods need to be deployed in order for the load order to be imported
   //  correctly.
-  await new Promise((resolve, reject) => {
+  return new Promise<void>((resolve, reject) => {
     api.events.emit('deploy-mods', (err) => {
       if (!!err) {
         return reject(err);
       } else {
-        return resolve(undefined);
+        api.store.dispatch(actions.setLoadOrder(profileId, collection.loadOrder as any));
+        return resolve();
       }
     });
   });
-  api.store.dispatch(actions.setLoadOrder(profileId, collection.loadOrder as any));
-  return Promise.resolve(undefined);
 }
