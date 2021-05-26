@@ -45,3 +45,46 @@ export interface ISortProps {
   metaManager: ComMetadataManager;
   loadOrder?: any;
 }
+
+export interface ILoadOrderEntry<T = any> {
+  pos: number;
+  enabled: boolean;
+  prefix?: string;
+  data?: T;
+  locked?: boolean;
+  external?: boolean;
+}
+
+export interface ILoadOrder {
+  [modId: string]: ILoadOrderEntry;
+}
+
+export interface IInvalidReasons {
+  cyclic: string[];
+  missing: string[];
+  incompatibleDeps: ICacheDependency[];
+}
+
+export interface ICacheDependency {
+  depId?: string;
+  depVersion?: string;
+  requiredVersion?: string;
+  currentVersion?: string;
+}
+
+export interface ISubModCacheEntry {
+  subModId: string;
+  subModName: string;
+  subModVer: string;
+  subModFile: string;
+  vortexId: string;
+  isOfficial: boolean;
+  isLocked: boolean;
+  isMultiplayer: boolean;
+  dependencies: ICacheDependency[];
+  invalid: IInvalidReasons;
+}
+
+export interface ISubModCache {
+  [subModId: string]: ISubModCacheEntry;
+}
