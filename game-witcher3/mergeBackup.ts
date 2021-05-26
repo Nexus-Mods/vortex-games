@@ -125,8 +125,8 @@ async function moveFiles(src: string, dest: string, props: IBaseProps) {
         },
         [
           { label: 'Cancel', action: () => Promise.reject(new util.UserCanceled()) },
-          { label: 'Try Again', action: () => removeDestFiles() }
-        ])
+          { label: 'Try Again', action: () => removeDestFiles() },
+        ]);
       } else {
         // We failed to clean up the destination folder - we can't
         //  continue.
@@ -249,6 +249,21 @@ export async function importScriptMerges(context: types.IExtensionContext,
   const props: IBaseProps = genBaseProps(context, profileId, true);
   if (props === undefined) {
     return;
+  }
+  const res = await context.api.showDialog('question', 'Script Merges Import', {
+    text: 'The collection you are importing contains script merges which the creator of '
+        + 'the collection deemed necessary for the mods to function correctly. Please note that'
+        + 'importing these will overwrite any existing script merges you may have effectuated. '
+        + 'Please ensure to back up any existing merges (if applicable/required) before '
+        + 'proceeding.',
+  },
+  [
+    { label: 'Cancel' },
+    { label: 'Import Merges' },
+  ]);
+
+  if (res.action === 'Cancel') {
+    return Promise.reject(new util.UserCanceled());
   }
   try {
     const tempPath = path.join(W3_TEMP_DATA_DIR, generate());
