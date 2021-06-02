@@ -100,3 +100,6 @@ export const W3_TEMP_DATA_DIR = path.join(util.getVortexPath('temp'), 'W3TempDat
 
 export const UNI_PATCH = 'mod0000____CompilationTrigger';
 export const LOCKED_PREFIX = 'mod0000_';
+
+export const DO_NOT_DISPLAY = ['communitypatch-base'];
+export const DO_NOT_DEPLOY = ['readme.txt'];

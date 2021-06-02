@@ -9,13 +9,13 @@ import * as IniParser from 'vortex-parse-ini';
 import winapi from 'winapi-bindings';
 
 import { genCollectionsData, parseCollectionsData } from './collections/collections';
-import { IExtensionFeature, IW3CollectionsData } from './collections/types';
+import { IW3CollectionsData } from './collections/types';
 import CollectionsDataView from './views/CollectionsDataView';
 
 import menuMod from './menumod';
 import { downloadScriptMerger, setMergerConfig } from './scriptmerger';
 
-import {
+import { DO_NOT_DEPLOY, DO_NOT_DISPLAY,
   GAME_ID, getLoadOrderFilePath, getPriorityTypeBranch, I18N_NAMESPACE, INPUT_XML_FILENAME,
   LOCKED_PREFIX, MERGE_INV_MANIFEST, PART_SUFFIX, ResourceInaccessibleError,
   SCRIPT_MERGER_ID, UNI_PATCH, UNIAPP,
@@ -25,7 +25,7 @@ import { registerActions } from './iconbarActions';
 import { PriorityManager } from './priorityManager';
 
 import { installMixed, testSupportedMixed } from './installers';
-import { restoreFromProfile, storeToProfile } from './mergeBackup';
+import { restoreFromProfile, storeToProfile, makeOnContextImport } from './mergeBackup';
 
 import { setPriorityType } from './actions';
 import { W3Reducer } from './reducers';
@@ -578,8 +578,12 @@ async function setINIStruct(context, loadOrder, priorityManager) {
   return getAllMods(context).then(modMap => {
     _INI_STRUCT = {};
     const mods = [].concat(modMap.merged, modMap.managed, modMap.manual);
-    const manualLocked = modMap.manual.filter(modName => modName.startsWith(LOCKED_PREFIX));
-    const totalLocked = [].concat(modMap.merged, manualLocked);
+    const filterFunc = (modName: string) => modName.startsWith(LOCKED_PREFIX);
+    const manualLocked = modMap.manual.filter(filterFunc);
+    const managedLocked = modMap.managed
+      .filter(entry => filterFunc(entry.name))
+      .map(entry => entry.name);
+    const totalLocked = [].concat(modMap.merged, manualLocked, managedLocked);
     return Bluebird.each(mods, (mod, idx) => {
       let name;
       let key;
@@ -673,7 +677,6 @@ async function preSort(context, items, direction, updateType, priorityManager): 
         const activeProfile = selectors.activeProfile(state);
         const modId = _INI_STRUCT[itemKey].VK;
         const loEntry = loadOrder[modId];
-        const minPriority = Object.keys(loadOrder).filter(k => loadOrder[k]?.locked).length;
         if (priorityManager.priorityType === 'position-based') {
           context.api.store.dispatch(actions.setLoadOrderEntry(
             activeProfile.id, modId, {
@@ -709,12 +712,15 @@ async function preSort(context, items, direction, updateType, priorityManager): 
     });
   }
 
-  const lockedManualMods = allMods.manual.filter(entry => entry.startsWith(LOCKED_PREFIX));
+  const filterFunc = (modName: string) => modName.startsWith(LOCKED_PREFIX);
+  const lockedMods = [].concat(allMods.manual.filter(filterFunc),
+    allMods.managed.filter(entry => filterFunc(entry.name))
+                   .map(entry => entry.name));
   const readableNames = {
     [UNI_PATCH]: 'Unification/Community Patch',
   };
 
-  const lockedEntries = [].concat(allMods.merged, lockedManualMods)
+  const lockedEntries = [].concat(allMods.merged, lockedMods)
     .map((modName, idx) => ({
       id: modName,
       name: !!readableNames[modName] ? readableNames[modName] : modName,
@@ -767,7 +773,15 @@ async function preSort(context, items, direction, updateType, priorityManager): 
     items = [].concat(items.slice(0, pos) || [], known, items.slice(pos) || []);
   });
 
-  let preSorted = [].concat(...lockedEntries, items, ...unknownManuallyAdded);
+  let preSorted = [].concat(
+    ...lockedEntries,
+    items.filter(item => {
+      const isLocked = lockedEntries.find(locked => locked.name === item.name) !== undefined
+      const doNotDisplay = DO_NOT_DISPLAY.includes(item.name.toLowerCase());
+      return !isLocked && !doNotDisplay;
+    }),
+    ...unknownManuallyAdded);
+
   preSorted = (updateType !== 'drag-n-drop')
     ? preSorted.sort((lhs, rhs) => lhs.prefix - rhs.prefix)
     : preSorted.reduce((accum, entry, idx) => {
@@ -808,6 +822,9 @@ function getManagedModNames(context: types.IComponentContext, mods: types.IMod[]
   const installationPath = selectors.installPathForGame(context.api.store.getState(), GAME_ID);
   return Bluebird.reduce(mods, (accum, mod) => findModFolder(installationPath, mod)
     .then(modName => {
+      if (mod.type === 'collection') {
+        return Promise.resolve(accum);
+      }
       const modComponents = util.getSafe(mod, ['attributes', 'modComponents'], []);
       if (modComponents.length === 0) {
         modComponents.push(modName);
@@ -1124,6 +1141,8 @@ function main(context: types.IExtensionContext) {
     },
     details: {
       steamAppId: 292030,
+      ignoreConflicts: DO_NOT_DEPLOY,
+      ignoreDeploy: DO_NOT_DEPLOY,
     },
   });
 
@@ -1147,6 +1166,18 @@ function main(context: types.IExtensionContext) {
     const gameMode = selectors.activeGameId(state);
     return (gameMode === GAME_ID);
   };
+
+  context.registerAction('mods-action-icons', 300, 'start-install', {}, 'Import Script Merges',
+    instanceIds => { makeOnContextImport(context, instanceIds[0]); },
+    instanceIds => {
+      const state = context.api.getState();
+      const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
+      if (mods[instanceIds?.[0]]?.type !== 'collection') {
+        return false;
+      }
+      const activeGameId = selectors.activeGameId(state);
+      return activeGameId === GAME_ID;
+    });
 
   context.registerInstaller('witcher3tl', 25, toBlue(testSupportedTL), toBlue(installTL));
   context.registerInstaller('witcher3mixed', 30, toBlue(testSupportedMixed), toBlue(installMixed));

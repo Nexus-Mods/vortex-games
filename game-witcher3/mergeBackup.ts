@@ -5,6 +5,10 @@ import { actions, fs, log, selectors, types, util } from 'vortex-api';
 import { GAME_ID, getLoadOrderFilePath, MERGE_INV_MANIFEST,
   SCRIPT_MERGER_ID, W3_TEMP_DATA_DIR } from './common';
 
+import { downloadScriptMerger } from './scriptmerger';
+
+import { hex2Buffer } from './collections/util';
+
 import { generate } from 'shortid';
 
 import { prepareFileData, restoreFileData } from './collections/util';
@@ -260,7 +264,7 @@ export async function importScriptMerges(context: types.IExtensionContext,
   [
     { label: 'Cancel' },
     { label: 'Import Merges' },
-  ]);
+  ], 'import-w3-script-merges-warning');
 
   if (res.action === 'Cancel') {
     return Promise.reject(new util.UserCanceled());
@@ -270,8 +274,42 @@ export async function importScriptMerges(context: types.IExtensionContext,
     await fs.ensureDirWritableAsync(tempPath);
     const data = await restoreFileData(fileData, tempPath);
     await handleMergedScripts(props, 'import', tempPath);
+    context.api.sendNotification({
+      message: 'Script merges imported successfully',
+      id: 'witcher3-script-merges-status',
+      type: 'success',
+    });
     return data;
   } catch (err) {
     return Promise.reject(err);
+  }
+}
+
+export async function makeOnContextImport(context: types.IExtensionContext, collectionId: string) {
+  const state = context.api.getState();
+  const mods: { [modId: string]: types.IMod } = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
+  const collectionMod = mods[collectionId];
+  if (collectionMod?.installationPath === undefined) {
+    log('error', 'collection mod is missing', collectionId);
+    return;
+  }
+
+  const stagingFolder = selectors.installPathForGame(state, GAME_ID);
+  try {
+    const fileData = await fs.readFileAsync(path.join(stagingFolder, collectionMod.installationPath, 'collection.json'), { encoding: 'utf8' });
+    const collection = JSON.parse(fileData);
+    const { scriptMergedData } = collection.mergedData;
+    if (scriptMergedData !== undefined) {
+      // Make sure we have the script merger installed straight away!
+      const scriptMergerTool = util.getSafe(state,
+        ['settings', 'gameMode', 'discovered', GAME_ID, 'tools', SCRIPT_MERGER_ID], undefined);
+      if (scriptMergerTool === undefined) {
+        await downloadScriptMerger(context);
+      }
+      const profileId = selectors.lastActiveProfileForGame(state, GAME_ID);
+      await importScriptMerges(context, profileId, hex2Buffer(scriptMergedData));
+    }
+  } catch (err) {
+    context.api.showErrorNotification('Failed to import script merges', err);
   }
 }
