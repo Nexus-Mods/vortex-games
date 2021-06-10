@@ -404,7 +404,8 @@ function main(context) {
         .then(() => {
           let missing = loadOrder
             .filter(mod => !listHasMod(transformId(mod), _MODS_STATE.enabled)
-                        && !listHasMod(transformId(mod), _MODS_STATE.disabled))
+                        && !listHasMod(transformId(mod), _MODS_STATE.disabled)
+                        && listHasMod(transformId(mod), _MODS_STATE.display))
             .map(mod => transformId(mod)) || [];
 
           // This is theoretically unecessary - but it will ensure no duplicates
