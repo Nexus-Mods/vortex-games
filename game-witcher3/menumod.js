@@ -465,6 +465,10 @@ async function exportMenuMod(api, profile, includedMods) {
       throw new Error('Failed to get deployment');
     }
     const modName = await onDidDeploy(api, deployment, profile);
+    if (modName === undefined) {
+      // The installed mods do not require a menu mod.
+      return undefined;
+    }
     const mods = util.getSafe(api.getState(), ['persistent', 'mods', GAME_ID], {});
     const modId = Object.keys(mods).find(id => id === modName);
     if (modId === undefined) {

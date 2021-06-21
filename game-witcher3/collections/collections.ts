@@ -31,7 +31,9 @@ export async function genCollectionsData(context: types.IExtensionContext,
       scriptMergesData = await exportScriptMerges(context, profile.id);
     }
     const mergedData: IW3MergedData = {
-      menuModSettingsData: menuModData.toString('hex'),
+      menuModSettingsData: (menuModData !== undefined)
+        ? menuModData.toString('hex')
+        : undefined,
       scriptMergedData: scriptMergesData !== undefined
         ? scriptMergesData.toString('hex')
         : undefined,
