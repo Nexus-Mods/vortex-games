@@ -456,7 +456,15 @@ function main(context) {
     return (activeGameId === GAME_ID);
   });
 
-  const refreshOnDeployEvent = (profileId) => {
+  const refreshOnDeployEvent = async (profileId) => {
+    try {
+      await getOfficialModType(context.api);
+    } catch (err) {
+      // no point to attempt a refresh if we can't ascertain the required
+      //  modType - this suggests that the game may have been removed.
+      return Promise.resolve();
+    }
+
     const state = context.api.getState();
     const prof = selectors.profileById(state, profileId);
     if (refreshFunc !== undefined && prof?.gameId === GAME_ID) {
@@ -475,7 +483,16 @@ function main(context) {
         return Promise.resolve();
       }
       const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
-      const targetModType = await getOfficialModType(context.api);
+      let targetModType;
+      try {
+        targetModType = await getOfficialModType(context.api);
+      } catch (err) {
+        // this event listener is supposed to check for invalid mods (version-wise)
+        //  any inability to ascertain the version suggests that the user may
+        //  have removed the game - no need to alert him of this (he probably knows)
+        return Promise.resolve();
+      }
+
       // Not really invalid - just wrong modType for the currently installed game version.
       const invalidMods = Object.keys(mods).filter(key => isOfficialModType(mods[key]?.type)
                                                        && mods[key].type !== targetModType);
