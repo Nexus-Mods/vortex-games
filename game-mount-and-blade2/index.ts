@@ -1,5 +1,6 @@
 import { Promise as Bluebird } from 'bluebird';
 import { app, remote } from 'electron';
+import * as xml from 'libxmljs';
 import * as React from 'react';
 import * as BS from 'react-bootstrap';
 
@@ -133,12 +134,12 @@ async function getDeployedModData(context, subModuleFilePaths) {
   return Bluebird.reduce(subModuleFilePaths, async (accum, subModFile: string) => {
     try {
       const subModData = await getXMLData(subModFile);
-      const subModId = subModData.get('//Id').attr('value').value();
-      const subModVerData = subModData.get('//Version').attr('value').value();
+      const subModId = subModData.get<xml.Element>('//Id').attr('value').value();
+      const subModVerData = subModData.get<xml.Element>('//Version').attr('value').value();
       const subModVer = getCleanVersion(subModId, subModVerData);
       const managedEntry = managedIds.find(entry => entry.subModId === subModId);
       const isMultiplayer = (!!subModData.get(`//${XML_EL_MULTIPLAYER}`));
-      const depNodes = subModData.find('//DependedModule');
+      const depNodes = subModData.find<xml.Element>('//DependedModule');
       let dependencies = [];
       try {
         dependencies = depNodes.map(depNode => {
@@ -158,7 +159,7 @@ async function getDeployedModData(context, subModuleFilePaths) {
       } catch (err) {
         log('debug', 'submodule has no dependencies or is invalid', err);
       }
-      const subModName = subModData.get('//Name').attr('value').value();
+      const subModName = subModData.get<xml.Element>('//Name').attr('value').value();
 
       accum[subModId] = {
         subModId,
@@ -323,7 +324,7 @@ async function getElementValue(subModuleFilePath, elementName) {
     .then(xmlData => {
       try {
         const modInfo = parseXmlString(xmlData);
-        const element = modInfo.get(`//${elementName}`);
+        const element = modInfo.get<xml.Element>(`//${elementName}`);
         return ((element !== undefined) && (element.attr('value').value() !== undefined))
           ? Promise.resolve(element.attr('value').value())
           : logAndContinue();
@@ -523,8 +524,9 @@ async function prepareForModding(context, discovery, metaManager: ComMetadataMan
   return startSteam().then(() => getXMLData(LAUNCHER_DATA_PATH)).then(launcherData => {
     try {
       const singlePlayerMods =
-        launcherData.get('//UserData/SingleplayerData/ModDatas').childNodes();
-      const multiPlayerMods = launcherData.get('//UserData/MultiplayerData/ModDatas').childNodes();
+        launcherData.get<xml.Element>('//UserData/SingleplayerData/ModDatas').childNodes();
+      const multiPlayerMods =
+        launcherData.get<xml.Element>('//UserData/MultiplayerData/ModDatas').childNodes();
       LAUNCHER_DATA.singlePlayerSubMods = singlePlayerMods.reduce((accum, spm) => {
         const dataElement = createDataElement(spm);
         if (!!dataElement) {

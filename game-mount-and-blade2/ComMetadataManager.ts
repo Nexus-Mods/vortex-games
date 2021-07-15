@@ -1,3 +1,4 @@
+import * as xml from 'libxmljs';
 import path from 'path';
 import turbowalk, { IEntry } from 'turbowalk';
 import { fs, log, selectors, types, util } from 'vortex-api';
@@ -74,9 +75,9 @@ class ComMetadataManager {
     let dependencies: IDependency[] = [];
     try {
       const data = await getXMLData(filePath);
-      subModId = data.get('//Id').attr('value').value();
+      subModId = data.get<xml.Element>('//Id').attr('value').value();
       const depNodes = data.find(`//${DEP_XML_ELEMENT}`);
-      dependencies = await depNodes.reduce(async (accumP, node) => {
+      dependencies = await depNodes.reduce(async (accumP: any, node: any) => {
         const accum = await accumP;
         try {
           const dep: IDependency = {
