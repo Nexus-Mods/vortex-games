@@ -166,7 +166,7 @@ async function installContent(files,
     });
 
     attrInstructions.push({
-      trype: 'attribute',
+      type: 'attribute',
       key: 'author',
       value: getAttr('author'),
     });
