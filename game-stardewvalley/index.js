@@ -19,6 +19,11 @@ const getBundledMods = () => {
   return Array.from(new Set(_SMAPI_BUNDLED_MODS.map(modName => modName.toLowerCase())));
 }
 
+const _SMAPI_BUNDLED_MODS = ['ErrorHandler', 'ConsoleCommands', 'SaveBackup'];
+const getBundledMods = () => {
+  return Array.from(new Set(_SMAPI_BUNDLED_MODS.map(modName => modName.toLowerCase())));
+}
+
 class StardewValley {
   /*********
   ** Vortex API
