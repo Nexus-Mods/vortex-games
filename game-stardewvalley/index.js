@@ -3,7 +3,7 @@ const
   Promise = require('bluebird'),
   { clipboard, remote } = require('electron'),
   rjson = require('relaxed-json'),
-  { fs, log, selectors, util } = require('vortex-api'),
+  { fs, log, selectors, util, types } = require('vortex-api'),
   { SevenZip } = util,
   winapi = require('winapi-bindings');
 
@@ -12,6 +12,11 @@ const GAME_ID = 'stardewvalley';
 const PTRN_CONTENT = path.sep + 'Content' + path.sep;
 const SMAPI_EXE = 'StardewModdingAPI.exe';
 const SMAPI_DATA = 'windows-install.dat';
+
+const _SMAPI_BUNDLED_MODS = ['ErrorHandler', 'ConsoleCommands', 'SaveBackup'];
+const getBundledMods = () => {
+  return Array.from(new Set(_SMAPI_BUNDLED_MODS.map(modName => modName.toLowerCase())));
+}
 
 class StardewValley {
   /*********
@@ -337,7 +342,11 @@ async function installSMAPI(files, destinationPath) {
       const relPath = path.relative(destinationPath, iter);
       // Filter out files from the original install as they're no longer required.
       if (!files.includes(relPath) && stats.isFile() && !files.includes(relPath+path.sep)) updatedFiles.push(relPath);
-      Promise.resolve();
+      const segments = relPath.toLocaleLowerCase().split(path.sep);
+      const modsFolderIdx = segments.indexOf('mods');
+      if ((modsFolderIdx !== -1) && (segments.length > modsFolderIdx + 1)) {
+        _SMAPI_BUNDLED_MODS.push(segments[modsFolderIdx + 1]);
+      }
   });
 
   // Find the SMAPI exe file. 
@@ -355,6 +364,12 @@ async function installSMAPI(files, destinationPath) {
           source: file,
           destination: path.join(file.substr(idx)),
       }
+  });
+
+  instructions.push({
+    type: 'attribute',
+    key: 'smapiBundledMods',
+    value: getBundledMods(),
   });
 
   return Promise.resolve({ instructions });
@@ -409,7 +424,44 @@ module.exports = {
       const state = context.api.store.getState();
       const discovery = state.settings.gameMode.discovered[game.id];
       return discovery.path;
+    };
+
+    const isModCandidateValid = (mod, entry) => {
+      if (mod === undefined || mod.type === 'sdvrootfolder') {
+        // There is no reliable way to ascertain whether a new file entry
+        //  actually belongs to a root modType as some of these mods will act
+        //  as replacement mods. This obviously means that if the game has
+        //  a substantial update which introduces new files we could potentially
+        //  add a vanilla game file into the mod's staging folder causing constant
+        //  contention between the game itself (when it updates) and the mod.
+        //
+        // There is also a potential chance for root modTypes to conflict with regular
+        //  mods, which is why it's not safe to assume that any addition inside the
+        //  mods directory can be safely added to this mod's staging folder either.
+        return false;
       }
+
+      if (mod.type !== 'SMAPI') {
+        // Other mod types do not require further validation - it should be fine
+        //  to add this entry.
+        return true;
+      }
+
+      const segments = entry.filePath.toLowerCase().split(path.sep).filter(seg => !!seg);
+      const modsSegIdx = segments.indexOf('mods');
+      const modFolderName = ((modsSegIdx !== -1) && (segments.length > modsSegIdx + 1))
+        ? segments[modsSegIdx + 1] : undefined;
+
+      let bundledMods = util.getSafe(mod, ['attributes', 'smapiBundledMods'], []);
+      bundledMods = bundledMods.length > 0 ? bundledMods : getBundledMods();
+      if (segments.includes('content')) {
+        // SMAPI is not supposed to overwrite the game's content directly.
+        //  this is clearly not a SMAPI file and should _not_ be added to it.
+        return false;
+      }
+
+      return (modFolderName !== undefined) && bundledMods.includes(modFolderName);
+    };
 
     context.registerGame(new StardewValley(context));
     // Register our SMAPI mod type and installer. Note: This currently flags an error in Vortex on installing correctly.
@@ -478,7 +530,7 @@ module.exports = {
           // only act if we definitively know which mod owns the file
           if (entry.candidates.length === 1) {
             const mod = util.getSafe(state.persistent.mods, [GAME_ID, entry.candidates[0]], undefined);
-            if (mod === undefined) {
+            if (!isModCandidateValid(mod, entry)) {
               return Promise.resolve();
             }
             const relPath = path.relative(modPaths[mod.type ?? ''], entry.filePath);
