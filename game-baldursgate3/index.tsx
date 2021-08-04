@@ -402,6 +402,7 @@ async function extractMeta(pakPath: string): Promise<IModSettings> {
     await fs.removeAsync(metaPath);
     return meta;
   } catch (err) {
+    await fs.removeAsync(metaPath);
     if (err.code === 'ENOENT') {
       return Promise.resolve(undefined);
     } else {
@@ -639,7 +640,10 @@ function makePreSort(api: types.IExtensionApi) {
             result.push(res);
           }
         } catch (err) {
-          api.showErrorNotification('Failed to read pak', err, { allowReport: true });
+          api.showErrorNotification('Failed to read pak', err, {
+            message: fileName,
+            allowReport: true,
+          });
         }
       });
     }
