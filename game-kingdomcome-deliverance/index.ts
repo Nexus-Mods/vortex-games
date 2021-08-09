@@ -328,6 +328,7 @@ function main(context) {
       genCollectionsData(context, gameId, includedMods),
     (gameId: string, collection: IKCDCollectionsData) =>
       parseCollectionsData(context, gameId, collection),
+    () => Promise.resolve(),
     (t) => t('Kingdom Come: Deliverance Data'),
     (state: types.IState, gameId: string) => gameId === GAME_ID,
     CollectionsDataView,

@@ -1207,6 +1207,7 @@ function main(context: types.IExtensionContext) {
       genCollectionsData(context, gameId, includedMods),
     (gameId: string, collection: IW3CollectionsData) =>
       parseCollectionsData(context, gameId, collection),
+    () => Promise.resolve(),
     (t) => t('Witcher 3 Data'),
     (state: types.IState, gameId: string) => gameId === GAME_ID,
     CollectionsDataView,

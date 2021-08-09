@@ -629,6 +629,7 @@ function main(context) {
       genCollectionsData(context, gameId, includedMods),
     (gameId: string, collection: ICollectionsData) =>
       parseCollectionsData(context, gameId, collection),
+    () => Promise.resolve(),
     (t) => t('Mount and Blade 2 Data'),
     (state: types.IState, gameId: string) => gameId === GAME_ID,
     CollectionsDataView,
