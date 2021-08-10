@@ -77,7 +77,12 @@ function prepareForModding(api: types.IExtensionApi, discovery): any {
             + 'Mods may become incompatible within days of being released, generally '
             + 'not work and/or break unrelated things within the game.<br/><br/>'
             + '[color="red"]Please don\'t report issues that happen in connection with mods to the '
-            + 'game developers (Larian Studios) or through the Vortex feedback system.[/color]',
+            + 'game developers (Larian Studios) or through the Vortex feedback system.[/color]'
+            + '<br/><br/>'
+            + 'Further: The game will not load [b]any[/b] mods if a single mod is invalid or '
+            + 'incompatible and there is no simple way to find out which mod caused the problem. '
+            + 'Therefore it\'s strongly recommended you install mods in small batches and test '
+            + 'regularly so you\'ll know which mod broke things.',
       }, [ { label: 'I understand' } ])));
 }
 
@@ -435,7 +440,7 @@ async function isLOListed(pakPath: string): Promise<boolean> {
   return metaLSX === undefined;
 }
 
-async function extractPakInfo(pakPath: string): Promise<IPakInfo> {
+async function extractPakInfoImpl(pakPath: string): Promise<IPakInfo> {
   const meta = await extractMeta(pakPath);
   const config = findNode(meta?.save?.region, 'Config');
   const configRoot = findNode(config?.node, 'root');
@@ -458,6 +463,17 @@ async function extractPakInfo(pakPath: string): Promise<IPakInfo> {
     isListed: await isLOListed(pakPath),
   };
 }
+
+const extractPakInfo = (() => {
+  const cache: { [pakPath: string]: Promise<IPakInfo> } = {};
+  return async (pakPath: string): Promise<IPakInfo> => {
+    if (cache[pakPath] === undefined) {
+      cache[pakPath] = extractPakInfoImpl(pakPath);
+    }
+
+    return cache[pakPath];
+  };
+})();
 
 const fallbackPicture = path.join(__dirname, 'gameart.jpg');
 
@@ -532,13 +548,14 @@ async function readStoredLO(api: types.IExtensionApi) {
   if (modNodes.length === 1) {
     const lastWrite = state.settings.baldursgate3?.settingsWritten?.[bg3profile];
     if ((lastWrite !== undefined) && (lastWrite.count > 1)) {
-      api.sendNotification({
-        id: 'bg3-modsettings-reset',
-        type: 'warning',
-        allowSuppress: true,
-        title: '"modsettings.lsx" file was reset',
-        message: 'This usually happens when an invalid mod is installed',
-      });
+      api.showDialog('info', '"modsettings.lsx" file was reset', {
+        text: 'The game reset the list of active mods and ran without them.\n'
+            + 'This happens when an invalid or incompatible mod is installed. '
+            + 'The game will not load any mods if one of them is incompatible, unfortunately '
+            + 'there is no easy way to find out which one caused the problem.',
+      }, [
+        { label: 'Continue' },
+      ]);
     }
   }
 
@@ -592,7 +609,7 @@ function makePreSort(api: types.IExtensionApi) {
 
     const result: any[] = [];
 
-    for (const fileName of paks) {
+    await Promise.all(paks.map(async fileName => {
       await (util as any).withErrorContext('reading pak', fileName, async () => {
         try {
           const existingItem = items.find(iter => iter.id === fileName);
@@ -608,9 +625,12 @@ function makePreSort(api: types.IExtensionApi) {
             ? state.persistent.mods[GAME_ID]?.[manifestEntry.source]
             : undefined;
 
-          let modInfo = existingItem?.data;
+          let modInfo = existingItem?.data ?? mod?.attributes?.pakInfo;
           if (modInfo === undefined) {
             modInfo = await extractPakInfo(path.join(modsPath(), fileName));
+            if (mod !== undefined) {
+              api.store.dispatch(actions.setModAttribute(GAME_ID, mod.id, 'pakInfo', modInfo));
+            }
           }
 
           let res: types.ILoadOrderDisplayItem;
@@ -646,7 +666,7 @@ function makePreSort(api: types.IExtensionApi) {
           });
         }
       });
-    }
+    }));
 
     try {
       const modSettings = await readModSettings(api);
@@ -668,7 +688,7 @@ function makePreSort(api: types.IExtensionApi) {
           return lhsIdx - rhsIdx;
         });
     } catch (err) {
-      api.showErrorNotification('Failed to read modsettings.lsx', err, {
+      api.showErrorNotification('Failed to read "modsettings.lsx"', err, {
         allowReport: false,
         message: 'Please run the game at least once and create a profile in-game',
       });
