@@ -13,7 +13,7 @@ import { IW3CollectionsData } from './collections/types';
 import CollectionsDataView from './views/CollectionsDataView';
 
 import menuMod from './menumod';
-import { downloadScriptMerger, setMergerConfig } from './scriptmerger';
+import { downloadScriptMerger, setMergerConfig, getScriptMergerDir } from './scriptmerger';
 
 import { DO_NOT_DEPLOY, DO_NOT_DISPLAY,
   GAME_ID, getLoadOrderFilePath, getPriorityTypeBranch, I18N_NAMESPACE, INPUT_XML_FILENAME,
@@ -492,14 +492,17 @@ function notifyMissingScriptMerger(api) {
 }
 
 function prepareForModding(context, discovery) {
-  const defaultWSMFilePath = path.join(discovery.path, 'WitcherScriptMerger', 'WitcherScriptMerger.exe');
-  const scriptMergerPath = util.getSafe(discovery,
-    ['tools', SCRIPT_MERGER_ID, 'path'], defaultWSMFilePath);
-
   const findScriptMerger = (error) => {
     log('error', 'failed to download/install script merger', error);
-    return fs.statAsync(scriptMergerPath)
-      .catch(() => notifyMissingScriptMerger(context.api));
+    const scriptMergerPath = getScriptMergerDir(context);
+    if (scriptMergerPath === undefined) {
+      notifyMissingScriptMerger(context.api);
+      return Promise.resolve();
+    } else {
+      if (discovery?.tools?.W3ScriptMerger === undefined) {
+        return setMergerConfig(discovery.path, scriptMergerPath);
+      }
+    }
   };
 
   const ensurePath = (dirpath) =>
@@ -511,10 +514,6 @@ function prepareForModding(context, discovery) {
   return Promise.all([
     ensurePath(path.join(discovery.path, 'Mods')),
     ensurePath(path.join(discovery.path, 'DLC')),
-    ensurePath(path.dirname(scriptMergerPath))
-      .catch(err => (err.code === 'EINVAL') // The filepath is invalid, revert to default.
-        ? ensurePath(path.dirname(defaultWSMFilePath))
-        : Promise.reject(err)),
     ensurePath(path.dirname(getLoadOrderFilePath()))])
       .then(() => downloadScriptMerger(context)
         .catch(err => (err instanceof util.UserCanceled)
