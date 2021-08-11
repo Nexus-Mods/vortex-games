@@ -5,7 +5,7 @@ const { actions, fs, FlexLayout, log, selectors, util } = require('vortex-api');
 const { parseXmlString } = require('libxmljs');
 const { app, remote } = require('electron');
 
-const { downloadScriptMerger, setMergerConfig } = require('./scriptmerger');
+const { downloadScriptMerger, setMergerConfig, getScriptMergerDir } = require('./scriptmerger');
 const menuMod = require('./menumod');
 
 const { 
@@ -492,13 +492,13 @@ function notifyMissingScriptMerger(api) {
 }
 
 function prepareForModding(context, discovery) {
-  const defaultWSMFilePath = path.join(discovery.path, 'WitcherScriptMerger', 'WitcherScriptMerger.exe');
-  const scriptMergerPath = util.getSafe(discovery, ['tools', SCRIPT_MERGER_ID, 'path'], defaultWSMFilePath);
-
   const findScriptMerger = (error) => {
     log('error', 'failed to download/install script merger', error);
-    return fs.statAsync(scriptMergerPath)
-      .catch(() => notifyMissingScriptMerger(context.api))
+    const scriptMergerPath = getScriptMergerDir(context);
+    if (scriptMergerPath === undefined) {
+      notifyMissingScriptMerger(context.api);
+      return Promise.resolve();
+    }
   };
 
   const ensurePath = (dirpath) =>
@@ -510,10 +510,6 @@ function prepareForModding(context, discovery) {
   return Promise.all([
     ensurePath(path.join(discovery.path, 'Mods')),
     ensurePath(path.join(discovery.path, 'DLC')),
-    ensurePath(path.dirname(scriptMergerPath))
-      .catch(err => (err.code === 'EINVAL') // The filepath is invalid, revert to default.
-        ? ensurePath(path.dirname(defaultWSMFilePath))
-        : Promise.reject(err)),
     ensurePath(path.dirname(getLoadOrderFilePath()))])
       .then(() => downloadScriptMerger(context)
         .catch(err => (err instanceof util.UserCanceled)

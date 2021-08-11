@@ -168,6 +168,28 @@ async function onDownloadComplete(context, archivePath, mostRecentVersion) {
   .then((mergerPath) => setUpMerger(context, mostRecentVersion, mergerPath))
 }
 
+async function getScriptMergerDir(context, create = false) {
+  const state = context.api.getState();
+  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', 'witcher3'], undefined);
+  if (discovery?.path === undefined) {
+    return undefined;
+  }
+  const currentPath = discovery.tools?.W3ScriptMerger?.path;
+  try {
+    if (!currentPath) {
+      throw new Error('Script Merger not set up');
+    }
+    await fs.statAsync(currentPath);
+    return currentPath;
+  } catch (err) {
+    const defaultPath = path.join(discovery.path, MERGER_RELPATH);
+    if (create) {
+      await fs.ensureDirWritableAsync(defaultPath);
+    }
+    return defaultPath;
+  }
+}
+
 async function downloadScriptMerger(context) {
   const state = context.api.store.getState();
   const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', 'witcher3'], undefined);
@@ -274,7 +296,7 @@ async function downloadScriptMerger(context) {
               .catch(err => {
                 context.api.dismissNotification(extractNotifId);
                 context.api.dismissNotification(downloadNotifId);
-                if (err instanceof MD5ComparisonError) {
+                if (err instanceof MD5ComparisonError || err instanceof util.ProcessCanceled) {
                   log('error', 'Failed to automatically install Script Merger', err.errorMessage);
                   context.api.sendNotification({
                     type: 'error',
@@ -309,9 +331,7 @@ async function downloadScriptMerger(context) {
     })
     .then((archivePath) => onDownloadComplete(context, archivePath, mostRecentVersion))
     .catch(err => {
-      context.api.dismissNotification(extractNotifId);
-      context.api.dismissNotification(downloadNotifId);
-      if (err instanceof MD5ComparisonError) {
+      const raiseManualInstallNotif = () => {
         log('error', 'Failed to automatically install Script Merger', err.errorMessage);
         context.api.sendNotification({
           type: 'error',
@@ -322,7 +342,12 @@ async function downloadScriptMerger(context) {
               action: () => util.opn('https://www.nexusmods.com/witcher3/mods/484')
                     .catch(err => null)
             }],
-        })
+        });
+      }
+      context.api.dismissNotification(extractNotifId);
+      context.api.dismissNotification(downloadNotifId);
+      if (err instanceof MD5ComparisonError) {
+        raiseManualInstallNotif();
         return Promise.resolve();
       }
       if (err instanceof util.UserCanceled) {
@@ -335,6 +360,9 @@ async function downloadScriptMerger(context) {
           //  and we were unable to resolve the re-direction link. Given that this
           //  will most certainly resolve itself eventually - we log this and keep going.
           log('info', 'failed to resolve W3 script merger re-direction link', err);
+          return Promise.resolve();
+        } else if (err.message.startsWith('Game is not discovered')) {
+          raiseManualInstallNotif();
           return Promise.resolve();
         }
       } else {
@@ -350,13 +378,11 @@ const extractNotif = {
   title: 'Extracting Script Merger',
 }
 async function extractScriptMerger(context, archivePath) {
-  const state = context.api.store.getState();
-  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', 'witcher3'], undefined);
-  const currentPath = discovery?.tools?.W3ScriptMerger?.path;
-  const destination = (!!currentPath)
-    ? path.dirname(currentPath)
-    : path.join(path.dirname(archivePath), MERGER_RELPATH);
-
+  const destination = await getScriptMergerDir(context, true);
+  if (destination === undefined) {
+    // How ?
+    return Promise.reject(new util.ProcessCanceled('Game is not discovered'));
+  }
   const sZip = new util.SevenZip();
   context.api.sendNotification(extractNotif);
   await sZip.extractFull(archivePath, destination);
@@ -442,4 +468,5 @@ module.exports = {
   downloadScriptMerger,
   setMergerConfig,
   getMergedModName,
+  getScriptMergerDir,
 };
