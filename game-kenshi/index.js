@@ -100,7 +100,7 @@ function getExecutable(discoveryPath) {
 }
 
 function main(context) {
-  context.registerGame({
+context.registerGame({
     id: KENSHI_ID,
     name: 'Kenshi',
     mergeMods: true,
@@ -108,6 +108,7 @@ function main(context) {
     queryModPath: () => 'mods',
     logo: 'gameart.jpg',
     executable: (discoveryPath) => getExecutable(discoveryPath),
+    supportedToos: tools, // Assign the tools in the registerGame API call
     requiredFiles: [
       'OgreMain_x64.dll',
       path.join('data', 'kenshi.ico'),
