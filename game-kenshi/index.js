@@ -19,6 +19,7 @@ let tools = [
   {
     id: 'nvidiaProfileInspector',
     name: 'Darkmod inspector',
+    logo: 'Nvidia logo.png',
     executable: () => 'nvidiaProfileInspector.exe',
     requiredFiles: [
       'nvidiaProfileInspector.exe',
@@ -27,6 +28,7 @@ let tools = [
   {
     id: 'WOCS.Patcher.Scar.PathFinding fix',
     name: 'OCS.Patcher.Scar.PathFinding fix',
+    logo: 'OCS logo.png',
     executable: () => 'OCS.Patcher.Scar.PathFinding.exe',
     requiredFiles: [
       'OCS.Patcher.Scar.PathFinding.exe',
