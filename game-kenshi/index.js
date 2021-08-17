@@ -29,9 +29,10 @@ let tools = [
     id: 'WOCS.Patcher.Scar.PathFinding fix',
     name: 'OCS.Patcher.Scar.PathFinding fix',
     logo: 'OCS logo.png',
-    executable: () => 'OCS.Patcher.Scar.PathFinding.exe',
+    executable: () => 'OCS.Patcher.Scar.PathFinding.Steam.exe',
     requiredFiles: [
       'OCS.Patcher.Scar.PathFinding.exe',
+      'OpenConstructionSet.dll',
     ],
   },
 ];
