@@ -23,6 +23,9 @@ let tools = [
     executable: () => 'nvidiaProfileInspector.exe',
     requiredFiles: [
       'nvidiaProfileInspector.exe',
+      'nvidiaProfileInspector.pdb',
+      'CustomColors.xml'
+      'Reference.xml'
     ],
   },
   {
