@@ -544,8 +544,12 @@ async function readStoredLO(api: types.IExtensionApi) {
 
   // return util.setSafe(state, ['settingsWritten', profile], { time, count });
   const state = api.store.getState();
+  const vProfile = selectors.activeProfile(state);
+  const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
+  const enabled = Object.keys(mods).filter(id =>
+    util.getSafe(vProfile, ['modState', id, 'enabled'], false));
   const bg3profile: string = state.settings.baldursgate3?.playerProfile;
-  if (modNodes.length === 1) {
+  if (enabled.length > 0 && modNodes.length === 1) {
     const lastWrite = state.settings.baldursgate3?.settingsWritten?.[bg3profile];
     if ((lastWrite !== undefined) && (lastWrite.count > 1)) {
       api.showDialog('info', '"modsettings.lsx" file was reset', {
