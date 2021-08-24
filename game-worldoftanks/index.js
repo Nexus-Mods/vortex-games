@@ -30,7 +30,7 @@ function findGame() {
 
 let version;
 
-function queryModPath(gamePath) {
+function queryModPath(api, gamePath) {
   if (version === undefined) {
     try {
       const data = fs.readFileSync(path.join(gamePath, 'version.xml'), { encoding: 'utf8' });
@@ -41,8 +41,11 @@ function queryModPath(gamePath) {
       fs.statSync(path.join(gamePath, 'res_mods', version));
     } catch (parseErr) {
       version = undefined;
-      throw new util.SetupError('World of Tanks doesn\'t seem to be installed correctly. '
-        + 'Please check the version.xml file in your game directory.');
+      api.showErrorNotification('Game not installed',
+        'World of Tanks doesn\'t seem to be installed correctly. '
+      + 'Please check the version.xml file in your game directory.'
+      , { allowReport: false });
+      return '.';
     }
   }
 
@@ -55,7 +58,7 @@ function main(context) {
     name: 'World Of Tanks',
     mergeMods: true,
     queryPath: findGame,
-    queryModPath,
+    queryModPath: (gamePath) => queryModPath(context.api, gamePath),
     logo: 'gameart.jpg',
     executable: () => 'WorldOfTanks.exe',
     requiredFiles: [
