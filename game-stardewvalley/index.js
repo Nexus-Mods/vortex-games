@@ -107,7 +107,7 @@ class StardewValley {
    */
   executable() {
     return process.platform == 'win32'
-      ? 'StardewValley.exe'
+      ? 'Stardew Valley.exe'
       : 'StardewValley';
   }
 
