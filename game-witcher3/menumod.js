@@ -118,7 +118,8 @@ function populateCache(api, activeProfile, modIds, initialCacheValue) {
   .then(newCache => {
     const modName = menuMod(activeProfile.name);
     let mod = util.getSafe(state, ['persistent', 'mods', GAME_ID, modName], undefined);
-    if (mod === undefined) {
+    if (mod?.installationPath === undefined) {
+      log('warn', 'failed to ascertain installation path', modName);
       // We will create it on the next run.
       return Promise.resolve();
     }
