@@ -308,7 +308,13 @@ async function removeMenuMod(api, profile) {
   return new Promise((resolve, reject) => {
     api.events.emit('remove-mod', profile.gameId, mod.id, async (error) => {
       if (error !== null) {
-        return reject(error);
+        // The fact that we're attempting to remove the aggregated menu mod means that
+        //  the user no longer has any menu mods installed and therefore it's safe to
+        //  ignore any errors that may have been raised during removal.
+        // The main problem here is the fact that users are actively messing with
+        //  the menu mod we generate causing odd errors to pop up.
+        log('error', 'failed to remove menu mod', error);
+        // return reject(error);
       }
       return resolve();
     });
