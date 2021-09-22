@@ -24,7 +24,7 @@ let tools = [
     requiredFiles: [
       'nvidiaProfileInspector.exe',
       'nvidiaProfileInspector.pdb',
-      'CustomColors.xml'
+      'CustomColors.xml',
       'Reference.xml'
     ],
   },
