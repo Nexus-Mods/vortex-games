@@ -1,3 +1,4 @@
+import { Element } from 'libxmljs';
 import path from 'path';
 import turbowalk, { IEntry } from 'turbowalk';
 import { fs, log, selectors, types, util } from 'vortex-api';
@@ -71,13 +72,12 @@ class ComMetadataManager {
     };
 
     let subModId;
-    let dependencies: IDependency[] = [];
+    const dependencies: IDependency[] = [];
     try {
       const data = await getXMLData(filePath);
-      subModId = data.get('//Id').attr('value').value();
+      subModId = data.get<Element>('//Id').attr('value').value();
       const depNodes = data.find(`//${DEP_XML_ELEMENT}`);
-      dependencies = await depNodes.reduce(async (accumP, node) => {
-        const accum = await accumP;
+      for (const node of depNodes) {
         try {
           const dep: IDependency = {
             id: await getAttributeValue(node, 'id', false),
@@ -86,12 +86,11 @@ class ComMetadataManager {
             version: await getAttributeValue(node, 'version'),
             incompatible: await getAttributeValue(node, 'incompatible') === 'true',
           };
-          accum.push(dep);
+          dependencies.push(dep);
         } catch (err) {
           log('error', 'unable to parse community dependency', err);
         }
-        return accum;
-      }, []);
+      }
     } catch (err) {
       // We're simply going to log at this stage; too many
       //  mods have had invalid subModule files in the past

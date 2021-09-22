@@ -1,5 +1,6 @@
 import Bluebird from 'bluebird';
 import { app, remote } from 'electron';
+import { Element } from 'libxmljs';
 import path from 'path';
 import semver from 'semver';
 import { log, selectors, types, util } from 'vortex-api';
@@ -83,12 +84,12 @@ async function getDeployedModData(context: types.IExtensionContext, subModuleFil
   return Bluebird.reduce(subModuleFilePaths, async (accum, subModFile: string) => {
     try {
       const subModData = await getXMLData(subModFile);
-      const subModId = subModData.get('//Id').attr('value').value();
-      const subModVerData = subModData.get('//Version').attr('value').value();
+      const subModId = subModData.get<Element>('//Id').attr('value').value();
+      const subModVerData = subModData.get<Element>('//Version').attr('value').value();
       const subModVer = getCleanVersion(subModId, subModVerData);
       const managedEntry = managedIds.find(entry => entry.subModId === subModId);
       const isMultiplayer = (!!subModData.get(`//${XML_EL_MULTIPLAYER}`));
-      const depNodes = subModData.find('//DependedModule');
+      const depNodes = subModData.find<Element>('//DependedModule');
       let dependencies = [];
       try {
         dependencies = depNodes.map(depNode => {
@@ -108,7 +109,7 @@ async function getDeployedModData(context: types.IExtensionContext, subModuleFil
       } catch (err) {
         log('debug', 'submodule has no dependencies or is invalid', err);
       }
-      const subModName = subModData.get('//Name').attr('value').value();
+      const subModName = subModData.get<Element>('//Name').attr('value').value();
 
       accum[subModId] = {
         subModId,
@@ -170,8 +171,9 @@ export async function parseLauncherData() {
   const launcherData = await getXMLData(LAUNCHER_DATA_PATH);
   try {
     const singlePlayerMods =
-      launcherData.get('//UserData/SingleplayerData/ModDatas').childNodes();
-    const multiPlayerMods = launcherData.get('//UserData/MultiplayerData/ModDatas').childNodes();
+      launcherData.get<Element>('//UserData/SingleplayerData/ModDatas').childNodes();
+    const multiPlayerMods = launcherData.get<Element>('//UserData/MultiplayerData/ModDatas')
+      .childNodes();
     LAUNCHER_DATA.singlePlayerSubMods = singlePlayerMods.reduce((accum, spm) => {
       const dataElement = createDataElement(spm);
       if (!!dataElement) {

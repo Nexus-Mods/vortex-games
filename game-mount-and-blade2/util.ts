@@ -1,5 +1,5 @@
 import Bluebird from 'bluebird';
-import { parseXmlString } from 'libxmljs';
+import { Element, parseXmlString } from 'libxmljs';
 import path from 'path';
 import { actions, fs, log, selectors, types, util } from 'vortex-api';
 
@@ -65,7 +65,7 @@ export async function getElementValue(subModuleFilePath: string, elementName: st
     .then(xmlData => {
       try {
         const modInfo = parseXmlString(xmlData);
-        const element = modInfo.get(`//${elementName}`);
+        const element = modInfo.get<Element>(`//${elementName}`);
         return ((element !== undefined) && (element.attr('value').value() !== undefined))
           ? Promise.resolve(element.attr('value').value())
           : logAndContinue();

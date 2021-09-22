@@ -1,6 +1,5 @@
 import Bluebird from 'bluebird';
-import { app, remote } from 'electron';
-import { parseXmlString } from 'libxmljs';
+import { Element, parseXmlString } from 'libxmljs';
 import path from 'path';
 import React from 'react';
 import * as BS from 'react-bootstrap';
@@ -13,7 +12,7 @@ import { IW3CollectionsData } from './collections/types';
 import CollectionsDataView from './views/CollectionsDataView';
 
 import menuMod from './menumod';
-import { downloadScriptMerger, setMergerConfig, getScriptMergerDir } from './scriptmerger';
+import { downloadScriptMerger, getScriptMergerDir, setMergerConfig } from './scriptmerger';
 
 import { DO_NOT_DEPLOY, DO_NOT_DISPLAY,
   GAME_ID, getLoadOrderFilePath, getPriorityTypeBranch, I18N_NAMESPACE, INPUT_XML_FILENAME,
@@ -25,7 +24,7 @@ import { registerActions } from './iconbarActions';
 import { PriorityManager } from './priorityManager';
 
 import { installMixed, testSupportedMixed } from './installers';
-import { restoreFromProfile, storeToProfile, makeOnContextImport } from './mergeBackup';
+import { makeOnContextImport, restoreFromProfile, storeToProfile } from './mergeBackup';
 
 import { setPriorityType } from './actions';
 import { W3Reducer } from './reducers';
@@ -193,7 +192,7 @@ function getElementValues(context: types.IExtensionContext, pattern: string): Bl
     .then(xmlData => {
       try {
         const mergeData = parseXmlString(xmlData);
-        const elements = mergeData.find(pattern)
+        const elements = mergeData.find<Element>(pattern)
           .map(modEntry => {
             try {
               return modEntry.text();
@@ -648,7 +647,7 @@ function genEntryActions(context, item, minPriority, onSetPriority) {
     {
       show: item.locked !== true,
       title: 'Set Manual Priority',
-      action: () => priorityInputDialog()
+      action: () => priorityInputDialog(),
     },
   ];
 
@@ -775,7 +774,7 @@ async function preSort(context, items, direction, updateType, priorityManager): 
   let preSorted = [].concat(
     ...lockedEntries,
     items.filter(item => {
-      const isLocked = lockedEntries.find(locked => locked.name === item.name) !== undefined
+      const isLocked = lockedEntries.find(locked => locked.name === item.name) !== undefined;
       const doNotDisplay = DO_NOT_DISPLAY.includes(item.name.toLowerCase());
       return !isLocked && !doNotDisplay;
     }),
@@ -1011,7 +1010,7 @@ function merge(filePath, mergeDir, context) {
     })
     .then(gameIndexFile => {
       const modVars = modData.find('//Var');
-      const gameVars = gameIndexFile.find('//Var');
+      const gameVars = gameIndexFile.find<Element>('//Var');
 
       modVars.forEach(modVar => {
         const matcher = (gameVar) => {
@@ -1048,7 +1047,7 @@ function merge(filePath, mergeDir, context) {
         } else {
           const parentGroup = modVar.parent().parent();
           const groupId = parentGroup.attr('id').value();
-          const matchingIndexGroup = gameIndexFile.find('//Group')
+          const matchingIndexGroup = gameIndexFile.find<Element>('//Group')
             .filter(group => group.attr('id').value() === groupId);
           if (matchingIndexGroup.length > 1) {
             // Something's wrong with the file - back off.
@@ -1060,10 +1059,10 @@ function merge(filePath, mergeDir, context) {
             return Promise.reject(err);
           } else if (matchingIndexGroup.length === 0) {
             // Need to add the group AND the var.
-            const userConfig = gameIndexFile.get('//UserConfig');
+            const userConfig = gameIndexFile.get<Element>('//UserConfig');
             userConfig.addChild(parentGroup.clone());
           } else {
-            matchingIndexGroup[0].child(0).addChild(modVar.clone());
+            (matchingIndexGroup[0].child(0) as Element).addChild(modVar.clone());
           }
         }
       });
@@ -1268,7 +1267,7 @@ function main(context: types.IExtensionContext) {
           _INI_STRUCT = newStruct;
           writeToModSettings()
             .then(() => {
-              (!!refreshFunc) ? refreshFunc() : null;
+              refreshFunc?.();
               return Promise.resolve();
             })
             .catch(err => modSettingsErrorHandler(context, err,
@@ -1350,8 +1349,9 @@ function main(context: types.IExtensionContext) {
           + 'remove the existing merge and re-apply it.');
       }
       const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
-      const docFiles = deployment['witcher3menumodroot'].filter(file => (file.relPath.endsWith(PART_SUFFIX))
-        && (file.relPath.indexOf(INPUT_XML_FILENAME) === -1));
+      const docFiles = deployment['witcher3menumodroot']
+        .filter(file => file.relPath.endsWith(PART_SUFFIX)
+                        && (file.relPath.indexOf(INPUT_XML_FILENAME) === -1));
       const menuModPromise = () => {
         if (docFiles.length === 0) {
           // If there are no menu mods deployed - remove the mod.
@@ -1368,13 +1368,13 @@ function main(context: types.IExtensionContext) {
               return Promise.resolve();
             });
         }
-      }
+      };
 
       return menuModPromise()
         .then(() => setINIStruct(context, loadOrder, priorityManager))
         .then(() => writeToModSettings())
         .then(() => {
-          (!!refreshFunc) ? refreshFunc() : null;
+          refreshFunc?.();
           return Promise.resolve();
         })
         .catch(err => modSettingsErrorHandler(context, err,
