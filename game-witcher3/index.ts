@@ -26,6 +26,8 @@ import { PriorityManager } from './priorityManager';
 import { installMixed, testSupportedMixed } from './installers';
 import { makeOnContextImport, restoreFromProfile, storeToProfile } from './mergeBackup';
 
+import { getMergedModNames } from './mergeInventoryParsing';
+
 import { setPriorityType } from './actions';
 import { W3Reducer } from './reducers';
 
@@ -175,60 +177,6 @@ async function getManuallyAddedMods(context) {
       details, { allowReport });
     return Promise.resolve([]);
   });
-}
-
-function getElementValues(context: types.IExtensionContext, pattern: string): Bluebird<string[]> {
-  // Provided with a pattern, attempts to retrieve element values
-  //  from any element keys that match the pattern inside the merge inventory file.
-  const state = context.api.store.getState();
-  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
-  const scriptMerger = util.getSafe(discovery, ['tools', SCRIPT_MERGER_ID], undefined);
-  if ((scriptMerger === undefined) || (scriptMerger.path === undefined)) {
-    return Bluebird.resolve([]);
-  }
-
-  const modsPath = path.join(discovery.path, 'Mods');
-  return fs.readFileAsync(path.join(path.dirname(scriptMerger.path), MERGE_INV_MANIFEST))
-    .then(xmlData => {
-      try {
-        const mergeData = parseXmlString(xmlData);
-        const elements = mergeData.find<Element>(pattern)
-          .map(modEntry => {
-            try {
-              return modEntry.text();
-            } catch (err) {
-              return undefined;
-            }
-          })
-          .filter(entry => !!entry);
-        const unique = new Set(elements);
-
-        return Bluebird.reduce(Array.from(unique), (accum: string[], mod: string) =>
-          fs.statAsync(path.join(modsPath, mod))
-          .then(() => {
-            accum.push(mod);
-            return accum;
-          }).catch(err => accum), []);
-      } catch (err) {
-        return Promise.reject(err);
-      }
-    })
-    .catch(err => (err.code === 'ENOENT') // No merge file? - no problem.
-      ? Promise.resolve([])
-      : Promise.reject(new util.DataInvalid(`Failed to parse ${MERGE_INV_MANIFEST}: ${err}`)));
-}
-
-function getMergedModNames(context) {
-  return getElementValues(context, '//MergedModName')
-    .catch(err => {
-      // We failed to parse the merge inventory for whatever reason.
-      //  Rather than blocking the user from modding his game we're
-      //  we simply return an empty array; but before we do that,
-      //  we need to tell him we were unable to parse the merged inventory.
-      context.api.showErrorNotification('Invalid MergeInventory.xml file', err,
-        { allowReport: false });
-      return Promise.resolve([]);
-    });
 }
 
 function findGame(): Bluebird<string> {
@@ -1201,8 +1149,8 @@ function main(context: types.IExtensionContext) {
 
   context['registerCollectionFeature'](
     'witcher3_collection_data',
-    (gameId: string, includedMods: string[]) =>
-      genCollectionsData(context, gameId, includedMods),
+    (gameId: string, includedMods: string[], collection: types.IMod) =>
+      genCollectionsData(context, gameId, includedMods, collection),
     (gameId: string, collection: IW3CollectionsData) =>
       parseCollectionsData(context, gameId, collection),
     () => Promise.resolve(),

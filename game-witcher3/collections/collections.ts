@@ -15,7 +15,8 @@ import { CollectionParseError, hex2Buffer } from './util';
 
 export async function genCollectionsData(context: types.IExtensionContext,
                                          gameId: string,
-                                         includedMods: string[]) {
+                                         includedMods: string[],
+                                         collection: types.IMod) {
   const api = context.api;
   const state = api.getState();
   const profile = selectors.activeProfile(state);
@@ -28,7 +29,7 @@ export async function genCollectionsData(context: types.IExtensionContext,
       ['settings', 'gameMode', 'discovered', GAME_ID, 'tools', SCRIPT_MERGER_ID], undefined);
     let scriptMergesData;
     if (scriptMergerTool !== undefined) {
-      scriptMergesData = await exportScriptMerges(context, profile.id);
+      scriptMergesData = await exportScriptMerges(context, profile.id, includedMods, collection);
     }
     const mergedData: IW3MergedData = {
       menuModSettingsData: (menuModData !== undefined)

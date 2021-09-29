@@ -45,6 +45,39 @@ export class ResourceInaccessibleError extends Error {
     }
 }
 
+export class MergeDataViolationError extends Error {
+  // Merge data violation errors intends to cater for/block curators
+  //  from uploading a collection with faulty merged data.
+  // We define faulty merged data as:
+  //  1. A merged script segment which relies on a certain mod to be included in the
+  //     collection, yet it is not included.
+  //  2. A merged script segment which requires a specific mod to be installed,
+  //     yet the collection highlighted said mod as "optional"; potentially
+  //     resulting in the mod being missing on the user end.
+  private mNotIncluded: string[];
+  private mOptional: string[];
+  private mCollectionName: string;
+  constructor(notIncluded: string[], optional: string[], collectionName: string) {
+    super(`Merged script data for ${collectionName} is referencing missing/undeployed/optional mods`);
+    this.name = 'MergeDataViolationError';
+    this.mOptional = optional;
+    this.mNotIncluded = notIncluded;
+    this.mCollectionName = collectionName;
+  }
+
+  public get Optional() {
+    return this.mOptional;
+  }
+
+  public get NotIncluded() {
+    return this.mNotIncluded;
+  }
+
+  public get CollectionName() {
+    return this.mCollectionName
+  }
+}
+
 export function calcHashImpl(filePath) {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash('md5');

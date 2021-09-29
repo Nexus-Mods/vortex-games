@@ -1,19 +1,23 @@
+
+import _ from 'lodash';
 import path from 'path';
 import turbowalk from 'turbowalk';
-import { actions, fs, log, selectors, types, util } from 'vortex-api';
+import { fs, log, selectors, types, util } from 'vortex-api';
 
 import { GAME_ID, getLoadOrderFilePath, MERGE_INV_MANIFEST,
-  SCRIPT_MERGER_ID, W3_TEMP_DATA_DIR } from './common';
-
-import { downloadScriptMerger } from './scriptmerger';
-
-import { hex2Buffer } from './collections/util';
+  SCRIPT_MERGER_ID, W3_TEMP_DATA_DIR, MergeDataViolationError } from './common';
 
 import { generate } from 'shortid';
 
-import { prepareFileData, restoreFileData } from './collections/util';
+import { hex2Buffer, prepareFileData, restoreFileData } from './collections/util';
 
-import { getMergedModName } from './scriptmerger';
+import { getNamesOfMergedMods } from './mergeInventoryParsing';
+
+import { getMergedModName, downloadScriptMerger } from './scriptmerger';
+
+import { getDeployment } from './util';
+
+import { IDeployedFile, IDeployment } from './types';
 
 type OpType = 'import' | 'export';
 interface IBaseProps {
@@ -230,19 +234,106 @@ export async function restoreFromProfile(context: types.IExtensionContext, profi
   return handleMergedScripts(props, 'import');
 }
 
+export async function queryScriptMerges(context: types.IExtensionContext,
+                                        includedModIds: string[],
+                                        collection: types.IMod) {
+  const state = context.api.getState();
+  const mods: { [modId: string]: types.IMod } = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
+  const modTypes: { [typeId: string]: string } = selectors.modPathsForGame(state, GAME_ID);
+  const deployment: IDeployment = await getDeployment(context.api, includedModIds);
+  const deployedNames: string[] = Object.keys(modTypes).reduce((accum, typeId) => {
+    const modPath = modTypes[typeId];
+    const files: IDeployedFile[] = deployment[typeId];
+    const isRootMod = modPath.toLowerCase().split(path.sep).indexOf('mods') === -1;
+    const names = files.map(file => {
+      const nameSegments = file.relPath.split(path.sep);
+      if (isRootMod) {
+        const nameIdx = nameSegments.map(seg => seg.toLowerCase()).indexOf('mods') + 1;
+        return (nameIdx > 0)
+          ? nameSegments[nameIdx]
+          : undefined;
+      } else {
+        return nameSegments[0];
+      }
+    });
+    accum = accum.concat(names.filter(name => !!name));
+    return accum;
+  }, []);
+  const uniqueDeployed = Array.from(new Set(deployedNames));
+  const merged = await getNamesOfMergedMods(context);
+  const diff = _.difference(merged, uniqueDeployed);
+  const isOptional = (modId: string) => (collection.rules ?? []).find(rule => {
+    const mod: types.IMod = mods[modId];
+    if (mod === undefined) {
+      return false
+    }
+    const validType = ['recommends'].includes(rule.type);
+    if (!validType) {
+      return false;
+    }
+    const matchedRule = util.testModReference(mod, rule.reference);
+    return matchedRule;
+  }) !== undefined;
+  const optionalMods = includedModIds.filter(isOptional);
+  if (optionalMods.length > 0 || diff.length !== 0) {
+    throw new MergeDataViolationError(diff || [],
+      optionalMods || [], util.renderModName(collection));
+  }
+}
+
 export async function exportScriptMerges(context: types.IExtensionContext,
-                                         profileId: string) {
+                                         profileId: string,
+                                         includedModIds: string[],
+                                         collection: types.IMod) {
   const props: IBaseProps = genBaseProps(context, profileId, true);
   if (props === undefined) {
     return;
   }
+
+  const exportMergedData = async () => {
+    try {
+      const tempPath = path.join(W3_TEMP_DATA_DIR, generate());
+      await fs.ensureDirWritableAsync(tempPath);
+      await handleMergedScripts(props, 'export', tempPath);
+      const data = await prepareFileData(tempPath);
+      return Promise.resolve(data);
+    } catch (err) {
+      return Promise.reject(err);
+    }
+  }
+
   try {
-    const tempPath = path.join(W3_TEMP_DATA_DIR, generate());
-    await fs.ensureDirWritableAsync(tempPath);
-    await handleMergedScripts(props, 'export', tempPath);
-    const data = await prepareFileData(tempPath);
-    return data;
+    await queryScriptMerges(context, includedModIds, collection);
+    return exportMergedData();
   } catch (err) {
+    if (err instanceof MergeDataViolationError) {
+      const violationError = (err as MergeDataViolationError);
+      const optional = violationError.Optional;
+      const notIncluded = violationError.NotIncluded;
+      const optionalSegment = (optional.length > 0)
+        ? 'Marked as "optional" but need to be marked "required":{{br}}[list]'
+          + optional.map(opt => `[*]${opt}`) + '[/list]{{br}}'
+        : '';
+      const notIncludedSegment = (notIncluded.length > 0)
+        ? 'No longer part of the collection and need to be re-added:{{br}}[list]'
+          + notIncluded.map(ni => `[*]${ni}`) + '[/list]{{br}}'
+        : '';
+      return context.api.showDialog('question', 'Potential merged data mismatch', {
+        bbcode: 'Your collection includes a script merge that is referencing mods '
+          + `that are...{{bl}} ${notIncludedSegment}${optionalSegment}`
+          + 'For the collection to function correctly you will need to address the '
+          + 'above or re-run the Script Merger to remove traces of merges referencing '
+          + 'these mods. Please, do only proceed to upload the collection/revision as '
+          + 'is if you intend to upload the script merge as is and if the reference for '
+          + 'the merge will e.g. be acquired from an external source as part of the collection.',
+        parameters: { br: '[br][/br]', bl: '[br][/br][br][/br]' },
+      }, [
+        { label: 'Cancel' },
+        { label: 'Upload Collection' }
+      ]).then(res => (res.action === 'Cancel')
+        ? Promise.reject(new util.UserCanceled)
+        : exportMergedData());
+    }
     return Promise.reject(err);
   }
 }
