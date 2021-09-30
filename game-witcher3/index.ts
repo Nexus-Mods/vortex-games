@@ -30,6 +30,7 @@ import { getMergedModNames } from './mergeInventoryParsing';
 
 import { setPriorityType } from './actions';
 import { W3Reducer } from './reducers';
+import { iteratee } from 'lodash';
 
 const GOG_ID = '1207664663';
 const GOG_ID_GOTY = '1495134320';
@@ -559,7 +560,10 @@ async function setINIStruct(context, loadOrder, priorityManager) {
 
 let refreshFunc;
 // item: ILoadOrderDisplayItem
-function genEntryActions(context, item, minPriority, onSetPriority) {
+function genEntryActions(context: types.IExtensionContext,
+                         item: types.ILoadOrderDisplayItem,
+                         minPriority: number,
+                         onSetPriority: (key: string, priority: number) => void) {
   const priorityInputDialog = () => {
     return new Bluebird((resolve) => {
       context.api.showDialog('question', 'Set New Priority', {
@@ -577,7 +581,8 @@ function genEntryActions(context, item, minPriority, onSetPriority) {
           const itemKey = Object.keys(_INI_STRUCT).find(key => _INI_STRUCT[key].VK === item.id);
           const wantedPriority = result.input['w3PriorityInput'];
           if (wantedPriority <= minPriority) {
-            context.api.showErrorNotification('Cannot change to locked entry Priority');
+            context.api.showErrorNotification('Cannot change to locked entry Priority',
+              wantedPriority);
             return resolve();
           }
           if (itemKey !== undefined) {
@@ -667,16 +672,27 @@ async function preSort(context, items, direction, updateType, priorityManager): 
   };
 
   const lockedEntries = [].concat(allMods.merged, lockedMods)
-    .map((modName, idx) => ({
-      id: modName,
-      name: !!readableNames[modName] ? readableNames[modName] : modName,
-      imgUrl: `${__dirname}/gameart.jpg`,
-      locked: true,
-      prefix: idx + 1,
-  }));
+    .reduce((accum, modName, idx) => {
+      const obj = {
+        id: modName,
+        name: !!readableNames[modName] ? readableNames[modName] : modName,
+        imgUrl: `${__dirname}/gameart.jpg`,
+        locked: true,
+        prefix: idx + 1,
+      };
+
+      if (!accum.find(acc => obj.id === acc.id)) {
+        accum.push(obj);
+      }
+
+      return accum;
+    }, []);
 
   items = items.filter(item => !allMods.merged.includes(item.id)
-                            && !allMods.manual.includes(item.id)).map((item, idx) => {
+                            && !allMods.manual.includes(item.id)
+                            && !allMods.managed.find(mod =>
+                                  (mod.name === UNI_PATCH) && (mod.id === item.id)))
+               .map((item, idx) => {
     if (idx === 0) {
       resetMaxPriority();
     }
@@ -798,16 +814,16 @@ const toggleModsState = async (context, props, enabled) => {
   const totalLocked = [].concat(modMap.merged, manualLocked);
   const newLO = Object.keys(loadOrder).reduce((accum, key) => {
     if (totalLocked.includes(key)) {
-      accum.push(loadOrder[key]);
+      accum[key] = loadOrder[key];
     } else {
-      accum.push({
+      accum[key] = {
         ...loadOrder[key],
         enabled,
-      });
+      };
     }
     return accum;
-  }, []);
-  context.api.store.dispatch(actions.setLoadOrder(profile.id, newLO));
+  }, {});
+  context.api.store.dispatch(actions.setLoadOrder(profile.id, newLO as any));
   props.refresh();
 };
 

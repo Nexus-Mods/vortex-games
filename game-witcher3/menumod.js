@@ -131,6 +131,27 @@ function populateCache(api, activeProfile, modIds, initialCacheValue) {
   });
 }
 
+function convertFilePath(filePath, installPath) { 
+  // Pre-collections we would use absolute paths pointing
+  //  to the menu mod input modifications; this will obviously
+  //  work just fine on the curator's end, but relpaths should be used
+  //  on the user's end. This functor will convert the abs path from
+  //  the curator's path to the user's path.
+  const segments = filePath.split(path.sep);
+  const idx = segments.findIndex((seg, idx) => {
+    if (seg === 'mods' && segments[idx - 1] === GAME_ID) {
+      return true;
+    } else {
+      return false;
+    }
+  });
+  if (idx === -1) {
+    log('error', 'unexpected menu mod filepath', filePath);
+    return filePath;
+  }
+  return path.join(installPath, segments.slice(idx + 1).join(path.sep));
+}
+
 async function onWillDeploy(api, deployment, activeProfile) {
   const state = api.store.getState();
   if (activeProfile?.name === undefined) {
@@ -328,10 +349,15 @@ async function cacheToFileMap(state, profile) {
     return undefined;
   }
 
+  const stagingFolder = selectors.installPathForGame(state, GAME_ID);
   const fileMap = currentCache.reduce((accum, entry) => {
     accum[toFileMapKey(entry.filepath)] =
       [].concat(accum[toFileMapKey(entry.filepath)] || [],
-      [{ id: entry.id, data: entry.data, filepath: entry.filepath }]);
+      [{
+        id: entry.id,
+        data: entry.data,
+        filepath: convertFilePath(entry.filepath, stagingFolder),
+      }]);
 
     return accum;
   }, {});
