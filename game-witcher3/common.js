@@ -93,8 +93,13 @@ const LOAD_ORDER_FILENAME = 'mods.settings';
 const I18N_NAMESPACE = 'game-witcher3';
 const CONFIG_MATRIX_REL_PATH = path.join('bin', 'config', 'r4game', 'user_config_matrix', 'pc');
 
+const DO_NOT_DISPLAY = ['communitypatch-base'];
+const DO_NOT_DEPLOY = ['info.txt', 'readme.txt'];
+
 module.exports = {
   CONFIG_MATRIX_REL_PATH,
+  DO_NOT_DISPLAY,
+  DO_NOT_DEPLOY,
   GAME_ID,
   LOAD_ORDER_FILENAME,
   MERGE_INV_MANIFEST,

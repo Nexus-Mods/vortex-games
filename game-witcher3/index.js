@@ -9,8 +9,8 @@ const { downloadScriptMerger, setMergerConfig, getScriptMergerDir } = require('.
 const menuMod = require('./menumod');
 
 const { 
-  GAME_ID, INPUT_XML_FILENAME, LOAD_ORDER_FILENAME, getLoadOrderFilePath, getPriorityTypeBranch,
-  PART_SUFFIX, SCRIPT_MERGER_ID, MERGE_INV_MANIFEST, ResourceInaccessibleError,
+  GAME_ID, INPUT_XML_FILENAME, DO_NOT_DISPLAY, getLoadOrderFilePath, getPriorityTypeBranch,
+  PART_SUFFIX, SCRIPT_MERGER_ID, MERGE_INV_MANIFEST, ResourceInaccessibleError, DO_NOT_DEPLOY,
   UNIAPP, I18N_NAMESPACE,
 } = require('./common');
 
@@ -667,7 +667,6 @@ async function preSort(context, items, direction, updateType, priorityManager) {
         const activeProfile = selectors.activeProfile(state);
         const modId = _INI_STRUCT[itemKey].VK;
         const loEntry = loadOrder[modId];
-        const minPriority = Object.keys(loadOrder).filter(k => loadOrder[k]?.locked).length;
         if (priorityManager.priorityType === 'position-based') {
           context.api.store.dispatch(actions.setLoadOrderEntry(
             activeProfile.id, modId, {
@@ -679,7 +678,7 @@ async function preSort(context, items, direction, updateType, priorityManager) {
           context.api.store.dispatch(actions.setLoadOrderEntry(
             activeProfile.id, modId, {
               ...loEntry,
-              prefix: parseInt(_INI_STRUCT[itemKey].Priority),
+              prefix: parseInt(_INI_STRUCT[itemKey].Priority, 10),
           }));
         }
         if (refreshFunc !== undefined) {
@@ -700,25 +699,39 @@ async function preSort(context, items, direction, updateType, priorityManager) {
         contextMenuActions: genEntryActions(context, item, 0, onSetPriority),
         prefix: getPriority(item),
       };
-    })
+    });
   }
 
-  const lockedManualMods = allMods.manual.filter(entry => entry.startsWith(LOCKED_PREFIX));
+  const filterFunc = (modName) => modName.startsWith(LOCKED_PREFIX);
+  const lockedMods = [].concat(allMods.manual.filter(filterFunc),
+    allMods.managed.filter(entry => filterFunc(entry.name))
+                   .map(entry => entry.name));
   const readableNames = {
     [UNI_PATCH]: 'Unification/Community Patch',
   };
 
-  const lockedEntries = [].concat(allMods.merged, lockedManualMods)
-    .map((modName, idx) => ({
-      id: modName,
-      name: !!readableNames[modName] ? readableNames[modName] : modName,
-      imgUrl: `${__dirname}/gameart.jpg`,
-      locked: true,
-      prefix: idx + 1,
-  }));
+  const lockedEntries = [].concat(allMods.merged, lockedMods)
+    .reduce((accum, modName, idx) => {
+      const obj = {
+        id: modName,
+        name: !!readableNames[modName] ? readableNames[modName] : modName,
+        imgUrl: `${__dirname}/gameart.jpg`,
+        locked: true,
+        prefix: idx + 1,
+      };
+
+      if (!accum.find(acc => obj.id === acc.id)) {
+        accum.push(obj);
+      }
+
+      return accum;
+    }, []);
 
   items = items.filter(item => !allMods.merged.includes(item.id)
-                            && !allMods.manual.includes(item.id)).map((item, idx) => {
+                            && !allMods.manual.includes(item.id)
+                            && !allMods.managed.find(mod =>
+                                  (mod.name === UNI_PATCH) && (mod.id === item.id)))
+               .map((item, idx) => {
     if (idx === 0) {
       resetMaxPriority();
     }
@@ -737,12 +750,12 @@ async function preSort(context, items, direction, updateType, priorityManager) {
         name: key,
         imgUrl: `${__dirname}/gameart.jpg`,
         external: true,
-      }
+      };
       return {
         ...item,
         prefix: getPriority(item),
         contextMenuActions: genEntryActions(context, item, lockedEntries.length, onSetPriority),
-      }
+      };
   });
 
   const keys = Object.keys(loadOrder);
@@ -750,7 +763,7 @@ async function preSort(context, items, direction, updateType, priorityManager) {
   const unknownManuallyAdded = manualEntries.filter(entry => !keys.includes(entry.id)) || [];
   const filteredOrder = keys
     .filter(key => lockedEntries.find(item => item.id === key) === undefined)
-    .reduce((accum,key) => {
+    .reduce((accum, key) => {
       accum[key] = loadOrder[key];
       return accum;
     }, []);
@@ -761,18 +774,26 @@ async function preSort(context, items, direction, updateType, priorityManager) {
     items = [].concat(items.slice(0, pos) || [], known, items.slice(pos) || []);
   });
 
-  let preSorted = [].concat(...lockedEntries, items, ...unknownManuallyAdded);
+  let preSorted = [].concat(
+    ...lockedEntries,
+    items.filter(item => {
+      const isLocked = lockedEntries.find(locked => locked.name === item.name) !== undefined;
+      const doNotDisplay = DO_NOT_DISPLAY.includes(item.name.toLowerCase());
+      return !isLocked && !doNotDisplay;
+    }),
+    ...unknownManuallyAdded);
+
   preSorted = (updateType !== 'drag-n-drop')
     ? preSorted.sort((lhs, rhs) => lhs.prefix - rhs.prefix)
     : preSorted.reduce((accum, entry, idx) => {
         if (lockedEntries.indexOf(entry) !== -1 || idx === 0) {
           accum.push(entry);
         } else {
-          const prevPrefix = parseInt(accum[idx - 1].prefix);
+          const prevPrefix = parseInt(accum[idx - 1].prefix, 10);
           if (prevPrefix >= entry.prefix) {
             accum.push({
               ...entry,
-              prefix: prevPrefix + 1
+              prefix: prevPrefix + 1,
             });
           } else {
             accum.push(entry);
@@ -1112,6 +1133,8 @@ function main(context) {
     },
     details: {
       steamAppId: 292030,
+      ignoreConflicts: DO_NOT_DEPLOY,
+      ignoreDeploy: DO_NOT_DEPLOY,
     }
   });
 
