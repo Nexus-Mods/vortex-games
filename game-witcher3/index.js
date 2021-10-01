@@ -815,7 +815,9 @@ function getManagedModNames(context, mods) {
       return Promise.resolve(accum);
     })
     .catch(err => {
-      log('error', 'unable to resolve mod name', err);
+      // Some geniuses distribute the mod configuration data
+      //  separately from the mod it's supposed to configure.
+      log('warn', 'unable to resolve mod name', err);
       return Promise.resolve(accum);
     }), []);
 }
@@ -844,7 +846,7 @@ const toggleModsState = async (context, props, enabled) => {
 
 function infoComponent(context, props) {
   const t = context.api.translate;
-  return React.createElement(BS.Panel, { id: 'loadorderinfo' },
+  return React.createElement(BS.Panel, { id: 'loadorderinfo', style: { display: 'block' } },
     React.createElement('h2', {}, t('Managing your load order', { ns: I18N_NAMESPACE })),
     React.createElement(FlexLayout.Flex, { style: { height: '30%' } },
     React.createElement('div', {},
