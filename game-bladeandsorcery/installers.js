@@ -32,11 +32,13 @@ async function installOfficialMod(files,
   if (discoveryPath === undefined) {
     return Promise.reject(new Error('Game is not discovered'));
   }
+  let isEngineInject;
   try {
     gameVersion = await getGameVersion(discoveryPath);
     minModVersion = await getMinModVersion(discoveryPath);
     try {
       const relPath = files.find(f => path.basename(f).toLowerCase() === MOD_MANIFEST);
+      isEngineInject = path.dirname(relPath).startsWith('BladeAndSorcery_Data');
       // just validating if the name is valid
       await getModName(path.join(destinationPath, relPath), 'Name');
     } catch (err) {
@@ -76,7 +78,7 @@ async function installOfficialMod(files,
     getModName(path.join(destinationPath, manifestFile), 'Name', undefined)
       .then(async manifestModName => {
         const isUsedModName = usedModNames.find(modName => modName === manifestModName) !== undefined;
-        const idx = manifestFile.indexOf(path.basename(manifestFile));
+        const idx = isEngineInject ? manifestFile.indexOf('BladeAndSorcery_Data') : manifestFile.indexOf(path.basename(manifestFile));
         const rootPath = path.dirname(manifestFile);
         const modName = (isUsedModName)
           ? path.basename(rootPath)
@@ -85,15 +87,15 @@ async function installOfficialMod(files,
         usedModNames.push(modName);
 
 
-        // Remove directories and anything that isn't in the rootPath.
+        // Remove directories and anything that isn't in the rootPath (unless mod type engine inject).
         const filtered = files.filter(file =>
-          ((file.indexOf(rootPath) !== -1) && (!file.endsWith(path.sep))));
+          (((file.indexOf(rootPath) !== -1) || isEngineInject) && (!file.endsWith(path.sep))));
 
         const instructions = filtered.map(file => {
           return {
             type: 'copy',
             source: file,
-            destination: path.join(modName, file.substr(idx)),
+            destination: isEngineInject ? file.substr(idx) : path.join(modName, file.substr(idx)),
           };
         });
 
@@ -120,7 +122,7 @@ async function installOfficialMod(files,
 
         const modTypeInstr = {
           type: 'setmodtype',
-          value: semver.gte(semver.coerce(gameVersion), semver.coerce('8.4'))
+          value: isEngineInject ? 'dinput' : semver.gte(semver.coerce(gameVersion), semver.coerce('8.4'))
             ? 'bas-official-modtype'
             : 'bas-legacy-modtype'
         }
