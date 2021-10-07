@@ -286,7 +286,9 @@ async function preSort(context, items, direction, refreshType) {
     return Promise.resolve(items.map(item => toDisplayItem(item.name, item.id)));
   }
 
-  const managedMods = await getDeployedManaged(context, targetModType);
+  const managedModsTarget = await getDeployedManaged(context, targetModType);
+  const managedModsDinput = await getDeployedManaged(context, 'dinput');
+  const managedMods = [].concat(managedModsTarget, managedModsDinput);
   const managedItems = managedMods.map(item => toDisplayItem(item.modName, item.modId))
   const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
   const loKeys = Object.keys(loadOrder).sort((a, b) => loadOrder[a].pos - loadOrder[b].pos);
