@@ -1,5 +1,4 @@
 import crypto from 'crypto';
-import { app, remote } from 'electron';
 import path from 'path';
 import { fs, util } from 'vortex-api';
 export class MD5ComparisonError extends Error {
@@ -104,9 +103,8 @@ export function getHash(filePath, tries = 3) {
     });
 }
 
-export const UNIAPP = app || remote.app;
 export function getLoadOrderFilePath() {
-  return path.join(UNIAPP.getPath('documents'), 'The Witcher 3', LOAD_ORDER_FILENAME);
+  return path.join(util.getVortexPath('documents'), 'The Witcher 3', LOAD_ORDER_FILENAME);
 }
 
 export function getPriorityTypeBranch() {

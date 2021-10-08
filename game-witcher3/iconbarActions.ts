@@ -2,7 +2,7 @@ import path from 'path';
 import { actions, fs, selectors, types, util } from 'vortex-api';
 
 import { setPriorityType } from './actions';
-import { GAME_ID, getPriorityTypeBranch, I18N_NAMESPACE, LOCKED_PREFIX, UNIAPP } from './common';
+import { GAME_ID, getPriorityTypeBranch, I18N_NAMESPACE, LOCKED_PREFIX } from './common';
 import { PriorityManager, PriorityType } from './priorityManager';
 
 import PriorityTypeButton from './views/PriorityTypeButton';
@@ -38,7 +38,7 @@ function resetPriorities(props: IProps) {
 export const registerActions = (props: IProps) => {
   const { context, refreshFunc, getPriorityManager } = props;
   const openTW3DocPath = () => {
-    const docPath = path.join(UNIAPP.getPath('documents'), 'The Witcher 3');
+    const docPath = path.join(util.getVortexPath('documents'), 'The Witcher 3');
     util.opn(docPath).catch(() => null);
   };
 

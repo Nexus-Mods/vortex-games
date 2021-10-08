@@ -1,5 +1,4 @@
 import Bluebird from 'bluebird';
-import { app, remote } from 'electron';
 import { Element } from 'libxmljs';
 import path from 'path';
 import semver from 'semver';
@@ -9,9 +8,8 @@ import { GAME_ID, LOCKED_MODULES, MODULES,
 import { ISubModCache } from './types';
 import { getElementValue, getXMLData, walkAsync } from './util';
 
-const APPUNI = app || remote.app;
 const XML_EL_MULTIPLAYER = 'MultiplayerModule';
-const LAUNCHER_DATA_PATH = path.join(APPUNI.getPath('documents'), 'Mount and Blade II Bannerlord', 'Configs', 'LauncherData.xml');
+const LAUNCHER_DATA_PATH = path.join(util.getVortexPath('documents'), 'Mount and Blade II Bannerlord', 'Configs', 'LauncherData.xml');
 const LAUNCHER_DATA = {
   singlePlayerSubMods: [],
   multiplayerSubMods: [],

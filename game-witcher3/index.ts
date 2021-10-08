@@ -17,7 +17,7 @@ import { downloadScriptMerger, getScriptMergerDir, setMergerConfig } from './scr
 import { DO_NOT_DEPLOY, DO_NOT_DISPLAY,
   GAME_ID, getLoadOrderFilePath, getPriorityTypeBranch, I18N_NAMESPACE, INPUT_XML_FILENAME,
   LOCKED_PREFIX, MERGE_INV_MANIFEST, PART_SUFFIX, ResourceInaccessibleError,
-  SCRIPT_MERGER_ID, UNI_PATCH, UNIAPP,
+  SCRIPT_MERGER_ID, UNI_PATCH,
 } from './common';
 
 import { registerActions } from './iconbarActions';
@@ -1155,7 +1155,7 @@ function main(context: types.IExtensionContext) {
   context.registerModType('witcher3menumodroot', 20,
     isTW3, getTLPath, toBlue(testMenuModRoot as any));
   context.registerModType('witcher3menumoddocuments', 60, isTW3,
-    (game) => path.join(UNIAPP.getPath('documents'), 'The Witcher 3'),
+    (game) => path.join(util.getVortexPath('documents'), 'The Witcher 3'),
     () => Bluebird.resolve(false));
 
   context.registerMerge(canMerge,
