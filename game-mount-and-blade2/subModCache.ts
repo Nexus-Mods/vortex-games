@@ -187,7 +187,21 @@ export async function parseLauncherData() {
       return accum;
     }, []);
   } catch (err) {
-    return Promise.reject(new util.DataInvalid(err.message));
+    // This is potentially due to the game not being installed correctly
+    //  or perhaps the users are using a 3rd party launcher which overwrites
+    //  the default launcher configuration... Lets just default to the data
+    //  we expect and let the user deal with whatever is broken later on
+    //  his environment later.
+    log('error', 'failed to parse launcher data', err);
+    LAUNCHER_DATA.singlePlayerSubMods = [
+      { subModId: 'Native', enabled: true },
+      { subModId: 'SandBoxCore', enabled: true },
+      { subModId: 'CustomBattle', enabled: true },
+      { subModId: 'Sandbox', enabled: true },
+      { subModId: 'StoryMode', enabled: true },
+    ];
+    LAUNCHER_DATA.multiplayerSubMods = [];
+    return Promise.resolve();
   }
 }
 
