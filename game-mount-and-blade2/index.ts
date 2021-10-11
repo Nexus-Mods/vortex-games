@@ -556,6 +556,7 @@ async function prepareForModding(context, discovery, metaManager: ComMetadataMan
         { subModId: 'StoryMode', enabled: true },
       ];
       LAUNCHER_DATA.multiplayerSubMods = [];
+      return Promise.resolve();
     }
   }).then(async () => {
     const deployedSubModules = await getDeployedSubModPaths(context);
