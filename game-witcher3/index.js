@@ -5,24 +5,32 @@ const { actions, fs, FlexLayout, log, selectors, util } = require('vortex-api');
 const { parseXmlString } = require('libxmljs');
 const { app, remote } = require('electron');
 
-const merger = require('./scriptmerger');
+const { downloadScriptMerger, setMergerConfig, getScriptMergerDir } = require('./scriptmerger');
 const menuMod = require('./menumod');
-const { GAME_ID, INPUT_XML_FILENAME, PART_SUFFIX } = require('./common');
+
+const { 
+  GAME_ID, INPUT_XML_FILENAME, DO_NOT_DISPLAY, getLoadOrderFilePath, getPriorityTypeBranch,
+  PART_SUFFIX, SCRIPT_MERGER_ID, MERGE_INV_MANIFEST, ResourceInaccessibleError, DO_NOT_DEPLOY,
+  UNIAPP, I18N_NAMESPACE,
+} = require('./common');
+
+const { PriorityManager } = require('./priorityManager');
+const { registerActions } = require('./iconbarActions');
+
+const { testSupportedMixed, installMixed } = require('./installers');
+
+const { storeToProfile, restoreFromProfile } = require('./mergeBackup');
+
+const { setPriorityType } = require('./actions');
+const { W3Reducer } = require('./reducers');
 
 const React = require('react');
 const BS = require('react-bootstrap');
 
 const IniParser = require('vortex-parse-ini');
 
-const appUni = app || remote.app;
-
-const SCRIPT_MERGER_ID = 'W3ScriptMerger';
-const I18N_NAMESPACE = 'game-witcher3';
-const MERGE_INV_MANIFEST = 'MergeInventory.xml';
-const LOAD_ORDER_FILENAME = 'mods.settings';
-
 const UNI_PATCH = 'mod0000____CompilationTrigger';
-const LOCKED_PREFIX = 'mod0000__';
+const LOCKED_PREFIX = 'mod0000_';
 
 const GOG_ID = '1207664663';
 const GOG_ID_GOTY = '1495134320';
@@ -45,16 +53,23 @@ const tools = [
   }
 ]
 
-function getLoadOrderFilePath() {
-  return path.join(appUni.getPath('documents'), 'The Witcher 3', LOAD_ORDER_FILENAME);
-}
-
 function writeToModSettings() {
   const filePath = getLoadOrderFilePath();
   const parser = new IniParser.default(new IniParser.WinapiFormat());
-  return fs.removeAsync(filePath).then(() => fs.writeFileAsync(filePath, '', { encoding:'utf8' }))
-    .then(() => parser.read(filePath)).then(ini => {
+  return fs.removeAsync(filePath)
+    .then(() => fs.writeFileAsync(filePath, '', { encoding:'utf8' }))
+    .then(() => parser.read(filePath))
+    .then(ini => {
       return Promise.each(Object.keys(_INI_STRUCT), (key) => {
+        if (_INI_STRUCT?.[key]?.Enabled === undefined) {
+          // It's possible for the user to run multiple operations at once,
+          //  causing the static ini structure to be modified
+          //  elsewhere while we're attempting to write to file. The user must've been
+          //  modifying the load order while deploying. This should
+          //  make sure we don't attempt to write any invalid mod entries.
+          //  https://github.com/Nexus-Mods/Vortex/issues/8437
+          return Promise.resolve();
+        }
         ini.data[key] = {
           Enabled: _INI_STRUCT[key].Enabled,
           Priority: _INI_STRUCT[key].Priority,
@@ -63,7 +78,10 @@ function writeToModSettings() {
         return Promise.resolve();
       })
       .then(() => parser.write(filePath, ini));
-    });
+    })
+    .catch(err => (err.path !== undefined && ['EPERM', 'EBUSY'].includes(err.code))
+      ? Promise.reject(new ResourceInaccessibleError(err.path))
+      : Promise.reject(err));
 }
 
 function createModSettings() {
@@ -198,16 +216,6 @@ function getElementValues(context, pattern) {
     .catch(err => (err.code === 'ENOENT') // No merge file? - no problem.
       ? Promise.resolve([])
       : Promise.reject(new util.DataInvalid(`Failed to parse ${MERGE_INV_MANIFEST}: ${err}`)))
-}
-
-function getUnificationPatch(context) {
-  const state = context.api.store.getState();
-  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID]);
-  const uniPatchPath = path.join(discovery.path, 'Mods', UNI_PATCH);
-  return fs.statAsync(uniPatchPath)
-    .then(() => Promise.resolve(UNI_PATCH))
-    .catch(() => Promise.resolve(undefined));
-
 }
 
 function getMergedModNames(context) {
@@ -484,13 +492,13 @@ function notifyMissingScriptMerger(api) {
 }
 
 function prepareForModding(context, discovery) {
-  const defaultWSMFilePath = path.join(discovery.path, 'WitcherScriptMerger', 'WitcherScriptMerger.exe');
-  const scriptMergerPath = util.getSafe(discovery, ['tools', SCRIPT_MERGER_ID, 'path'], defaultWSMFilePath);
-
   const findScriptMerger = (error) => {
     log('error', 'failed to download/install script merger', error);
-    return fs.statAsync(scriptMergerPath)
-      .catch(() => notifyMissingScriptMerger(context.api))
+    const scriptMergerPath = getScriptMergerDir(context);
+    if (scriptMergerPath === undefined) {
+      notifyMissingScriptMerger(context.api);
+      return Promise.resolve();
+    }
   };
 
   const ensurePath = (dirpath) =>
@@ -502,12 +510,8 @@ function prepareForModding(context, discovery) {
   return Promise.all([
     ensurePath(path.join(discovery.path, 'Mods')),
     ensurePath(path.join(discovery.path, 'DLC')),
-    ensurePath(path.dirname(scriptMergerPath))
-      .catch(err => (err.code === 'EINVAL') // The filepath is invalid, revert to default.
-        ? ensurePath(path.dirname(defaultWSMFilePath))
-        : Promise.reject(err)),
     ensurePath(path.dirname(getLoadOrderFilePath()))])
-      .then(() => merger.default(context)
+      .then(() => downloadScriptMerger(context)
         .catch(err => (err instanceof util.UserCanceled)
           ? Promise.resolve()
           : findScriptMerger(err)));
@@ -564,44 +568,7 @@ async function getAllMods(context) {
   });
 }
 
-let _MAX_PRIORITY = undefined;
-function getPriority(loadorder, item, minPriority, reset = false) {
-  const maxPriority = () => Object.keys(loadorder).reduce((prev, key) => {
-    const prefixVal = (loadorder[key]?.prefix !== undefined)
-      ? parseInt(loadorder[key].prefix) : loadorder[key].pos;
-    const posVal = loadorder[key].pos;
-    if (posVal !== prefixVal) {
-      prev = (prefixVal > prev)
-        ? prefixVal : prev;
-    } else {
-      prev = (posVal > prev)
-        ? posVal : prev;
-    }
-    return prev;
-  }, minPriority);
-
-  if (_MAX_PRIORITY === undefined || reset) {
-    _MAX_PRIORITY = maxPriority();
-  }
-
-  const itemKey = Object.keys(loadorder).find(x => x === item.id);
-  if (itemKey !== undefined) {
-    const prefixVal = (loadorder[itemKey]?.prefix !== undefined)
-      ? parseInt(loadorder[itemKey].prefix) : loadorder[itemKey].pos;
-    const posVal = loadorder[itemKey].pos;
-    if (posVal !== prefixVal && prefixVal > minPriority) {
-      return prefixVal;
-    } else {
-      return (posVal > minPriority)
-        ? posVal : _MAX_PRIORITY++;
-    }
-  }
-
-  _MAX_PRIORITY += 1;
-  return _MAX_PRIORITY;
-}
-
-async function setINIStruct(context, loadOrder, updateType) {
+async function setINIStruct(context, loadOrder, priorityManager) {
   return getAllMods(context).then(modMap => {
     _INI_STRUCT = {};
     const mods = [].concat(modMap.merged, modMap.managed, modMap.manual);
@@ -619,12 +586,15 @@ async function setINIStruct(context, loadOrder, updateType) {
       }
 
       const LOEntry = util.getSafe(loadOrder, [key], undefined);
+      if (idx === 0) {
+        priorityManager.resetMaxPriority();
+      }
       _INI_STRUCT[name] = {
         // The INI file's enabled attribute expects 1 or 0
         Enabled: (LOEntry !== undefined) ? LOEntry.enabled ? 1 : 0 : 1,
         Priority: totalLocked.includes(name)
           ? totalLocked.indexOf(name)
-          : getPriority(loadOrder, { id: key }, totalLocked.length, idx === 0),
+          : priorityManager.getPriority({ id: key }),
         VK: key,
       };
     });
@@ -633,7 +603,7 @@ async function setINIStruct(context, loadOrder, updateType) {
 
 let refreshFunc;
 // item: ILoadOrderDisplayItem
-function genEntryActions (context, item, minPriority) {
+function genEntryActions (context, item, minPriority, onSetPriority) {
   const priorityInputDialog = () => {
     return new Promise((resolve) => {
       context.api.showDialog('question', 'Set New Priority', {
@@ -656,7 +626,7 @@ function genEntryActions (context, item, minPriority) {
           }
           if (itemKey !== undefined) {
             _INI_STRUCT[itemKey].Priority = parseInt(wantedPriority);
-
+            onSetPriority(itemKey, wantedPriority);
           } else {
             log('error', 'Failed to set priority - mod is not in ini struct', { modId: item.id });
           }
@@ -670,37 +640,16 @@ function genEntryActions (context, item, minPriority) {
       show: item.locked !== true,
       title: 'Set Manual Priority',
       action: () => priorityInputDialog()
-        .then(() => writeToModSettings())
-        .then(() => {
-          const itemKey = Object.keys(_INI_STRUCT).find(key => _INI_STRUCT[key].VK === item.id);
-          if (itemKey === undefined) {
-            return Promise.resolve();
-          }
-          const state = context.api.store.getState();
-          const activeProfile = selectors.activeProfile(state);
-          const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
-          const loKey = Object.keys(loadOrder).find(key => key === item.id);
-          if (loKey !== undefined) {
-            const loEntry = loadOrder[loKey];
-            context.api.store.dispatch(actions.setLoadOrderEntry(
-              activeProfile.id, item.id, {
-                ...loEntry,
-                prefix: parseInt(_INI_STRUCT[itemKey].Priority),
-            }));
-            if (refreshFunc !== undefined) {
-              refreshFunc();
-            }
-          }
-        }),
     },
   ];
 
   return itemActions;
 }
 
-async function preSort(context, items, direction, updateType) {
+async function preSort(context, items, direction, updateType, priorityManager) {
   const state = context.api.store.getState();
   const activeProfile = selectors.activeProfile(state);
+  const { getPriority, resetMaxPriority } = priorityManager;
   if (activeProfile?.id === undefined) {
     // What an odd use case - perhaps the user had switched gameModes or
     //  even deleted his profile during the pre-sort functionality ?
@@ -709,38 +658,87 @@ async function preSort(context, items, direction, updateType) {
     return Promise.resolve([]);
   }
 
-  const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
+  let loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
+  const onSetPriority = (itemKey, wantedPriority) => {
+    return writeToModSettings()
+      .then(() => {
+        wantedPriority = +wantedPriority;
+        const state = context.api.store.getState();
+        const activeProfile = selectors.activeProfile(state);
+        const modId = _INI_STRUCT[itemKey].VK;
+        const loEntry = loadOrder[modId];
+        if (priorityManager.priorityType === 'position-based') {
+          context.api.store.dispatch(actions.setLoadOrderEntry(
+            activeProfile.id, modId, {
+              ...loEntry,
+              pos: (loEntry.pos < wantedPriority) ? wantedPriority : wantedPriority - 2,
+          }));
+          loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
+        } else {
+          context.api.store.dispatch(actions.setLoadOrderEntry(
+            activeProfile.id, modId, {
+              ...loEntry,
+              prefix: parseInt(_INI_STRUCT[itemKey].Priority, 10),
+          }));
+        }
+        if (refreshFunc !== undefined) {
+          refreshFunc();
+        }
+      })
+      .catch(err => modSettingsErrorHandler(context, err,
+        'Failed to modify load order file'));
+  };
   const allMods = await getAllMods(context);
   if ((allMods.merged.length === 0) && (allMods.manual.length === 0)) {
     items.map((item, idx) => {
+      if (idx === 0) {
+        resetMaxPriority();
+      }
       return {
         ...item,
-        contextMenuActions: genEntryActions(context, item, 0),
-        prefix: getPriority(loadOrder, item, 0, idx === 0),
+        contextMenuActions: genEntryActions(context, item, 0, onSetPriority),
+        prefix: getPriority(item),
       };
-    })
+    });
   }
 
-  const lockedManualMods = allMods.manual.filter(entry => entry.startsWith(LOCKED_PREFIX));
+  const filterFunc = (modName) => modName.startsWith(LOCKED_PREFIX);
+  const lockedMods = [].concat(allMods.manual.filter(filterFunc),
+    allMods.managed.filter(entry => filterFunc(entry.name))
+                   .map(entry => entry.name));
   const readableNames = {
-    'mod0000____CompilationTrigger': 'Unification/Community Patch',
+    [UNI_PATCH]: 'Unification/Community Patch',
   };
 
-  const lockedEntries = [].concat(allMods.merged, lockedManualMods)
-    .map((modName, idx) => ({
-      id: modName,
-      name: !!readableNames[modName] ? readableNames[modName] : modName,
-      imgUrl: `${__dirname}/gameart.jpg`,
-      locked: true,
-      prefix: idx + 1,
-  }));
+  const lockedEntries = [].concat(allMods.merged, lockedMods)
+    .reduce((accum, modName, idx) => {
+      const obj = {
+        id: modName,
+        name: !!readableNames[modName] ? readableNames[modName] : modName,
+        imgUrl: `${__dirname}/gameart.jpg`,
+        locked: true,
+        prefix: idx + 1,
+      };
+
+      if (!accum.find(acc => obj.id === acc.id)) {
+        accum.push(obj);
+      }
+
+      return accum;
+    }, []);
 
   items = items.filter(item => !allMods.merged.includes(item.id)
-                            && !allMods.manual.includes(item.id)).map((item, idx) => {
+                            && !allMods.manual.includes(item.id)
+                            && !allMods.managed.find(mod =>
+                                  (mod.name === UNI_PATCH) && (mod.id === item.id)))
+               .map((item, idx) => {
+    if (idx === 0) {
+      resetMaxPriority();
+    }
     return {
       ...item,
-      contextMenuActions: genEntryActions(context, item, lockedEntries.length),
-      prefix: getPriority(loadOrder, item, lockedEntries.length, idx === 0),
+      contextMenuActions: genEntryActions(context, item, lockedEntries.length, onSetPriority),
+      prefix: getPriority(item),
     };
   });
 
@@ -752,12 +750,12 @@ async function preSort(context, items, direction, updateType) {
         name: key,
         imgUrl: `${__dirname}/gameart.jpg`,
         external: true,
-      }
+      };
       return {
         ...item,
-        prefix: getPriority(loadOrder, item, lockedEntries.length),
-        contextMenuActions: genEntryActions(context, item, lockedEntries.length),
-      }
+        prefix: getPriority(item),
+        contextMenuActions: genEntryActions(context, item, lockedEntries.length, onSetPriority),
+      };
   });
 
   const keys = Object.keys(loadOrder);
@@ -765,7 +763,7 @@ async function preSort(context, items, direction, updateType) {
   const unknownManuallyAdded = manualEntries.filter(entry => !keys.includes(entry.id)) || [];
   const filteredOrder = keys
     .filter(key => lockedEntries.find(item => item.id === key) === undefined)
-    .reduce((accum,key) => {
+    .reduce((accum, key) => {
       accum[key] = loadOrder[key];
       return accum;
     }, []);
@@ -776,18 +774,26 @@ async function preSort(context, items, direction, updateType) {
     items = [].concat(items.slice(0, pos) || [], known, items.slice(pos) || []);
   });
 
-  let preSorted = [].concat(...lockedEntries, items, ...unknownManuallyAdded);
+  let preSorted = [].concat(
+    ...lockedEntries,
+    items.filter(item => {
+      const isLocked = lockedEntries.find(locked => locked.name === item.name) !== undefined;
+      const doNotDisplay = DO_NOT_DISPLAY.includes(item.name.toLowerCase());
+      return !isLocked && !doNotDisplay;
+    }),
+    ...unknownManuallyAdded);
+
   preSorted = (updateType !== 'drag-n-drop')
     ? preSorted.sort((lhs, rhs) => lhs.prefix - rhs.prefix)
     : preSorted.reduce((accum, entry, idx) => {
         if (lockedEntries.indexOf(entry) !== -1 || idx === 0) {
           accum.push(entry);
         } else {
-          const prevPrefix = parseInt(accum[idx - 1].prefix);
+          const prevPrefix = parseInt(accum[idx - 1].prefix, 10);
           if (prevPrefix >= entry.prefix) {
             accum.push({
               ...entry,
-              prefix: prevPrefix + 1
+              prefix: prevPrefix + 1,
             });
           } else {
             accum.push(entry);
@@ -795,9 +801,7 @@ async function preSort(context, items, direction, updateType) {
         }
         return accum;
       }, []);
-  return (direction === 'descending')
-    ? Promise.resolve(preSorted.reverse())
-    : Promise.resolve(preSorted);
+  return Promise.resolve(preSorted);
 }
 
 function findModFolder(installationPath, mod) {
@@ -808,9 +812,9 @@ function findModFolder(installationPath, mod) {
     return Promise.reject(new Error(errMessage));
   }
 
-  const expectedModNameLocation = (mod.type !== 'witcher3menumodroot')
-    ? path.join(installationPath, mod.installationPath)
-    : path.join(installationPath, mod.installationPath, 'Mods');
+  const expectedModNameLocation = ['witcher3menumodroot', 'witcher3tl'].includes(mod.type)
+    ? path.join(installationPath, mod.installationPath, 'Mods')
+    : path.join(installationPath, mod.installationPath);
   return fs.readdirAsync(expectedModNameLocation)
     .then(entries => Promise.resolve(entries[0]));
 }
@@ -832,7 +836,9 @@ function getManagedModNames(context, mods) {
       return Promise.resolve(accum);
     })
     .catch(err => {
-      log('error', 'unable to resolve mod name', err);
+      // Some geniuses distribute the mod configuration data
+      //  separately from the mod it's supposed to configure.
+      log('warn', 'unable to resolve mod name', err);
       return Promise.resolve(accum);
     }), []);
 }
@@ -861,7 +867,7 @@ const toggleModsState = async (context, props, enabled) => {
 
 function infoComponent(context, props) {
   const t = context.api.translate;
-  return React.createElement(BS.Panel, { id: 'loadorderinfo' },
+  return React.createElement(BS.Panel, { id: 'loadorderinfo', style: { display: 'block' } },
     React.createElement('h2', {}, t('Managing your load order', { ns: I18N_NAMESPACE })),
     React.createElement(FlexLayout.Flex, { style: { height: '30%' } },
     React.createElement('div', {},
@@ -879,6 +885,9 @@ function infoComponent(context, props) {
         React.createElement('li', {}, t('If you cannot see your mod in this load order, you may need to add it manually (see our wiki for details).', { ns: I18N_NAMESPACE })),
         React.createElement('li', {}, t('When managing menu mods, mod settings changed inside the game will be detected by Vortex as external changes - that is expected, '
           + 'choose to use the newer file and your settings will be made persistent.', { ns: I18N_NAMESPACE })),
+        React.createElement('li', {}, t('You can change the way the priorities are assgined using the "Switch To Position/Prefix based" button. '
+          + 'Prefix based is less restrictive and allows you to set any priority value you want "5000, 69999, etc" while position based will '
+          + 'restrict the priorities to the number of load order entries that are available.', { ns: I18N_NAMESPACE })),
         React.createElement('li', {}, t('Merges generated by the Witcher 3 Script merger must be loaded first and are locked in the first load order slot.', { ns: I18N_NAMESPACE }))),
         React.createElement(BS.Button, {
           onClick: () => toggleModsState(context, props, false),
@@ -960,7 +969,7 @@ function readInputFile(context, mergeDir) {
     : Promise.reject({ code: 'ENOENT', message: 'Game is not discovered' })
 }
 
-const emptyXml = '<?xml version="1.0" ?><metadata></metadata>';
+const emptyXml = '<?xml version="1.0" encoding="UTF-8"?><metadata></metadata>';
 function merge(filePath, mergeDir, context) {
   let modData;
   return fs.readFileAsync(filePath)
@@ -1058,7 +1067,7 @@ function merge(filePath, mergeDir, context) {
       });
 
       return fs.writeFileAsync(path.join(mergeDir, CONFIG_MATRIX_REL_PATH, INPUT_XML_FILENAME),
-        gameIndexFile, { encoding: 'utf16le' });
+        gameIndexFile);
     })
     .catch(err => {
       log('error', 'input.xml merge failed', err);
@@ -1074,6 +1083,22 @@ function scriptMergerTest(files, gameId) {
   return Promise.resolve({ supported, requiredFiles: SCRIPT_MERGER_FILES });
 }
 
+function modSettingsErrorHandler(context, err, errMessage) {
+  let allowReport = true;
+  const userCanceled = err instanceof util.UserCanceled;
+  if (userCanceled) {
+    allowReport = false;
+  }
+  const busyResource = err instanceof ResourceInaccessibleError;
+  if (allowReport && busyResource) {
+    allowReport = err.allowReport;
+    err.message = err.errorMessage;
+  }
+
+  context.api.showErrorNotification(errMessage, err, { allowReport });
+  return;
+}
+
 function scriptMergerDummyInstaller(context, files) {
   context.api.showErrorNotification('Invalid Mod', 'It looks like you tried to install '
     + 'The Witcher 3 Script Merger, which is a tool and not a mod for The Witcher 3.\n\n'
@@ -1087,6 +1112,8 @@ function scriptMergerDummyInstaller(context, files) {
 }
 
 function main(context) {
+  context.registerReducer(['settings', 'witcher3'], W3Reducer);
+  let priorityManager = undefined;
   context.registerGame({
     id: GAME_ID,
     name: 'The Witcher 3',
@@ -1106,6 +1133,8 @@ function main(context) {
     },
     details: {
       steamAppId: 292030,
+      ignoreConflicts: DO_NOT_DEPLOY,
+      ignoreDeploy: DO_NOT_DEPLOY,
     }
   });
 
@@ -1121,61 +1150,38 @@ function main(context) {
     return discovery.path;
   };
 
+  const isTW3 = (gameId = undefined) => {
+    if (gameId !== undefined) {
+      return (gameId === GAME_ID);
+    }
+    const state = context.api.getState();
+    const gameMode = selectors.activeGameId(state);
+    return (gameMode === GAME_ID);
+  }
+
   context.registerInstaller('witcher3tl', 25, testSupportedTL, installTL);
+  context.registerInstaller('witcher3mixed', 30, testSupportedMixed, installMixed);
   context.registerInstaller('witcher3content', 50, testSupportedContent, installContent);
   context.registerInstaller('witcher3menumodroot', 20, testMenuModRoot, installMenuMod);
   context.registerInstaller('scriptmergerdummy', 15, scriptMergerTest, (files) => scriptMergerDummyInstaller(context, files));
 
-  context.registerModType('witcher3tl', 25, gameId => gameId === 'witcher3', getTLPath, testTL);
-  context.registerModType('witcher3dlc', 25, gameId => gameId === 'witcher3', getDLCPath, testDLC);
-  context.registerModType('witcher3menumodroot', 20, gameId => gameId === 'witcher3', getTLPath, testMenuModRoot);
-  context.registerModType('witcher3menumoddocuments', 60, gameId => gameId === 'witcher3',
-    (game) => path.join(appUni.getPath('documents'), 'The Witcher 3'), () => Promise.resolve(false));
+  context.registerModType('witcher3tl', 25, isTW3, getTLPath, testTL);
+  context.registerModType('witcher3dlc', 25, isTW3, getDLCPath, testDLC);
+  context.registerModType('witcher3menumodroot', 20, isTW3, getTLPath, testMenuModRoot);
+  context.registerModType('witcher3menumoddocuments', 60, isTW3,
+    (game) => path.join(UNIAPP.getPath('documents'), 'The Witcher 3'), () => Promise.resolve(false));
 
   context.registerMerge(canMerge,
     (filePath, mergeDir) => merge(filePath, mergeDir, context), 'witcher3menumodroot');
 
-  context.registerAction('mod-icons', 300, 'open-ext', {},
-                         'Open TW3 Documents Folder', () => {
-    const docPath = path.join(appUni.getPath('documents'), 'The Witcher 3');
-    util.opn(docPath).catch(() => null);
-  }, () => {
-    const state = context.api.getState();
-    const gameMode = selectors.activeGameId(state);
-    return (gameMode === GAME_ID);
-  })
+  registerActions({ context, refreshFunc, getPriorityManager: () => priorityManager });
 
-  context.registerAction('generic-load-order-icons', 100, 'loot-sort', {}, 'Reset Priorities',
+  context.registerProfileFeature(
+    'local_merges', 'boolean', 'settings', 'Profile Data',
+    'This profile will store and restore profile specific data (merged scripts, loadorder, etc) when switching profiles',
     () => {
-      context.api.showDialog('info', 'Reset Priorities', {
-        bbcode: context.api.translate('This action will revert all manually set priorities and will re-instate priorities in an incremental ' 
-          + 'manner starting from 1. Are you sure you want to do this ?', { ns: I18N_NAMESPACE }),
-      }, [
-        { label: 'No', action: () => {
-          return;
-        }},
-        { label: 'Yes', action: () => {
-          const state = context.api.store.getState();
-          const profile = selectors.activeProfile(state);
-          const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], {});
-          const newLO = Object.keys(loadOrder).reduce((accum, key) => {
-            const loEntry = loadOrder[key];
-            accum[key] = {
-              ...loEntry,
-              prefix: loEntry.pos + 1,
-            }
-            return accum;
-          }, {});
-          context.api.store.dispatch(actions.setLoadOrder(profile.id, newLO));
-          if (refreshFunc !== undefined) {
-            refreshFunc();
-          }
-        }},
-      ]);
-    }, () => {
-      const state = context.api.store.getState();
-      const gameMode = selectors.activeGameId(state);
-      return gameMode === GAME_ID;
+      const activeGameId = selectors.activeGameId(context.api.getState());
+      return activeGameId === GAME_ID;
     });
 
   const invalidModTypes = ['witcher3menumoddocuments'];
@@ -1187,7 +1193,7 @@ function main(context) {
     },
     gameArtURL: `${__dirname}/gameart.jpg`,
     filter: (mods) => mods.filter(mod => !invalidModTypes.includes(mod.type)),
-    preSort: (items, direction, updateType) => preSort(context, items, direction, updateType),
+    preSort: (items, direction, updateType) => preSort(context, items, direction, updateType, priorityManager),
     callback: (loadOrder, updateType) => {
       if (loadOrder === _PREVIOUS_LO) {
         return;
@@ -1197,15 +1203,10 @@ function main(context) {
         context.api.store.dispatch(actions.setDeploymentNecessary(GAME_ID, true));
       }
       _PREVIOUS_LO = loadOrder;
-
-      setINIStruct(context, loadOrder, updateType)
+      setINIStruct(context, loadOrder, priorityManager)
         .then(() => writeToModSettings())
-        .catch(err => {
-          const userCanceled = err instanceof util.UserCanceled;
-          context.api.showErrorNotification('Failed to modify load order file', err,
-           { allowReport: !userCanceled });
-          return;
-        });
+        .catch(err => modSettingsErrorHandler(context, err,
+          'Failed to modify load order file'));
     },
   });
 
@@ -1231,11 +1232,8 @@ function main(context) {
               (!!refreshFunc) ? refreshFunc() : null;
               return Promise.resolve();
             })
-            .catch(err => {
-              const userCanceled = err instanceof util.UserCanceled;
-              context.api.showErrorNotification('Failed to cleanup load order file', err,
-                { allowReport: !userCanceled })
-            });
+            .catch(err => modSettingsErrorHandler(context, err,
+              'Failed to cleanup load order file'));
         } else {
           const filePath = getLoadOrderFilePath();
           fs.removeAsync(filePath)
@@ -1263,11 +1261,26 @@ function main(context) {
 
   let prevDeployment = [];
   context.once(() => {
-    context.api.events.on('gamemode-activated', (gameMode) => {
+    priorityManager = new PriorityManager(context.api, 'prefix-based');
+    context.api.events.on('gamemode-activated', async (gameMode) => {
       if (gameMode !== GAME_ID) {
         // Just in case the script merger notification is still
         //  present.
         context.api.dismissNotification('witcher3-merge');
+      } else {
+        const state = context.api.getState();
+        const lastProfId = selectors.lastActiveProfileForGame(state, gameMode);
+        const activeProf = selectors.activeProfile(state);
+        const priorityType = util.getSafe(state, getPriorityTypeBranch(), 'prefix-based');
+        context.api.store.dispatch(setPriorityType(priorityType));
+        if (lastProfId !== activeProf?.id) {
+          try {
+            await storeToProfile(context, lastProfId)
+              .then(() => restoreFromProfile(context, activeProf?.id));
+          } catch (err) {
+            context.api.showErrorNotification('Failed to restore profile merged files', err);
+          }
+        }
       }
     });
     context.api.onAsync('will-deploy', (profileId, deployment) => {
@@ -1277,9 +1290,12 @@ function main(context) {
         return Promise.resolve();
       }
 
-      return menuMod.onWillDeploy(context.api, deployment, activeProfile);
+      return menuMod.onWillDeploy(context.api, deployment, activeProfile)
+        .catch(err => (err instanceof util.UserCanceled)
+          ? Promise.resolve()
+          : Promise.reject(err));
     });
-    context.api.onAsync('did-deploy', (profileId, deployment) => {
+    context.api.onAsync('did-deploy', async (profileId, deployment) => {
       const state = context.api.store.getState();
       const activeProfile = validateProfile(profileId, state);
       if (activeProfile === undefined) {
@@ -1317,22 +1333,45 @@ function main(context) {
 
       prevLoadOrder = loadOrder;
       return menuModPromise()
-        .then(() => setINIStruct(context, loadOrder))
+        .then(() => setINIStruct(context, loadOrder, priorityManager))
         .then(() => writeToModSettings())
         .then(() => {
           (!!refreshFunc) ? refreshFunc() : null;
           return Promise.resolve();
         })
-        .catch(err => {
-          const userCanceled = err instanceof util.UserCanceled;
-          context.api.showErrorNotification('Failed to modify load order file', err,
-           { allowReport: !userCanceled });
-          return Promise.resolve();
-        });
+        .catch(err => modSettingsErrorHandler(context, err,
+          'Failed to modify load order file'));
     });
-    context.api.events.on('profile-will-change', (newProfileId) => {
-      revertLOFile(context);
+    context.api.events.on('profile-will-change', async (newProfileId) => {
+      const state = context.api.getState();
+      const profile = selectors.profileById(state, newProfileId);
+      if (profile?.gameId !== GAME_ID) {
+        return;
+      }
+
+      const priorityType = util.getSafe(state, getPriorityTypeBranch(), 'prefix-based');
+      context.api.store.dispatch(setPriorityType(priorityType));
+
+      const lastProfId = selectors.lastActiveProfileForGame(state, profile.gameId);
+      try {
+        await storeToProfile(context, lastProfId)
+          .then(() => restoreFromProfile(context, profile.id));
+      } catch (err) {
+        context.api.showErrorNotification('Failed to store profile specific merged items', err);
+      }
     });
+
+    context.api.onStateChange(['settings', 'witcher3'], (prev, current) => {
+      const state = context.api.getState();
+      const activeProfile = selectors.activeProfile(state);
+      if (activeProfile?.gameId !== GAME_ID || priorityManager === undefined) {
+        return;
+      }
+
+      const priorityType = util.getSafe(state, getPriorityTypeBranch(), 'prefix-based');
+      priorityManager.priorityType = priorityType;
+    });
+
     context.api.events.on('purge-mods', () => {
       revertLOFile(context);
     });

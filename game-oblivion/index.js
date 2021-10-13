@@ -1,7 +1,9 @@
 const Promise = require('bluebird');
+const path = require('path');
 const { util } = require('vortex-api');
 const winapi = require('winapi-bindings');
 
+const MS_ID = 'BethesdaSoftworks.TESOblivion-PC';
 function findGame() {
   try {
     const instPath = winapi.RegGetValue(
@@ -14,7 +16,13 @@ function findGame() {
     return Promise.resolve(instPath.value);
   } catch (err) {
     return util.steam.findByName('The Elder Scrolls IV: Oblivion')
-      .then(game => game.gamePath);
+      .catch(err => util.GameStoreHelper.findByAppId([MS_ID], 'xbox'))
+      .then(game => (game.gameStoreId === 'xbox')
+        // The xbox pass variant has a different file structure; we're naively
+        //  assuming that all XBOX copies (regardless of locale) will contain
+        //  the English variant as well (fingers crossed)
+        ? path.join(game.gamePath, 'Oblivion GOTY English')
+        : game.gamePath);
   }
 }
 
@@ -50,6 +58,20 @@ let tools = [
   },
 ];
 
+function requiresLauncher(gamePath) {
+  return util.GameStoreHelper.findByAppId([MS_ID], 'xbox')
+    .then(() => Promise.resolve({
+      launcher: 'xbox',
+      addInfo: {
+        appId: MS_ID,
+        parameters: [
+          { appExecName: 'Game' },
+        ],
+      }
+    }))
+    .catch(err => Promise.resolve(undefined));
+}
+
 function main(context) {
   context.registerGame({
     id: 'oblivion',
@@ -63,6 +85,7 @@ function main(context) {
     requiredFiles: [
       'oblivion.exe',
     ],
+    requiresLauncher,
     environment: {
       SteamAPPId: '22330',
     },

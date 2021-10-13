@@ -92,7 +92,7 @@ function main(context) {
       const state = context.api.store.getState();
       const profile = selectors.profileById(state, profileId);
 
-      if (GAME_ID !== profile.gameId) {
+      if (GAME_ID !== profile?.gameId) {
         return Promise.resolve();
       }
 

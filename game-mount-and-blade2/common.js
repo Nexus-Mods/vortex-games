@@ -1,10 +1,6 @@
-const GAME_ID = 'mountandblade2bannerlord';
-
-// Bannerlord mods have this file in their root.
-//  Casing is actually "SubModule.xml"
-const SUBMOD_FILE = "submodule.xml";
-
-module.exports = {
-  GAME_ID,
-  SUBMOD_FILE,
-}
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SUBMOD_FILE = exports.GAME_ID = void 0;
+exports.GAME_ID = 'mountandblade2bannerlord';
+exports.SUBMOD_FILE = 'submodule.xml';
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiY29tbW9uLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiY29tbW9uLnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiI7OztBQUFhLFFBQUEsT0FBTyxHQUFHLDBCQUEwQixDQUFDO0FBSXJDLFFBQUEsV0FBVyxHQUFHLGVBQWUsQ0FBQyIsInNvdXJjZXNDb250ZW50IjpbImV4cG9ydCBjb25zdCBHQU1FX0lEID0gJ21vdW50YW5kYmxhZGUyYmFubmVybG9yZCc7XHJcblxyXG4vLyBCYW5uZXJsb3JkIG1vZHMgaGF2ZSB0aGlzIGZpbGUgaW4gdGhlaXIgcm9vdC5cclxuLy8gIENhc2luZyBpcyBhY3R1YWxseSBcIlN1Yk1vZHVsZS54bWxcIlxyXG5leHBvcnQgY29uc3QgU1VCTU9EX0ZJTEUgPSAnc3VibW9kdWxlLnhtbCc7XHJcbiJdfQ==

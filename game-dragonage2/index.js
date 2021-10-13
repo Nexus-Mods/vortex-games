@@ -1,10 +1,11 @@
 const { app, remote } = require('electron');
 const path = require('path');
-const { fs } = require('vortex-api');
+const { fs, util } = require('vortex-api');
 const winapi = require('winapi-bindings');
 
 const appUni = app || remote.app;
 
+const STEAM_IDS = ['15543', '1238040'];
 function regget(key, val) {
   try {
     const instPath = winapi.RegGetValue(
@@ -26,7 +27,9 @@ function findGame() {
   //  in different registry paths (possibly tied to game edition or localisation),
   //  namely within HKLM...\Dragon Age 2\Install Dir; OR HKLM...\Dragon Age II\Install Dir;
   //  we're going to test both.
-  return regget('Software\\Wow6432Node\\BioWare\\Dragon Age 2', 'Install Dir')
+  return util.GameStoreHelper.findByAppId(STEAM_IDS)
+    .then(game => game.gamePath)
+    .catch(() => regget('Software\\Wow6432Node\\BioWare\\Dragon Age 2', 'Install Dir'))
     .catch(() => regget('Software\\Wow6432Node\\BioWare\\Dragon Age II', 'Install Dir'));
 }
 

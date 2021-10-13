@@ -8,7 +8,8 @@ const appUni = app || remote.app;
 // Nexus Mods id for the game.
 const GAME_ID = 'torchlight2';
 
-const STEAM_ID = 200710;
+const STEAM_ID = '200710';
+const GOG_ID = '1958228073';
 
 const MOD_EXT = '.mod';
 
@@ -30,7 +31,7 @@ function findGame() {
     }
     return Promise.resolve(instPath.value);
   } catch (err) {
-    return util.steam.findByAppId(STEAM_ID.toString())
+    return util.GameStoreHelper.findByAppId([STEAM_ID, GOG_ID])
       .then(game => game.gamePath);
   }
 }
@@ -99,10 +100,10 @@ function main(context) {
     ],
     setup: prepareForModding,
     environment: {
-      SteamAPPId: STEAM_ID.toString(),
+      SteamAPPId: STEAM_ID,
     },
     details: {
-      steamAppId: STEAM_ID,
+      steamAppId: +STEAM_ID,
     },
   });
 

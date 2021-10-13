@@ -1,6 +1,6 @@
 {
-  "name": "Game: XCOM 2",
-  "author": "Black Tree Gaming Ltd.",
-  "version": "1.0.0",
-  "description": "Support for XCOM 2"
-}
+    "name": "Game: XCOM 2",
+    "author": "Black Tree Gaming Ltd.",
+    "version": "1.1.1",
+    "description": "Support for XCOM 2 and XCOM 2: War of the Chosen"
+  }

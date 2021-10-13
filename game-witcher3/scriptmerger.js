@@ -2,6 +2,7 @@ const https = require('https');
 const path = require('path');
 const _ = require('lodash');
 const url = require('url');
+const { Builder, parseStringPromise } = require('xml2js');
 const semver = require('semver');
 const getVersion = require('exe-version').default;
 const { actions, fs, log, util } = require('vortex-api');
@@ -9,9 +10,10 @@ const { actions, fs, log, util } = require('vortex-api');
 const RELEASE_CUTOFF = '0.6.5';
 const GITHUB_URL = 'https://api.github.com/repos/IDCs/WitcherScriptMerger';
 const MERGER_RELPATH = 'WitcherScriptMerger';
-const MERGER_ID = 'W3ScriptMerger';
 
-const { getHash, MD5ComparisonError } = require('./common');
+const MERGER_CONFIG_FILE = 'WitcherScriptMerger.exe.config';
+
+const { getHash, MD5ComparisonError, SCRIPT_MERGER_ID } = require('./common');
 
 function query(baseUrl, request) {
   return new Promise((resolve, reject) => {
@@ -90,18 +92,17 @@ async function getMergerVersion(context) {
     return Promise.resolve(undefined);
   }
 
-  if (merger?.mergerVersion !== undefined) {
-    return Promise.resolve(merger.mergerVersion);
-  }
-
   if (!!merger?.path) {
     return fs.statAsync(merger.path)
       .then(() => {
+        if (merger?.mergerVersion !== undefined) {
+          return Promise.resolve(merger.mergerVersion);
+        }
         const execVersion = getVersion(merger.path);
         if (!!execVersion) {
           const trimmedVersion = execVersion.split('.').slice(0, 3).join('.');
           const newToolDetails = { ...merger, mergerVersion: trimmedVersion };
-          context.api.store.dispatch(actions.addDiscoveredTool('witcher3', MERGER_ID, newToolDetails, true));
+          context.api.store.dispatch(actions.addDiscoveredTool('witcher3', SCRIPT_MERGER_ID, newToolDetails, true));
           return Promise.resolve(trimmedVersion);
         }
       })
@@ -165,6 +166,28 @@ async function onDownloadComplete(context, archivePath, mostRecentVersion) {
     return Promise.resolve(mergerPath);
   })
   .then((mergerPath) => setUpMerger(context, mostRecentVersion, mergerPath))
+}
+
+async function getScriptMergerDir(context, create = false) {
+  const state = context.api.getState();
+  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', 'witcher3'], undefined);
+  if (discovery?.path === undefined) {
+    return undefined;
+  }
+  const currentPath = discovery.tools?.W3ScriptMerger?.path;
+  try {
+    if (!currentPath) {
+      throw new Error('Script Merger not set up');
+    }
+    await fs.statAsync(currentPath);
+    return currentPath;
+  } catch (err) {
+    const defaultPath = path.join(discovery.path, MERGER_RELPATH);
+    if (create) {
+      await fs.ensureDirWritableAsync(defaultPath);
+    }
+    return defaultPath;
+  }
 }
 
 async function downloadScriptMerger(context) {
@@ -273,7 +296,7 @@ async function downloadScriptMerger(context) {
               .catch(err => {
                 context.api.dismissNotification(extractNotifId);
                 context.api.dismissNotification(downloadNotifId);
-                if (err instanceof MD5ComparisonError) {
+                if (err instanceof MD5ComparisonError || err instanceof util.ProcessCanceled) {
                   log('error', 'Failed to automatically install Script Merger', err.errorMessage);
                   context.api.sendNotification({
                     type: 'error',
@@ -308,9 +331,7 @@ async function downloadScriptMerger(context) {
     })
     .then((archivePath) => onDownloadComplete(context, archivePath, mostRecentVersion))
     .catch(err => {
-      context.api.dismissNotification(extractNotifId);
-      context.api.dismissNotification(downloadNotifId);
-      if (err instanceof MD5ComparisonError) {
+      const raiseManualInstallNotif = () => {
         log('error', 'Failed to automatically install Script Merger', err.errorMessage);
         context.api.sendNotification({
           type: 'error',
@@ -321,7 +342,12 @@ async function downloadScriptMerger(context) {
               action: () => util.opn('https://www.nexusmods.com/witcher3/mods/484')
                     .catch(err => null)
             }],
-        })
+        });
+      }
+      context.api.dismissNotification(extractNotifId);
+      context.api.dismissNotification(downloadNotifId);
+      if (err instanceof MD5ComparisonError) {
+        raiseManualInstallNotif();
         return Promise.resolve();
       }
       if (err instanceof util.UserCanceled) {
@@ -334,6 +360,9 @@ async function downloadScriptMerger(context) {
           //  and we were unable to resolve the re-direction link. Given that this
           //  will most certainly resolve itself eventually - we log this and keep going.
           log('info', 'failed to resolve W3 script merger re-direction link', err);
+          return Promise.resolve();
+        } else if (err.message.startsWith('Game is not discovered')) {
+          raiseManualInstallNotif();
           return Promise.resolve();
         }
       } else {
@@ -349,13 +378,11 @@ const extractNotif = {
   title: 'Extracting Script Merger',
 }
 async function extractScriptMerger(context, archivePath) {
-  const state = context.api.store.getState();
-  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', 'witcher3'], undefined);
-  const currentPath = discovery?.tools?.W3ScriptMerger?.path;
-  const destination = (!!currentPath)
-    ? path.dirname(currentPath)
-    : path.join(path.dirname(archivePath), MERGER_RELPATH);
-
+  const destination = await getScriptMergerDir(context, true);
+  if (destination === undefined) {
+    // How ?
+    return Promise.reject(new util.ProcessCanceled('Game is not discovered'));
+  }
   const sZip = new util.SevenZip();
   context.api.sendNotification(extractNotif);
   await sZip.extractFull(archivePath, destination);
@@ -375,7 +402,7 @@ async function setUpMerger(context, mergerVersion, newPath) {
   const newToolDetails = (!!currentDetails)
     ? { ...currentDetails, mergerVersion }
     : {
-      id: MERGER_ID,
+      id: SCRIPT_MERGER_ID,
       name: 'W3 Script Merger',
       logo: 'WitcherScriptMerger.jpg',
       executable: () => 'WitcherScriptMerger.exe',
@@ -386,10 +413,60 @@ async function setUpMerger(context, mergerVersion, newPath) {
     };
   newToolDetails.path = path.join(newPath, 'WitcherScriptMerger.exe');
   newToolDetails.workingDirectory = newPath;
-  context.api.store.dispatch(actions.addDiscoveredTool('witcher3', MERGER_ID, newToolDetails, true));
+  await setMergerConfig(discovery.path, newPath);
+  context.api.store.dispatch(actions.addDiscoveredTool('witcher3', SCRIPT_MERGER_ID, newToolDetails, true));
   return Promise.resolve();
 }
 
+async function getMergedModName(scriptMergerPath) {
+  const configFilePath = path.join(scriptMergerPath, MERGER_CONFIG_FILE);
+  try {
+    const data = await fs.readFileAsync(configFilePath, { encoding: 'utf8' });
+    const config = await parseStringPromise(data);
+    const configItems = config?.configuration?.appSettings?.[0]?.add;
+    const MergedModName = configItems?.find(item => item.$?.key === 'MergedModName') ?? undefined;
+    if (!!MergedModName?.$?.value) {
+      return MergedModName.$.value;
+    }
+  } catch (err) {
+    // This is probably a sign of a corrupt script merger installation....
+    log('error', 'failed to ascertain merged mod name - using "mod0000_MergedFiles"', err);
+    return 'mod0000_MergedFiles';
+  }
+}
+
+async function setMergerConfig(gameRootPath, scriptMergerPath) {
+  const findIndex = (nodes, id) => {
+    return nodes?.findIndex(iter => iter.$?.key === id) ?? undefined;
+  };
+
+  const configFilePath = path.join(scriptMergerPath, MERGER_CONFIG_FILE);
+  try {
+    const data = await fs.readFileAsync(configFilePath, { encoding: 'utf8' });
+    const config = await parseStringPromise(data);
+    const replaceElement = (id, replacement) => {
+      const idx = findIndex(config?.configuration?.appSettings?.[0]?.add, id);
+      if (idx !== undefined) {
+        config.configuration.appSettings[0].add[idx].$ = { key: id, value: replacement };
+      }
+    };
+
+    replaceElement('GameDirectory', gameRootPath);
+    replaceElement('VanillaScriptsDirectory', path.join(gameRootPath, 'content', 'content0', 'scripts'));
+    replaceElement('ModsDirectory', path.join(gameRootPath, 'mods'));
+    const builder = new Builder();
+    const xml = builder.buildObject(config);
+    await fs.writeFileAsync(configFilePath, xml);
+  } catch (err) {
+    // Guess the user will have to set up the merger configuration
+    //  through the merger directly.
+    return;
+  }
+}
+
 module.exports = {
-  default: downloadScriptMerger,
+  downloadScriptMerger,
+  setMergerConfig,
+  getMergedModName,
+  getScriptMergerDir,
 };

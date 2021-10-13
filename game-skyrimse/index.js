@@ -2,6 +2,7 @@ const path = require('path');
 const { util } = require('vortex-api');
 const winapi = require('winapi-bindings');
 
+const MS_ID = 'BethesdaSoftworks.SkyrimSE-PC';
 function findGame() {
   try {
     const instPath = winapi.RegGetValue(
@@ -14,6 +15,7 @@ function findGame() {
     return Promise.resolve(instPath.value);
   } catch (err) {
     return util.steam.findByName('The Elder Scrolls V: Skyrim Special Edition')
+      .catch(() => util.GameStoreHelper.findByAppId([MS_ID], 'xbox'))
       .then(game => game.gamePath);
   }
 }
@@ -73,6 +75,20 @@ const tools = [
   },
 ];
 
+function requiresLauncher(gamePath) {
+  return util.GameStoreHelper.findByAppId([MS_ID], 'xbox')
+    .then(() => Promise.resolve({
+      launcher: 'xbox',
+      addInfo: {
+        appId: MS_ID,
+        parameters: [
+          { appExecName: 'Game' },
+        ],
+      }
+    }))
+    .catch(err => Promise.resolve(undefined));
+}
+
 function main(context) {
   context.registerGame({
     id: 'skyrimse',
@@ -87,6 +103,7 @@ function main(context) {
     requiredFiles: [
       'SkyrimSE.exe',
     ],
+    requiresLauncher,
     environment: {
       SteamAPPId: '489830',
     },

@@ -25,10 +25,35 @@ const MULLE_MOD_INFO = 'mod.json';
 //  the file will be located inside StreamingAssets/Mods.
 const LOAD_ORDER_FILENAME = 'loadorder.json';
 
-//GAME IS ALSO FOUND IN THE OCULUS STORE!!
+const supportedTools = [
+  {
+    id: 'SteamVR',
+    name: 'Blade and Sorcery (SteamVR)',
+    logo: 'steam.png',
+    executable: () => 'BladeAndSorcery.exe',
+    requiredFiles: [
+      'BladeAndSorcery.exe'
+    ],
+    parameters: ['-vrmode', 'openvr'],
+    relative: true,
+  },
+  {
+    id: 'OculusVR',
+    name: 'Blade and Sorcery (OculusVR)',
+    logo: 'oculus.png',
+    executable: () => 'BladeAndSorcery.exe',
+    requiredFiles: [
+      'BladeAndSorcery.exe'
+    ],
+    parameters: ['-vrmode', 'oculus'],
+    relative: true,
+  },
+];
+
+// TODO: Add Oculus detection once/if we add the Oculus game store.
 function findGame() {
-  return util.steam.findByAppId('629730')
-      .then(game => game.gamePath);
+  return util.GameStoreHelper.findByAppId('629730', 'steam')
+    .then(game => game.gamePath);
 }
 
 function createModDirectories(discovery) {
@@ -52,7 +77,7 @@ async function ensureModType(discovery, api) {
   // Aims to ensure that the user's mods are all assigned
   //  the correct modType for their game version.
   //  (We're doing this as users may jump between 8.4 and older versions)
-  const targetModType = await getOfficialModType(api);
+  const targetModType = await getOfficialModType(api, discovery);
   const state = api.store.getState();
   const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
 
@@ -74,8 +99,10 @@ function prepareForModding(discovery, api) {
     .then(() => ensureModType(discovery, api));
 }
 
-async function getOfficialModType(api) {
-  const discoveryPath = getDiscoveryPath(api);
+async function getOfficialModType(api, discovery = undefined) {
+  const discoveryPath = (discovery?.path !== undefined)
+    ? discovery.path
+    : getDiscoveryPath(api);
   if (discoveryPath === undefined) {
     return Promise.reject(new Error('Game is not discovered'));
   }
@@ -158,7 +185,15 @@ async function ensureLOFile(discoveryPath) {
   const loFilePath = path.join(discoveryPath, streamingAssetsPath(), 'Mods', LOAD_ORDER_FILENAME);
   return fs.statAsync(loFilePath)
     .then(() => Promise.resolve(loFilePath))
-    .catch(err => fs.ensureDirWritableAsync(path.dirname(loFilePath))
+    // It appears that some mods might be distributing the lo file
+    //  and if the user decides to remove it manually from the staging
+    //  folder without purging first - they're left with a symlink that
+    //  points nowhere https://github.com/Nexus-Mods/Vortex/issues/9063
+    //  So we're going to try to pre-emptively remove any lo link/file
+    //  before re-creating the file.
+    .catch(err => fs.unlinkAsync(loFilePath)
+      .catch(err2 => null)
+      .then(() => fs.ensureDirWritableAsync(path.dirname(loFilePath)))
       .then(() => fs.writeFileAsync(loFilePath, JSON.stringify(emptyLO, undefined, 2), { encoding: 'utf8' }))
       .then(() => Promise.resolve(loFilePath)));
 }
@@ -251,7 +286,9 @@ async function preSort(context, items, direction, refreshType) {
     return Promise.resolve(items.map(item => toDisplayItem(item.name, item.id)));
   }
 
-  const managedMods = await getDeployedManaged(context, targetModType);
+  const managedModsTarget = await getDeployedManaged(context, targetModType);
+  const managedModsDinput = await getDeployedManaged(context, 'dinput');
+  const managedMods = [].concat(managedModsTarget, managedModsDinput);
   const managedItems = managedMods.map(item => toDisplayItem(item.modName, item.modId))
   const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
   const loKeys = Object.keys(loadOrder).sort((a, b) => loadOrder[a].pos - loadOrder[b].pos);
@@ -325,6 +362,17 @@ function resolveGameVersion(discoveryPath) {
     })
 }
 
+function requiresLauncher(gamePath) {
+  // TODO: this currently ONLY works with Steam detection - if we ever
+  //  add oculus as a game store and we need to launch the game through
+  //  the store - this here needs to change.
+  return findGame()
+    .then(steamPath => (steamPath.toLowerCase() === gamePath.toLowerCase())
+      ? Promise.resolve({ launcher: 'steam', addInfo: '629730' })
+      : Promise.resolve(undefined))
+    .catch(() => Promise.resolve(undefined));
+}
+
 function main(context) {
   const getLegacyDestination = () => {
     return path.join(getDiscoveryPath(context.api), streamingAssetsPath());
@@ -346,9 +394,11 @@ function main(context) {
     requiredFiles: ['BladeAndSorcery.exe'],
     requiresCleanup: true,
     setup: (discovery) => prepareForModding(discovery, context.api),
+    supportedTools,
     environment: {
       SteamAPPId: '629730',
     },
+    requiresLauncher,
     details: {
       steamAppId: 629730,
     },
@@ -387,12 +437,11 @@ function main(context) {
     preSort: (items, direction, refreshType) => preSort(context, items, direction, refreshType),
     displayCheckboxes: false,
     callback: (loadOrder) => {
-      try {
-        writeLOToFile(context.api, loadOrder)
-      } catch (err) {
-        context.api.showErrorNotification('failed to write to load order file', err,
-          { allowReport: !['EPERM', 'EISDIR'].includes(err.code) });
-      }
+      writeLOToFile(context.api, loadOrder)
+        .catch(err => {
+          context.api.showErrorNotification('failed to write to load order file', err,
+            { allowReport: !['EPERM', 'EISDIR'].includes(err.code) });
+        });
     },
   });
 
@@ -409,7 +458,15 @@ function main(context) {
     return (activeGameId === GAME_ID);
   });
 
-  const refreshOnDeployEvent = (profileId) => {
+  const refreshOnDeployEvent = async (profileId) => {
+    try {
+      await getOfficialModType(context.api);
+    } catch (err) {
+      // no point to attempt a refresh if we can't ascertain the required
+      //  modType - this suggests that the game may have been removed.
+      return Promise.resolve();
+    }
+
     const state = context.api.getState();
     const prof = selectors.profileById(state, profileId);
     if (refreshFunc !== undefined && prof?.gameId === GAME_ID) {
@@ -428,7 +485,16 @@ function main(context) {
         return Promise.resolve();
       }
       const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
-      const targetModType = await getOfficialModType(context.api);
+      let targetModType;
+      try {
+        targetModType = await getOfficialModType(context.api);
+      } catch (err) {
+        // this event listener is supposed to check for invalid mods (version-wise)
+        //  any inability to ascertain the version suggests that the user may
+        //  have removed the game - no need to alert him of this (he probably knows)
+        return Promise.resolve();
+      }
+
       // Not really invalid - just wrong modType for the currently installed game version.
       const invalidMods = Object.keys(mods).filter(key => isOfficialModType(mods[key]?.type)
                                                        && mods[key].type !== targetModType);
