@@ -45,7 +45,7 @@ let tools = [
     executable: () => 'fose_loader.exe',
     requiredFiles: [
       'fose_loader.exe',
-      'falloutlauncher.exe',
+      'data/fallout3.esm',
     ],
     relative: true,
     exclusive: true,
@@ -75,7 +75,6 @@ function main(context) {
       }
     },
     requiredFiles: [
-      'falloutlauncher.exe',
       'data/fallout3.esm'
     ],
     environment: {
