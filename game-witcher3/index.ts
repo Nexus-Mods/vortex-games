@@ -20,6 +20,8 @@ import { DO_NOT_DEPLOY, DO_NOT_DISPLAY,
   SCRIPT_MERGER_ID, UNI_PATCH,
 } from './common';
 
+import { ModLimitPatcher } from './modLimitPatch';
+
 import { registerActions } from './iconbarActions';
 import { PriorityManager } from './priorityManager';
 
@@ -1084,6 +1086,7 @@ export function toBlue<T>(func: (...args: any[]) => Promise<T>): (...args: any[]
 function main(context: types.IExtensionContext) {
   context.registerReducer(['settings', 'witcher3'], W3Reducer);
   let priorityManager;
+  let modLimitPatcher: ModLimitPatcher;
   context.registerGame({
     id: GAME_ID,
     name: 'The Witcher 3',
@@ -1141,6 +1144,9 @@ function main(context: types.IExtensionContext) {
       return activeGameId === GAME_ID;
     });
 
+  context.registerAction('mod-icons', 500, 'savegame', {}, 'Test SHIT', () => {
+    modLimitPatcher.ensureModLimitPatch();
+  }, () => true);
   context.registerInstaller('witcher3tl', 25, toBlue(testSupportedTL), toBlue(installTL));
   context.registerInstaller('witcher3mixed', 30, toBlue(testSupportedMixed), toBlue(installMixed));
   context.registerInstaller('witcher3content', 50,
@@ -1157,6 +1163,9 @@ function main(context: types.IExtensionContext) {
   context.registerModType('witcher3menumoddocuments', 60, isTW3,
     (game) => path.join(util.getVortexPath('documents'), 'The Witcher 3'),
     () => Bluebird.resolve(false));
+
+  context.registerModType('w3modlimitpatcher', 25, isTW3, getTLPath, () => Bluebird.resolve(false),
+    { deploymentEssential: false, name: 'Mod Limit Patcher Mod Type' });
 
   context.registerMerge(canMerge,
     (filePath, mergeDir) => merge(filePath, mergeDir, context), 'witcher3menumodroot');
@@ -1263,6 +1272,7 @@ function main(context: types.IExtensionContext) {
 
   let prevDeployment = [];
   context.once(() => {
+    modLimitPatcher = new ModLimitPatcher(context.api);
     priorityManager = new PriorityManager(context.api, 'prefix-based');
     context.api.events.on('gamemode-activated', async (gameMode) => {
       if (gameMode !== GAME_ID) {
