@@ -787,7 +787,7 @@ function getManagedModNames(context: types.IComponentContext, mods: types.IMod[]
   const installationPath = selectors.installPathForGame(context.api.store.getState(), GAME_ID);
   return Bluebird.reduce(mods, (accum, mod) => findModFolder(installationPath, mod)
     .then(modName => {
-      if (mod.type === 'collection') {
+      if (!modName || ['collection', 'w3modlimitpatcher'].includes(mod.type)) {
         return Promise.resolve(accum);
       }
       const modComponents = util.getSafe(mod, ['attributes', 'modComponents'], []);
