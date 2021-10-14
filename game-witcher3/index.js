@@ -137,18 +137,19 @@ async function getManuallyAddedMods(context) {
           let candidates = [];
           await require('turbowalk').default(path.join(modsPath, mod), entries => {
             candidates = [].concat(candidates, entries.filter(entry => (!entry.isDirectory)
-                                 && (path.extname(path.basename(entry.filePath)) !== '')
-                                 && (entry?.linkCount === undefined || entry.linkCount <= 1)));
+              && (path.extname(path.basename(entry.filePath)) !== '')
+              && (entry?.linkCount === undefined || entry.linkCount <= 1)));
           })
           .catch(err => (['ENOENT', 'ENOTFOUND'].indexOf(err.code) !== -1)
             ? null // do nothing
             : Promise.reject(err));
 
-          const mapped = await Promise.map(candidates, cand => fs.statAsync(cand.filePath)
-                                                    .then(stats => stats.isSymbolicLink()
-                                                      ? Promise.resolve(undefined)
-                                                      : Promise.resolve(cand.filePath))
-                                                    .catch(err => Promise.resolve(undefined)));
+          const mapped = await Promise.map(candidates,
+            cand => fs.statAsync(cand.filePath)
+              .then(stats => stats.isSymbolicLink()
+                ? Promise.resolve(undefined)
+                : Promise.resolve(cand.filePath))
+              .catch(err => Promise.resolve(undefined)));
           return resolve(mapped);
         }))
         .then((files) => {
@@ -823,6 +824,11 @@ function getManagedModNames(context, mods) {
   const installationPath = selectors.installPathForGame(context.api.store.getState(), GAME_ID);
   return Promise.reduce(mods, (accum, mod) => findModFolder(installationPath, mod)
     .then(modName => {
+      if (modName === undefined) {
+        // The mod is not installed correctly, or perhaps
+        //  it's a modType we don't cater for.
+        return Promise.resolve(accum);
+      }
       const modComponents = util.getSafe(mod, ['attributes', 'modComponents'], []);
       if (modComponents.length === 0) {
         modComponents.push(modName);
