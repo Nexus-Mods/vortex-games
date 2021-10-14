@@ -111,6 +111,10 @@ export function getPriorityTypeBranch() {
   return ['settings', 'witcher3', 'prioritytype'];
 }
 
+export function getSuppressModLimitBranch() {
+  return ['settings', 'witcher3', 'suppressModLimitPatch'];
+}
+
 export const GAME_ID = 'witcher3';
 
 // File used by some mods to define hotkey/input mapping

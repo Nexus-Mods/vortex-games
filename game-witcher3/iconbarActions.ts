@@ -9,10 +9,14 @@ import PriorityTypeButton from './views/PriorityTypeButton';
 
 import { exportMenuMod, importMenuMod } from './menumod';
 
+import { makeOnContextImport } from './mergeBackup';
+import { ModLimitPatcher } from './modLimitPatch';
+
 interface IProps {
   context: types.IExtensionContext;
   refreshFunc: () => void;
   getPriorityManager: () => PriorityManager;
+  getModLimitPatcher: () => ModLimitPatcher;
 }
 
 function resetPriorities(props: IProps) {
@@ -36,7 +40,7 @@ function resetPriorities(props: IProps) {
 }
 
 export const registerActions = (props: IProps) => {
-  const { context, refreshFunc, getPriorityManager } = props;
+  const { context, refreshFunc, getModLimitPatcher } = props;
   const openTW3DocPath = () => {
     const docPath = path.join(util.getVortexPath('documents'), 'The Witcher 3');
     util.opn(docPath).catch(() => null);
@@ -50,6 +54,22 @@ export const registerActions = (props: IProps) => {
     const gameMode = selectors.activeGameId(state);
     return (gameMode === GAME_ID);
   };
+
+  context.registerAction('mods-action-icons', 300, 'start-install', {}, 'Import Script Merges',
+    instanceIds => { makeOnContextImport(context, instanceIds[0]); },
+    instanceIds => {
+      const state = context.api.getState();
+      const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
+      if (mods[instanceIds?.[0]]?.type !== 'collection') {
+        return false;
+      }
+      const activeGameId = selectors.activeGameId(state);
+      return activeGameId === GAME_ID;
+    });
+
+  context.registerAction('mod-icons', 500, 'savegame', {}, 'Apply Mod Limit Patch', () => {
+    getModLimitPatcher().ensureModLimitPatch();
+  }, () => true);
 
   context.registerAction('generic-load-order-icons', 300, PriorityTypeButton, {},
     undefined, isTW3);
