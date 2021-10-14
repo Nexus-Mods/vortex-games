@@ -15,10 +15,12 @@ import menuMod from './menumod';
 import { downloadScriptMerger, getScriptMergerDir, setMergerConfig } from './scriptmerger';
 
 import { DO_NOT_DEPLOY, DO_NOT_DISPLAY,
-  GAME_ID, getLoadOrderFilePath, getPriorityTypeBranch, I18N_NAMESPACE, INPUT_XML_FILENAME,
-  LOCKED_PREFIX, MERGE_INV_MANIFEST, PART_SUFFIX, ResourceInaccessibleError,
+  GAME_ID, getLoadOrderFilePath, getPriorityTypeBranch, I18N_NAMESPACE,
+  INPUT_XML_FILENAME, LOCKED_PREFIX, PART_SUFFIX, ResourceInaccessibleError,
   SCRIPT_MERGER_ID, UNI_PATCH,
 } from './common';
+
+import { testModLimitBreach } from './tests';
 
 import { ModLimitPatcher } from './modLimitPatch';
 
@@ -26,13 +28,12 @@ import { registerActions } from './iconbarActions';
 import { PriorityManager } from './priorityManager';
 
 import { installMixed, testSupportedMixed } from './installers';
-import { makeOnContextImport, restoreFromProfile, storeToProfile } from './mergeBackup';
+import { restoreFromProfile, storeToProfile } from './mergeBackup';
 
 import { getMergedModNames } from './mergeInventoryParsing';
 
 import { setPriorityType } from './actions';
 import { W3Reducer } from './reducers';
-import { iteratee } from 'lodash';
 
 const GOG_ID = '1207664663';
 const GOG_ID_GOTY = '1495134320';
@@ -1085,7 +1086,7 @@ export function toBlue<T>(func: (...args: any[]) => Promise<T>): (...args: any[]
 
 function main(context: types.IExtensionContext) {
   context.registerReducer(['settings', 'witcher3'], W3Reducer);
-  let priorityManager;
+  let priorityManager: PriorityManager;
   let modLimitPatcher: ModLimitPatcher;
   context.registerGame({
     id: GAME_ID,
@@ -1132,21 +1133,6 @@ function main(context: types.IExtensionContext) {
     return (gameMode === GAME_ID);
   };
 
-  context.registerAction('mods-action-icons', 300, 'start-install', {}, 'Import Script Merges',
-    instanceIds => { makeOnContextImport(context, instanceIds[0]); },
-    instanceIds => {
-      const state = context.api.getState();
-      const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
-      if (mods[instanceIds?.[0]]?.type !== 'collection') {
-        return false;
-      }
-      const activeGameId = selectors.activeGameId(state);
-      return activeGameId === GAME_ID;
-    });
-
-  context.registerAction('mod-icons', 500, 'savegame', {}, 'Test SHIT', () => {
-    modLimitPatcher.ensureModLimitPatch();
-  }, () => true);
   context.registerInstaller('witcher3tl', 25, toBlue(testSupportedTL), toBlue(installTL));
   context.registerInstaller('witcher3mixed', 30, toBlue(testSupportedMixed), toBlue(installMixed));
   context.registerInstaller('witcher3content', 50,
@@ -1170,7 +1156,12 @@ function main(context: types.IExtensionContext) {
   context.registerMerge(canMerge,
     (filePath, mergeDir) => merge(filePath, mergeDir, context), 'witcher3menumodroot');
 
-  registerActions({ context, refreshFunc, getPriorityManager: () => priorityManager });
+  registerActions({
+    context,
+    refreshFunc,
+    getPriorityManager: () => priorityManager,
+    getModLimitPatcher: () => modLimitPatcher,
+  });
 
   context['registerCollectionFeature'](
     'witcher3_collection_data',
@@ -1220,6 +1211,11 @@ function main(context: types.IExtensionContext) {
           'Failed to modify load order file'));
     },
   });
+
+  context.registerTest('tw3-mod-limit-breach', 'gamemode-activated',
+    () => Bluebird.resolve(testModLimitBreach(context.api, modLimitPatcher)));
+  context.registerTest('tw3-mod-limit-breach', 'mod-activated',
+    () => Bluebird.resolve(testModLimitBreach(context.api, modLimitPatcher)));
 
   const revertLOFile = () => {
     const state = context.api.store.getState();

@@ -2,7 +2,9 @@ import _ from 'lodash';
 import path from 'path';
 import { actions, fs, selectors, types, util } from 'vortex-api';
 
-import { GAME_ID } from './common';
+import { setSuppressModLimitPatch } from './actions';
+
+import { GAME_ID, I18N_NAMESPACE } from './common';
 
 const RANGE_START = 0xB94000;
 const RANGE_END = 0xB98000;
@@ -26,6 +28,7 @@ export class ModLimitPatcher {
     if (!discovery?.path) {
       throw new util.ProcessCanceled('Game is not discovered');
     }
+    await this.queryPatch();
     const stagingPath = selectors.installPathForGame(state, GAME_ID);
     const modName = 'Mod Limit Patcher';
     let mod: types.IMod = util.getSafe(state, ['persistent', 'mods', GAME_ID, modName], undefined);
@@ -48,12 +51,51 @@ export class ModLimitPatcher {
       await this.streamExecutable(RANGE_START, RANGE_END, dest, tempFile);
       await fs.removeAsync(dest);
       await fs.renameAsync(tempFile, dest);
+      this.mApi.sendNotification({
+        message: 'Patch generated successfully',
+        type: 'success',
+        displayMS: 5000,
+      });
     } catch (err) {
+      this.mApi.showErrorNotification('Failed to generate mod limit patch', err);
       this.mApi.events.emit('remove-mod', GAME_ID, modName);
-      return Promise.reject(err);
+      return Promise.resolve(undefined);
     }
 
     return Promise.resolve(modName);
+  }
+
+  public getLimitText(t: any) {
+    return t('Witcher 3 is restricted to 192 file handles which is quickly reached when '
+      + 'adding mods (about ~25 mods) - Vortex has detected that the current mods environment may be '
+      + 'breaching this limit; this issue will usually exhibit itself by the game failing to start up.{{bl}}'
+      + 'Vortex can attempt to patch your game executable to increase the available file handles to 500 '
+      + 'which should cater for most if not all modding environments.{{bl}}Please note - the patch is applied as '
+      + 'a mod which will be generated and automatically enabled; to disable the patch, simply remove or disable '
+      + 'the "Witcher 3 Mod Limit Patcher" mod and the original game executable will be restored.',
+      { ns: I18N_NAMESPACE, replace: { bl: '[br][/br][br][/br]', br: '[br][/br]' } });
+  }
+
+  private async queryPatch(): Promise<void> {
+    const t = this.mApi.translate;
+    const message = this.getLimitText(t);
+    const res: types.IDialogResult = await (this.mApi.showDialog('question', 'Mod Limit Patch', {
+      bbcode: message,
+      checkboxes: [
+        { id: 'suppress-limit-patcher-test', text: 'Do not ask again', value: false }
+      ],
+    }, [
+      { label: 'Cancel' },
+      { label: 'Generate Patch' },
+    ]) as any);
+    if (res.input['suppress-limit-patcher-test'] === true) {
+      this.mApi.store.dispatch(setSuppressModLimitPatch(true));
+    }
+    if (res.action === 'Cancel') {
+      throw new util.UserCanceled();
+    }
+
+    return Promise.resolve();
   }
 
   private createModLimitPatchMod(modName: string): Promise<void> {
@@ -110,7 +152,10 @@ export class ModLimitPatcher {
     return data;
   }
 
-  private async streamExecutable(start: number, end: number, filePath: string, tempPath: string): Promise<void> {
+  private async streamExecutable(start: number,
+                                 end: number,
+                                 filePath: string,
+                                 tempPath: string): Promise<void> {
     return new Promise((resolve, reject) => {
       const writer = fs.createWriteStream(tempPath);
       const stream = fs.createReadStream(filePath);
@@ -131,7 +176,9 @@ export class ModLimitPatcher {
       });
       stream.on('error', onError);
       stream.on('data', ((chunk: Buffer) => {
-        if (this.mIsPatched || (stream.bytesRead + 65536) < start || stream.bytesRead > end + 65536) {
+        if (this.mIsPatched
+          || (stream.bytesRead < (start + chunk.length))
+          || (stream.bytesRead > (end + chunk.length))) {
           writer.write(chunk);
         } else {
           if (this.hasSequence(unpatched, chunk)) {
