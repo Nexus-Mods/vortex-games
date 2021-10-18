@@ -68,8 +68,13 @@ export const registerActions = (props: IProps) => {
     });
 
   context.registerAction('mod-icons', 500, 'savegame', {}, 'Apply Mod Limit Patch', () => {
-    getModLimitPatcher().ensureModLimitPatch();
-  }, () => true);
+    getModLimitPatcher().ensureModLimitPatch()
+      .catch(err => {
+        context.api.showErrorNotification('Failed to apply patch', err, {
+          allowReport: (err instanceof util.ProcessCanceled),
+        });
+      });
+  }, () => selectors.activeGameId(context.api.getState()) === GAME_ID);
 
   context.registerAction('generic-load-order-icons', 300, PriorityTypeButton, {},
     undefined, isTW3);
