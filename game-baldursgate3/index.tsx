@@ -4,6 +4,7 @@ import * as _ from 'lodash';
 import * as path from 'path';
 import * as React from 'react';
 import { FormControl } from 'react-bootstrap';
+import { useSelector } from 'react-redux';
 import { createAction } from 'redux-act';
 import { generate as shortid } from 'shortid';
 import walk, { IEntry } from 'turbowalk';
@@ -550,128 +551,143 @@ async function readStoredLO(api: types.IExtensionApi) {
       .findIndex(i => i === lhs.data) - modOrder.findIndex(i => i === rhs.data));
 }
 
-function makePreSort(api: types.IExtensionApi) {
-  // workaround for mod_load_order being bugged af, it will occasionally call preSort
-  // with a fresh list of mods from filter, completely ignoring previous sort results
-
-  return async (items: any[], sortDir: any, updateType: any): Promise<any[]> => {
-    if ((items.length === 0) && (storedLO !== undefined)) {
-      return storedLO;
+async function readPAKList(api: types.IExtensionApi) {
+  let paks: string[];
+  try {
+    paks = (await fs.readdirAsync(modsPath()))
+    .filter(fileName => path.extname(fileName).toLowerCase() === '.pak');
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      try {
+      await fs.ensureDirWritableAsync(modsPath(), () => Bluebird.resolve());
+      } catch (err) {
+        // nop
+      }
+    } else {
+      api.showErrorNotification('Failed to read mods directory', err, {
+        id: 'bg3-failed-read-mods',
+        message: modsPath(),
+      });
     }
+    paks = [];
+  }
 
-    const state = api.getState();
-    let paks: string[];
-    try {
-      paks = (await fs.readdirAsync(modsPath()))
-      .filter(fileName => path.extname(fileName).toLowerCase() === '.pak');
-    } catch (err) {
-      if (err.code === 'ENOENT') {
-        try {
-        await fs.ensureDirWritableAsync(modsPath(), () => Bluebird.resolve());
-        } catch (err) {
-          // nop
-        }
-      } else {
-        api.showErrorNotification('Failed to read mods directory', err, {
-          id: 'bg3-failed-read-mods',
-          message: modsPath(),
+  return paks;
+}
+
+async function readPAKs(api: types.IExtensionApi)
+    : Promise<Array<{ fileName: string, mod: types.IMod, info: IPakInfo }>> {
+  const state = api.getState();
+
+  const paks = await readPAKList(api);
+
+  let manifest;
+  try {
+    manifest = await util.getManifest(api, '', GAME_ID);
+  } catch (err) {
+    const allowReport = !['EPERM'].includes(err.code);
+    api.showErrorNotification('Failed to read deployment manifest', err, { allowReport });
+    return [];
+  }
+
+  return Promise.all(paks.map(async fileName => {
+    return (util as any).withErrorContext('reading pak', fileName, async () => {
+      try {
+        const manifestEntry = manifest.files.find(entry => entry.relPath === fileName);
+        const mod = (manifestEntry !== undefined)
+          ? state.persistent.mods[GAME_ID]?.[manifestEntry.source]
+          : undefined;
+
+        return { fileName, mod, info: await extractPakInfo(path.join(modsPath(), fileName)) };
+      } catch (err) {
+        api.showErrorNotification('Failed to read pak', err, { allowReport: true });
+        return undefined;
+      }
+    });
+  }));
+}
+
+async function readLO(api: types.IExtensionApi): Promise<string[]> {
+  try {
+    const modSettings = await readModSettings(api);
+    const config = findNode(modSettings?.save?.region, 'ModuleSettings');
+    const configRoot = findNode(config?.node, 'root');
+    const modOrderRoot = findNode(configRoot?.children?.[0]?.node, 'ModOrder');
+    const modOrderNodes = modOrderRoot?.children?.[0]?.node ?? [];
+    return modOrderNodes.map(node => findNode(node.attribute, 'UUID').$?.value);
+  } catch (err) {
+    api.showErrorNotification('Failed to read modsettings.lsx', err, {
+      allowReport: false,
+      message: 'Please run the game at least once and create a profile in-game',
+    });
+    return [];
+  }
+}
+
+function serializeLoadOrder(api: types.IExtensionApi, order): Promise<void> {
+  return writeLoadOrder(api, order);
+}
+
+async function deserializeLoadOrder(api: types.IExtensionApi): Promise<any> {
+  const paks = await readPAKs(api);
+
+  const order = await readLO(api);
+
+  const orderValue = (info: IPakInfo) => {
+    return order.indexOf(info.uuid) + (info.isListed ? 0 : 1000);
+  };
+
+  return paks
+    .sort((lhs, rhs) => orderValue(lhs.info) - orderValue(rhs.info))
+    .map(({ fileName, mod, info }) => ({
+      id: fileName,
+      enabled: true,
+      name: util.renderModName(mod),
+      modId: mod?.id,
+      locked: info.isListed,
+      data: info,
+    }));
+}
+
+function validate(before, after): Promise<any> {
+  return Promise.resolve();
+}
+
+let forceRefresh: () => void;
+
+function InfoPanelWrap(props: { api: types.IExtensionApi, refresh: () => void }) {
+  const { api } = props;
+
+  const currentProfile = useSelector((state: types.IState) =>
+    state.settings['baldursgate3']?.playerProfile);
+
+  React.useEffect(() => {
+    forceRefresh = props.refresh;
+  }, []);
+
+  const onSetProfile = React.useCallback((profileName: string) => {
+    const impl = async () => {
+      api.store.dispatch(setPlayerProfile(profileName));
+      try {
+        await readStoredLO(api);
+      } catch (err) {
+        api.showErrorNotification('Failed to read load order', err, {
+          message: 'Please run the game before you start modding',
+          allowReport: false,
         });
       }
-      paks = [];
-    }
+      forceRefresh?.();
+    };
+    impl();
+  }, [ api ]);
 
-    let manifest;
-    try {
-      manifest = await util.getManifest(api, '', GAME_ID);
-    } catch (err) {
-      const allowReport = !['EPERM'].includes(err.code);
-      api.showErrorNotification('Failed to read deployment manifest', err, { allowReport });
-      return items;
-    }
-
-    const result: any[] = [];
-
-    for (const fileName of paks) {
-      await (util as any).withErrorContext('reading pak', fileName, async () => {
-        try {
-          const existingItem = items.find(iter => iter.id === fileName);
-          if ((existingItem !== undefined)
-              && (updateType !== 'refresh')
-              && (existingItem.imgUrl !== undefined)) {
-            result.push(existingItem);
-            return;
-          }
-
-          const manifestEntry = manifest.files.find(entry => entry.relPath === fileName);
-          const mod = manifestEntry !== undefined
-            ? state.persistent.mods[GAME_ID]?.[manifestEntry.source]
-            : undefined;
-
-          let modInfo = existingItem?.data;
-          if (modInfo === undefined) {
-            modInfo = await extractPakInfo(path.join(modsPath(), fileName));
-          }
-
-          let res: types.ILoadOrderDisplayItem;
-          if (mod !== undefined) {
-            // pak is from a mod (an installed one)
-            res = {
-              id: fileName,
-              name: util.renderModName(mod),
-              imgUrl: mod.attributes?.pictureUrl ?? fallbackPicture,
-              data: modInfo,
-              external: false,
-            };
-          } else {
-            res = {
-              id: fileName,
-              name: path.basename(fileName, path.extname(fileName)),
-              imgUrl: fallbackPicture,
-              data: modInfo,
-              external: true,
-            };
-          }
-
-          if (modInfo.isListed) {
-            res.locked = true;
-            result.unshift(res);
-          } else {
-            result.push(res);
-          }
-        } catch (err) {
-          api.showErrorNotification('Failed to read pak', err, { allowReport: true });
-        }
-      });
-    }
-
-    try {
-      const modSettings = await readModSettings(api);
-      const config = findNode(modSettings?.save?.region, 'ModuleSettings');
-      const configRoot = findNode(config?.node, 'root');
-      const modOrderRoot = findNode(configRoot?.children?.[0]?.node, 'ModOrder');
-      const modOrderNodes = modOrderRoot?.children?.[0]?.node ?? [];
-      const modOrder = modOrderNodes.map(node => findNode(node.attribute, 'UUID').$?.value);
-
-      storedLO = (updateType !== 'refresh')
-        ? result.sort((lhs, rhs) => items.indexOf(lhs) - items.indexOf(rhs))
-        : result.sort((lhs, rhs) => {
-          // A refresh suggests that we're either deploying or the user decided to refresh
-          //  the list forcefully - in both cases we're more intrested in the LO specifed
-          //  by the mod list file rather than what we stored in our state as we assume
-          //  that the LO had already been saved to file.
-          const lhsIdx = modOrder.findIndex(i => i === lhs.data.uuid);
-          const rhsIdx = modOrder.findIndex(i => i === rhs.data.uuid);
-          return lhsIdx - rhsIdx;
-        });
-    } catch (err) {
-      api.showErrorNotification('Failed to read modsettings.lsx', err, {
-        allowReport: false,
-        message: 'Please run the game at least once and create a profile in-game',
-      });
-    }
-
-    return storedLO;
-  };
+  return (
+    <InfoPanel
+      t={api.translate}
+      currentProfile={currentProfile}
+      onSetPlayerProfile={onSetProfile}
+    />
+  );
 }
 
 function main(context: types.IExtensionContext) {
@@ -715,40 +731,19 @@ function main(context: types.IExtensionContext) {
     },
   });
 
-  let forceRefresh: () => void;
-
   context.registerInstaller('bg3-replacer', 25, testReplacer, installReplacer);
 
   context.registerModType('bg3-replacer', 25, (gameId) => gameId === GAME_ID,
     () => getGameDataPath(context.api), files => isReplacer(context.api, files),
     { name: 'BG3 Replacer' } as any);
 
-  (context as any).registerLoadOrderPage({
+  context.registerLoadOrder({
     gameId: GAME_ID,
-    createInfoPanel: (props) => {
-      forceRefresh = props.refresh;
-      return React.createElement(InfoPanel, {
-        t: context.api.translate,
-        currentProfile: context.api.store.getState().settings.baldursgate3?.playerProfile,
-        onSetPlayerProfile: async (profileName: string) => {
-          context.api.store.dispatch(setPlayerProfile(profileName));
-          try {
-            await readStoredLO(context.api);
-          } catch (err) {
-            context.api.showErrorNotification('Failed to read load order', err, {
-              message: 'Please run the game before you start modding',
-              allowReport: false,
-            });
-          }
-          forceRefresh?.();
-        },
-      });
-    },
-    filter: () => [],
-    preSort: makePreSort(context.api),
-    gameArtURL: `${__dirname}/gameart.jpg`,
-    displayCheckboxes: true,
-    callback: (loadOrder: any) => writeLoadOrder(context.api, loadOrder),
+    deserializeLoadOrder: () => deserializeLoadOrder(context.api),
+    serializeLoadOrder: (loadOrder) => serializeLoadOrder(context.api, loadOrder),
+    validate,
+    toggleableEntries: true,
+    usageInstructions: (() => (<InfoPanelWrap api={context.api} refresh={() => {}} />)) as any,
   });
 
   context.once(() => {
