@@ -156,7 +156,7 @@ async function getManuallyAddedMods(context) {
           return resolve(mapped);
         }))
         .then((files: string[]) => {
-          if (files.filter(file => !!file).length > 0) {
+          if (files.filter(file => file !== undefined).length > 0) {
             accum.push(mod);
           }
           return Promise.resolve(accum);
@@ -528,7 +528,15 @@ async function setINIStruct(context, loadOrder, priorityManager) {
   return getAllMods(context).then(modMap => {
     _INI_STRUCT = {};
     const mods = [].concat(modMap.merged, modMap.managed, modMap.manual);
-    const filterFunc = (modName: string) => modName.startsWith(LOCKED_PREFIX);
+    const filterFunc = (modName: string) => {
+      // We're adding this to avoid having the load order page
+      //  from not loading if we encounter an invalid mod name.
+      if (!modName) {
+        log('debug', 'encountered invalid mod instance/name');
+        return false;
+      }
+      return modName.startsWith(LOCKED_PREFIX);
+    }
     const manualLocked = modMap.manual.filter(filterFunc);
     const managedLocked = modMap.managed
       .filter(entry => filterFunc(entry.name))
