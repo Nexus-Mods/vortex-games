@@ -1,20 +1,23 @@
 import Bluebird from 'bluebird';
 import { spawn } from 'child_process';
+import getVersion from 'exe-version';
 import * as _ from 'lodash';
 import * as path from 'path';
 import * as React from 'react';
 import { FormControl } from 'react-bootstrap';
 import { useSelector } from 'react-redux';
 import { createAction } from 'redux-act';
+import * as semver from 'semver';
 import { generate as shortid } from 'shortid';
 import walk, { IEntry } from 'turbowalk';
 import { actions, fs, log, selectors, types, util } from 'vortex-api';
 import { Builder, parseStringPromise } from 'xml2js';
 import { ILoadOrderEntry, IModNode, IModSettings, IPakInfo, IXmlNode } from './types';
 
-const GAME_ID = 'baldursgate3';
+import { GAME_ID, LSLIB_URL } from './common';
+import * as gitHubDownloader from './githubDownloader';
+
 const STOP_PATTERNS = ['[^/]*\\.pak$'];
-const LSLIB_URL = 'https://github.com/Norbyte/lslib';
 
 function toWordExp(input) {
   return '(^|/)' + input + '(/|$)';
@@ -82,6 +85,12 @@ function prepareForModding(api: types.IExtensionApi, discovery): any {
       }, [ { label: 'I understand' } ])));
 }
 
+function getGamePath(api) {
+  const state = api.getState();
+  return state.settings.gameMode.discovered?.[GAME_ID]?.path;
+}
+
+
 function getGameDataPath(api) {
   const state = api.getState();
   const gameMode = selectors.activeGameId(state);
@@ -114,6 +123,71 @@ const ORIGINAL_FILES = new Set([
   'textures.pak',
   'virtualtextures.pak',
 ]);
+
+const LSLIB_FILES = new Set([
+  'divine.exe',
+  'lslib.dll',
+]);
+
+function isLSLib(api: types.IExtensionApi, files: types.IInstruction[]) {
+  const origFile = files.find(iter =>
+    (iter.type === 'copy') && LSLIB_FILES.has(path.basename(iter.destination).toLowerCase()));
+  return origFile !== undefined
+    ? Bluebird.resolve(true)
+    : Bluebird.resolve(false);
+}
+
+function testLSLib(files: string[], gameId: string): Bluebird<types.ISupportedResult> {
+  if (gameId !== GAME_ID) {
+    return Bluebird.resolve({ supported: false, requiredFiles: [] });
+  }
+  const matchedFiles = files.filter(file => LSLIB_FILES.has(path.basename(file).toLowerCase()));
+
+  return Bluebird.resolve({
+    supported: matchedFiles.length >= 2,
+    requiredFiles: [],
+  });
+}
+
+async function installLSLib(files: string[],
+                            destinationPath: string,
+                            gameId: string,
+                            progressDelegate: types.ProgressDelegate)
+                            : Promise<types.IInstallResult> {
+  const exe = files.find(file => path.basename(file.toLowerCase()) === 'divine.exe');
+  const exePath = path.join(destinationPath, exe);
+  let ver: string = await getVersion(exePath);
+  ver = ver.split('.').slice(0, 3).join('.');
+
+  // Unfortunately the LSLib developer is not consistent when changing
+  //  file versions - the executable attribute might have an older version
+  //  value than the one specified by the filename - we're going to use
+  //  the filename as the point of truth *ugh*
+  const fileName = path.basename(destinationPath, path.extname(destinationPath));
+  const idx = fileName.indexOf('-v');
+  const fileNameVer = fileName.slice(idx + 2);
+  if (semver.valid(fileNameVer) && ver !== fileNameVer) {
+    ver = fileNameVer;
+  }
+  const versionAttr: types.IInstruction = { type: 'attribute', key: 'version', value: ver };
+  const modtypeAttr: types.IInstruction = { type: 'setmodtype', value: 'bg3-lslib-divine-tool' };
+  const instructions: types.IInstruction[] =
+    files.reduce((accum: types.IInstruction[], filePath: string) => {
+      if (filePath.toLowerCase()
+                  .split(path.sep)
+                  .indexOf('tools') !== -1
+      && !filePath.endsWith(path.sep)) {
+        accum.push({
+          type: 'copy',
+          source: filePath,
+          destination: path.join('tools', path.basename(filePath)),
+        });
+      }
+      return accum;
+    }, [ modtypeAttr, versionAttr ]);
+
+  return Promise.resolve({ instructions });
+}
 
 function isReplacer(api: types.IExtensionApi, files: types.IInstruction[]) {
   const origFile = files.find(iter =>
@@ -328,12 +402,22 @@ interface IDivineOutput {
   returnCode: number;
 }
 
-function divine(action: DivineAction, options: IDivineOptions): Promise<IDivineOutput> {
+function divine(api: types.IExtensionApi,
+                action: DivineAction,
+                options: IDivineOptions): Promise<IDivineOutput> {
   return new Promise<IDivineOutput>((resolve, reject) => {
     let returned: boolean = false;
     let stdout: string = '';
 
-    const exe = path.join(__dirname, 'tools', 'divine.exe');
+    const state = api.getState();
+    const discovery = selectors.discoveryByGame(state, GAME_ID);
+    if (discovery?.path === undefined) {
+      const err = new Error('LSLib/Divine tool is missing/undeployed');
+      err['attachLogOnReport'] = false;
+      return reject(err);
+    }
+
+    const exe = path.join(discovery.path, 'tools', 'divine.exe');
     const args = [
       '--action', action,
       '--source', options.source,
@@ -380,14 +464,15 @@ function divine(action: DivineAction, options: IDivineOptions): Promise<IDivineO
   });
 }
 
-async function extractPak(pakPath, destPath, pattern) {
-  return divine('extract-package', { source: pakPath, destination: destPath, expression: pattern });
+async function extractPak(api: types.IExtensionApi, pakPath, destPath, pattern) {
+  return divine(api, 'extract-package',
+    { source: pakPath, destination: destPath, expression: pattern });
 }
 
-async function extractMeta(pakPath: string): Promise<IModSettings> {
+async function extractMeta(api: types.IExtensionApi, pakPath: string): Promise<IModSettings> {
   const metaPath = path.join(util.getVortexPath('temp'), 'lsmeta', shortid());
   await fs.ensureDirAsync(metaPath);
-  await extractPak(pakPath, metaPath, '*/meta.lsx');
+  await extractPak(api, pakPath, metaPath, '*/meta.lsx');
   try {
     // the meta.lsx may be in a subdirectory. There is probably a pattern here
     // but we'll just use it from wherever
@@ -417,16 +502,16 @@ function findNode<T extends IXmlNode<{ id: string }>, U>(nodes: T[], id: string)
 
 const listCache: { [path: string]: Promise<string[]> } = {};
 
-async function listPackage(pakPath: string): Promise<string[]> {
-  const res = await divine('list-package', { source: pakPath });
+async function listPackage(api: types.IExtensionApi, pakPath: string): Promise<string[]> {
+  const res = await divine(api, 'list-package', { source: pakPath });
   const lines = res.stdout.split('\n').map(line => line.trim()).filter(line => line.length !== 0);
 
   return lines;
 }
 
-async function isLOListed(pakPath: string): Promise<boolean> {
+async function isLOListed(api: types.IExtensionApi, pakPath: string): Promise<boolean> {
   if (listCache[pakPath] === undefined) {
-    listCache[pakPath] = listPackage(pakPath);
+    listCache[pakPath] = listPackage(api, pakPath);
   }
   const lines = await listCache[pakPath];
   // const nonGUI = lines.find(line => !line.toLowerCase().startsWith('public/game/gui'));
@@ -435,8 +520,8 @@ async function isLOListed(pakPath: string): Promise<boolean> {
   return metaLSX === undefined;
 }
 
-async function extractPakInfo(pakPath: string): Promise<IPakInfo> {
-  const meta = await extractMeta(pakPath);
+async function extractPakInfoImpl(api: types.IExtensionApi, pakPath: string): Promise<IPakInfo> {
+  const meta = await extractMeta(api, pakPath);
   const config = findNode(meta?.save?.region, 'Config');
   const configRoot = findNode(config?.node, 'root');
   const moduleInfo = findNode(configRoot?.children?.[0]?.node, 'ModuleInfo');
@@ -455,7 +540,7 @@ async function extractPakInfo(pakPath: string): Promise<IPakInfo> {
     type: attr('Type', () => 'Adventure'),
     uuid: attr('UUID', () => require('uuid').v4()),
     version: attr('Version', () => '1'),
-    isListed: await isLOListed(pakPath),
+    isListed: await isLOListed(api, pakPath),
   };
 }
 
@@ -598,7 +683,7 @@ async function readPAKs(api: types.IExtensionApi)
           ? state.persistent.mods[GAME_ID]?.[manifestEntry.source]
           : undefined;
 
-        return { fileName, mod, info: await extractPakInfo(path.join(modsPath(), fileName)) };
+        return { fileName, mod, info: await extractPakInfoImpl(api, path.join(modsPath(), fileName)) };
       } catch (err) {
         api.showErrorNotification('Failed to read pak', err, { allowReport: true });
         return undefined;
@@ -690,6 +775,78 @@ function InfoPanelWrap(props: { api: types.IExtensionApi, refresh: () => void })
   );
 }
 
+function getLatestInstalledLSLibVer(api: types.IExtensionApi) {
+  const state = api.getState();
+  const mods: { [modId: string]: types.IMod } =
+    util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
+
+  return Object.keys(mods).reduce((prev, id) => {
+    if (mods[id].type === 'bg3-lslib-divine-tool') {
+      const arcId = mods[id].archiveId;
+      const dl: types.IDownload = util.getSafe(state,
+        ['persistent', 'downloads', 'files', arcId], undefined);
+      const storedVer = util.getSafe(mods[id], ['attributes', 'version'], '0.0.0');
+      if (semver.gt(storedVer, prev)) {
+        prev = storedVer;
+      }
+
+      if (dl !== undefined) {
+        // The LSLib developer doesn't always update the version on the executable
+        //  itself - we're going to try to extract it from the archive which tends
+        //  to use the correct version.
+        const fileName = path.basename(dl.localPath, path.extname(dl.localPath));
+        const idx = fileName.indexOf('-v');
+        const ver = fileName.slice(idx + 2);
+        if (semver.valid(ver) && ver !== storedVer) {
+          api.store.dispatch(actions.setModAttribute(GAME_ID, id, 'version', ver));
+          prev = ver;
+        }
+      }
+    }
+    return prev;
+  }, '0.0.0');
+}
+
+async function onCheckModVersion(api: types.IExtensionApi, gameId: string, mods: types.IMod[]) {
+  const profile = selectors.activeProfile(api.getState());
+  if (profile.gameId !== GAME_ID || gameId !== GAME_ID) {
+    return;
+  }
+
+  const latestVer: string = getLatestInstalledLSLibVer(api);
+
+  if (latestVer === '0.0.0') {
+    // Nothing to update.
+    return;
+  }
+
+  const newestVer: string = await gitHubDownloader.checkForUpdates(api, latestVer);
+  if (!newestVer || newestVer === latestVer) {
+    return;
+  }
+}
+
+async function onGameModeActivated(api: types.IExtensionApi, gameId: string) {
+  if (gameId !== GAME_ID) {
+    return;
+  }
+
+  try {
+    await readStoredLO(api);
+  } catch (err) {
+    api.showErrorNotification(
+      'Failed to read load order', err, {
+        message: 'Please run the game before you start modding',
+        allowReport: false,
+    });
+  }
+
+  const latestVer: string = getLatestInstalledLSLibVer(api);
+  if (latestVer === '0.0.0') {
+    await gitHubDownloader.downloadDivine(api);
+  }
+}
+
 function main(context: types.IExtensionContext) {
   context.registerReducer(['settings', 'baldursgate3'], reducer);
 
@@ -732,10 +889,15 @@ function main(context: types.IExtensionContext) {
   });
 
   context.registerInstaller('bg3-replacer', 25, testReplacer, installReplacer);
+  context.registerInstaller('bg3-lslib-divine-tool', 15, testLSLib, installLSLib as any);
 
   context.registerModType('bg3-replacer', 25, (gameId) => gameId === GAME_ID,
     () => getGameDataPath(context.api), files => isReplacer(context.api, files),
     { name: 'BG3 Replacer' } as any);
+
+  context.registerModType('bg3-lslib-divine-tool', 15, (gameId) => gameId === GAME_ID,
+    () => path.join(getGamePath(context.api)), files => isLSLib(context.api, files),
+    { name: 'BG3 LSLib' } as any);
 
   context.registerLoadOrder({
     gameId: GAME_ID,
@@ -772,19 +934,11 @@ function main(context: types.IExtensionContext) {
       return Promise.resolve();
     });
 
-    context.api.events.on('gamemode-activated', async (gameMode: string) => {
-      if (gameMode === GAME_ID) {
-        try {
-          await readStoredLO(context.api);
-        } catch (err) {
-          context.api.showErrorNotification(
-            'Failed to read load order', err, {
-              message: 'Please run the game before you start modding',
-              allowReport: false,
-            });
-        }
-      }
-    });
+    context.api.events.on('check-mods-version',
+      (gameId: string, mods: types.IMod[]) => onCheckModVersion(context.api, gameId, mods));
+
+    context.api.events.on('gamemode-activated',
+      async (gameMode: string) => onGameModeActivated(context.api, gameMode));
   });
 
   return true;
