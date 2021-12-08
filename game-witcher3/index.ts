@@ -555,7 +555,7 @@ async function setINIStruct(context, loadOrder, priorityManager) {
 
       const LOEntry = util.getSafe(loadOrder, [key], undefined);
       if (idx === 0) {
-        priorityManager.resetMaxPriority();
+        priorityManager.resetMaxPriority(totalLocked.length);
       }
       _INI_STRUCT[name] = {
         // The INI file's enabled attribute expects 1 or 0
@@ -705,7 +705,7 @@ async function preSort(context, items, direction, updateType, priorityManager): 
                                   (mod.name === UNI_PATCH) && (mod.id === item.id)))
                .map((item, idx) => {
     if (idx === 0) {
-      resetMaxPriority();
+      resetMaxPriority(lockedEntries.length);
     }
     return {
       ...item,
