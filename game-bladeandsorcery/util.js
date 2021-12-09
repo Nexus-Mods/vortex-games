@@ -3,7 +3,7 @@ const semver = require('semver');
 const rjson = require('relaxed-json');
 const { fs, log, util } = require('vortex-api');
 
-const { GAME_ID } = require('./common');
+const { GAME_ID, BAS_DB } = require('./common');
 
 // The global file holds current gameversion information
 //  we're going to use this to compare against a mod's expected
@@ -91,8 +91,34 @@ async function findGameConfig(discoveryPath) {
         : Promise.reject(new util.NotFound('Missing game.json config file.'));
     });
   const basePath = path.join(discoveryPath, streamingAssetsPath(), 'Default');
-  return findConfig(path.join(basePath, 'Bas'))
-    .catch(err => findConfig(basePath));
+  try {
+    const configPath = await extractBaSDB(discoveryPath);
+    return findConfig(configPath);
+  } catch (err) {
+    // Backwards compatibility for pre U10
+    return findConfig(path.join(basePath, 'Bas'))
+      .catch(err => findConfig(basePath));
+  }
+}
+
+// Returns the path to the game.json file
+async function extractBaSDB(discoveryPath) {
+  const basePath = path.join(discoveryPath, streamingAssetsPath(), 'Default');
+  const basArc = path.join(basePath, BAS_DB);
+  try {
+    await fs.statAsync(path.join(basePath, GAME_FILE));
+    // game.json file is already there.
+    return basePath;
+  } catch (err) {
+    // game.json isn't there - extract it.
+    try {
+      const seven = new util.SevenZip();
+      await seven.extract(basArc, basePath, { raw: ['Game.json'] });
+      return basePath;
+    } catch (err) {
+      return Promise.reject(err);
+    }
+  }
 }
 
 async function getGameVersion(discoveryPath) {
