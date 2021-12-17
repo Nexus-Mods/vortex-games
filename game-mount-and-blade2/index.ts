@@ -3,10 +3,13 @@ import { Promise as Bluebird } from 'bluebird';
 import * as React from 'react';
 import * as BS from 'react-bootstrap';
 
+import { Element } from 'libxmljs';
+import getVersion from 'exe-version';
+
 import path from 'path';
 import semver from 'semver';
 import { actions, FlexLayout, fs, log, selectors, types, util } from 'vortex-api';
-import { getElementValue, refreshGameParams, walkAsync } from './util';
+import { getElementValue, getXMLData, refreshGameParams, walkAsync } from './util';
 
 import { BANNERLORD_EXEC, GAME_ID, LOCKED_MODULES, MODULES, OFFICIAL_MODULES, SUBMOD_FILE } from './common';
 import CustomItemRenderer from './customItemRenderer';
@@ -596,6 +599,26 @@ function infoComponent(context, props) {
                                       + 'be ignored by auto-sort maintaining its locked position.', { ns: I18N_NAMESPACE })))));
 }
 
+async function resolveGameVersion(discoveryPath: string) {
+  if (process.env.NODE_ENV !== 'development' && semver.satisfies(util.getApplication().version, '<1.4.0')) {
+    return Promise.reject(new util.ProcessCanceled('not supported in older Vortex versions'));
+  }
+  try {
+    const data = await getXMLData(path.join(discoveryPath, 'bin', 'Win64_Shipping_Client', 'Version.xml'));
+    const exePath = path.join(discoveryPath, BANNERLORD_EXEC);
+    const value = data.get<Element>('//Singleplayer')
+      .attr('Value')
+      .value()
+      .slice(1)
+      .split('.')
+      .slice(0, 3)
+      .join('.');
+    return (semver.valid(value)) ? Promise.resolve(value) : getVersion(exePath);
+  } catch (err) {
+    return Promise.reject(err);
+  }
+}
+
 let _IS_SORTING = false;
 function main(context) {
   const metaManager = new ComMetadataManager(context.api);
@@ -605,6 +628,7 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: () => '.',
+    getGameVersion: resolveGameVersion,
     logo: 'gameart.jpg',
     executable: () => BANNERLORD_EXEC,
     setup: (discovery) => prepareForModding(context, discovery, metaManager),
