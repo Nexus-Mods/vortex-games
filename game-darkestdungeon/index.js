@@ -1,7 +1,7 @@
 const Promise = require('bluebird');
 const path = require('path');
 const winapi = require('winapi-bindings');
-const { parseXmlString } = require('libxmljs');
+const { parseXmlString, Node } = require('libxmljs');
 const { fs, log, util } = require('vortex-api');
 
 let _API;
@@ -138,7 +138,11 @@ function setModDataPath(projectFilePath, modPath) {
       }
 
       const modDataPath = projectData.get('//ModDataPath');
-      modDataPath.text(modPath);
+      if (modDataPath === undefined) {
+        projectData.root().node('ModDataPath', modPath);
+      } else {
+        modDataPath.text(modPath);
+      }
       return fs.writeFileAsync(projectFilePath, projectData.toString(), { encoding: 'utf-8' });
     })
 }
