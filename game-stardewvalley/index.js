@@ -11,7 +11,8 @@ const MANIFEST_FILE = 'manifest.json';
 const GAME_ID = 'stardewvalley';
 const PTRN_CONTENT = path.sep + 'Content' + path.sep;
 const SMAPI_EXE = 'StardewModdingAPI.exe';
-const SMAPI_DATA = 'windows-install.dat';
+const SMAPI_DLL = 'SMAPI.Installer.dll';
+const SMAPI_DATA = ['windows-install.dat', 'install.dat'];
 
 const _SMAPI_BUNDLED_MODS = ['ErrorHandler', 'ConsoleCommands', 'SaveBackup'];
 const getBundledMods = () => {
@@ -319,17 +320,37 @@ function isSMAPIModType(instructions) {
 
 function testSMAPI(files, gameId) {
   // Make sure the download contains the SMAPI data archive.s
-  const supported = (gameId === GAME_ID) && (files.find(file => file.toLowerCase().indexOf(SMAPI_DATA) !== -1) !== undefined);
+  const supported = (gameId === GAME_ID) && (files.find(file =>
+    path.basename(file) === SMAPI_DLL) !== undefined)
   return Promise.resolve({
       supported,
       requiredFiles: [],
   });
 }
 
-async function installSMAPI(files, destinationPath) {
+async function installSMAPI(getDiscoveryPath, files, destinationPath) {
+  const folder = process.platform === 'win32'
+    ? 'windows'
+    : process.platform === 'linux'
+      ? 'linux'
+      : 'macos';
+  const fileHasCorrectPlatform = (file) => {
+    const segments = file.split(path.sep).map(seg => seg.toLowerCase());
+    return (segments.includes(folder));
+  }
   // Find the SMAPI data archive
-  const dataFile = files.find(file => file.toLowerCase().endsWith(SMAPI_DATA));
+  const dataFile = files.find(file => {
+    const isCorrectPlatform = fileHasCorrectPlatform(file);
+    return isCorrectPlatform && SMAPI_DATA.includes(path.basename(file).toLowerCase())
+  });
   
+  let data = '';
+  try {
+    data = await fs.readFileAsync(path.join(getDiscoveryPath(), 'Stardew Valley.deps.json'), { encoding: 'utf8' });
+  } catch (err) {
+    log('error', 'failed to parse SDV dependencies', err);
+  }
+
   // file will be outdated after the walk operation so prepare a replacement. 
   const updatedFiles = [];
 
@@ -370,6 +391,12 @@ async function installSMAPI(files, destinationPath) {
     type: 'attribute',
     key: 'smapiBundledMods',
     value: getBundledMods(),
+  });
+
+  instructions.push({
+    type: 'generatefile',
+    data,
+    destination: 'StardewModdingAPI.deps.json',
   });
 
   return Promise.resolve({ instructions });
@@ -465,7 +492,7 @@ module.exports = {
 
     context.registerGame(new StardewValley(context));
     // Register our SMAPI mod type and installer. Note: This currently flags an error in Vortex on installing correctly.
-    context.registerInstaller('smapi-installer', 30, testSMAPI, installSMAPI);
+    context.registerInstaller('smapi-installer', 30, testSMAPI, (files, dest) => installSMAPI(getDiscoveryPath, files, dest));
     context.registerModType('SMAPI', 30, gameId => gameId === GAME_ID, getSMAPIPath, isSMAPIModType);
     context.registerInstaller('stardew-valley-installer', 50, testSupported, install);
     context.registerInstaller('sdvrootfolder', 50, testRootFolder, installRootFolder);
