@@ -675,7 +675,7 @@ async function readPAKs(api: types.IExtensionApi)
     return [];
   }
 
-  return Promise.all(paks.map(async fileName => {
+  const res = await Promise.all(paks.map(async fileName => {
     return (util as any).withErrorContext('reading pak', fileName, async () => {
       try {
         const manifestEntry = manifest.files.find(entry => entry.relPath === fileName);
@@ -683,13 +683,18 @@ async function readPAKs(api: types.IExtensionApi)
           ? state.persistent.mods[GAME_ID]?.[manifestEntry.source]
           : undefined;
 
-        return { fileName, mod, info: await extractPakInfoImpl(api, path.join(modsPath(), fileName)) };
+        return {
+          fileName,
+          mod,
+          info: await extractPakInfoImpl(api, path.join(modsPath(), fileName)),
+        };
       } catch (err) {
         api.showErrorNotification('Failed to read pak', err, { allowReport: true });
         return undefined;
       }
     });
   }));
+  return res.filter(iter => iter !== undefined);
 }
 
 async function readLO(api: types.IExtensionApi): Promise<string[]> {
