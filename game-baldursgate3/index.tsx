@@ -10,7 +10,7 @@ import { createAction } from 'redux-act';
 import * as semver from 'semver';
 import { generate as shortid } from 'shortid';
 import walk, { IEntry } from 'turbowalk';
-import { actions, fs, log, selectors, types, util } from 'vortex-api';
+import { actions, fs, log, selectors, tooltip, types, util } from 'vortex-api';
 import { Builder, parseStringPromise } from 'xml2js';
 import { ILoadOrderEntry, IModNode, IModSettings, IPakInfo, IXmlNode } from './types';
 
@@ -89,7 +89,6 @@ function getGamePath(api) {
   const state = api.getState();
   return state.settings.gameMode.discovered?.[GAME_ID]?.path;
 }
-
 
 function getGameDataPath(api) {
   const state = api.getState();
@@ -282,13 +281,14 @@ const getPlayerProfiles = (() => {
 })();
 
 function InfoPanel(props) {
-  const { t, currentProfile, onSetPlayerProfile } = props;
+  const { t, currentProfile, onInstallLSLib,
+          onSetPlayerProfile, isLsLibInstalled } = props;
 
   const onSelect = React.useCallback((ev) => {
     onSetPlayerProfile(ev.currentTarget.value);
   }, [onSetPlayerProfile]);
 
-  return (
+  return isLsLibInstalled() ? (
     <div style={{ display: 'flex', flexDirection: 'column', padding: '16px' }}>
       <div style={{ display: 'flex', whiteSpace: 'nowrap', alignItems: 'center' }}>
         {t('Ingame Profile: ')}
@@ -312,6 +312,24 @@ function InfoPanel(props) {
           + 'and can therefore not be load-ordered by mod managers. If you want to disable '
           + 'such a mod, please do so on the "Mods" screen.')}
       </div>
+    </div>
+  ) : (
+    <div style={{ display: 'flex', flexDirection: 'column', padding: '16px' }}>
+      <div style={{ display: 'flex', whiteSpace: 'nowrap', alignItems: 'center' }}>
+        {t('LSLib is not installed')}
+      </div>
+      <hr/>
+      <div>
+        {t('To take full advantage of Vortex\'s BG3 modding capabilities such as managing the '
+         + 'order in which mods are loaded into the game; Vortex requires a 3rd party tool "LSLib", '
+         + 'please install the library using the buttons below to manage your load order.')}
+      </div>
+      <tooltip.Button
+        tooltip={'Install LSLib'}
+        onClick={onInstallLSLib}
+      >
+        {t('Install LSLib')}
+      </tooltip.Button>
     </div>
   );
 }
@@ -402,6 +420,32 @@ interface IDivineOutput {
   returnCode: number;
 }
 
+function getLatestLSLibMod(api: types.IExtensionApi) {
+  const state = api.getState();
+  const mods: { [modId: string]: types.IMod } = state.persistent.mods[GAME_ID];
+  if (mods === undefined) {
+    log('warn', 'LSLib is not installed');
+    return undefined;
+  }
+  const lsLib: types.IMod = Object.keys(mods).reduce((prev: types.IMod, id: string) => {
+    if (mods[id].type === 'bg3-lslib-divine-tool') {
+      const latestVer = util.getSafe(prev, ['attributes', 'version'], '0.0.0');
+      const currentVer = util.getSafe(mods[id], ['attributes', 'version'], '0.0.0');
+      if (semver.gt(currentVer, latestVer)) {
+        prev = mods[id];
+      }
+    }
+    return prev;
+  }, undefined);
+
+  if (lsLib === undefined) {
+    log('warn', 'LSLib is not installed');
+    return undefined;
+  }
+
+  return lsLib;
+}
+
 function divine(api: types.IExtensionApi,
                 action: DivineAction,
                 options: IDivineOptions): Promise<IDivineOutput> {
@@ -410,14 +454,14 @@ function divine(api: types.IExtensionApi,
     let stdout: string = '';
 
     const state = api.getState();
-    const discovery = selectors.discoveryByGame(state, GAME_ID);
-    if (discovery?.path === undefined) {
-      const err = new Error('LSLib/Divine tool is missing/undeployed');
+    const stagingFolder = selectors.installPathForGame(state, GAME_ID);
+    const lsLib: types.IMod = getLatestLSLibMod(api);
+    if (lsLib === undefined) {
+      const err = new Error('LSLib/Divine tool is missing');
       err['attachLogOnReport'] = false;
       return reject(err);
     }
-
-    const exe = path.join(discovery.path, 'tools', 'divine.exe');
+    const exe = path.join(stagingFolder, lsLib.installationPath, 'tools', 'divine.exe');
     const args = [
       '--action', action,
       '--source', options.source,
@@ -663,7 +707,10 @@ async function readPAKList(api: types.IExtensionApi) {
 async function readPAKs(api: types.IExtensionApi)
     : Promise<Array<{ fileName: string, mod: types.IMod, info: IPakInfo }>> {
   const state = api.getState();
-
+  const lsLib = getLatestLSLibMod(api);
+  if (lsLib === undefined) {
+    return [];
+  }
   const paks = await readPAKList(api);
 
   let manifest;
@@ -771,11 +818,21 @@ function InfoPanelWrap(props: { api: types.IExtensionApi, refresh: () => void })
     impl();
   }, [ api ]);
 
+  const isLsLibInstalled = React.useCallback(() => {
+    return getLatestLSLibMod(api) !== undefined;
+  }, [ api ]);
+
+  const onInstallLSLib = React.useCallback(() => {
+    onGameModeActivated(api, GAME_ID);
+  }, [api]);
+
   return (
     <InfoPanel
       t={api.translate}
       currentProfile={currentProfile}
       onSetPlayerProfile={onSetProfile}
+      isLsLibInstalled={isLsLibInstalled}
+      onInstallLSLib={onInstallLSLib}
     />
   );
 }
@@ -901,7 +958,7 @@ function main(context: types.IExtensionContext) {
     { name: 'BG3 Replacer' } as any);
 
   context.registerModType('bg3-lslib-divine-tool', 15, (gameId) => gameId === GAME_ID,
-    () => path.join(getGamePath(context.api)), files => isLSLib(context.api, files),
+    () => undefined, files => isLSLib(context.api, files),
     { name: 'BG3 LSLib' } as any);
 
   context.registerLoadOrder({
