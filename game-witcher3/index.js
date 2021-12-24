@@ -706,8 +706,11 @@ async function preSort(context, items, direction, updateType, priorityManager) {
   const filterFunc = (modName) => {
     // We're adding this to avoid having the load order page
     //  from not loading if we encounter an invalid mod name.
-    if (!modName) {
+    if (!modName || typeof(modName) !== 'string') {
       log('debug', 'encountered invalid mod instance/name');
+      if (typeof(modName) !== 'undefined') {
+        log('debug', 'invalid mod name', JSON.stringify(modName));
+      }
       return false;
     }
     return modName.startsWith(LOCKED_PREFIX);
