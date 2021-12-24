@@ -787,6 +787,10 @@ async function preSort(context, items, direction, updateType, priorityManager) {
   let preSorted = [].concat(
     ...lockedEntries,
     items.filter(item => {
+      if (item?.name === undefined) {
+        // Corrupted state ?
+        return false;
+      }
       const isLocked = lockedEntries.find(locked => locked.name === item.name) !== undefined;
       const doNotDisplay = DO_NOT_DISPLAY.includes(item.name.toLowerCase());
       return !isLocked && !doNotDisplay;
