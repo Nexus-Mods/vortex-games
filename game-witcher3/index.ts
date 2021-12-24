@@ -1,4 +1,4 @@
-import Bluebird from 'bluebird';
+import Bluebird, { all } from 'bluebird';
 import { Element, parseXmlString } from 'libxmljs';
 import path from 'path';
 import React from 'react';
@@ -765,6 +765,8 @@ async function preSort(context, items, direction, updateType, priorityManager): 
           if (prevPrefix >= entry.prefix) {
             accum.push({
               ...entry,
+              external: ((entry.external === true) && (allMods.managed.find(man => man.name === entry.name)))
+                ? false : true,
               prefix: prevPrefix + 1,
             });
           } else {
