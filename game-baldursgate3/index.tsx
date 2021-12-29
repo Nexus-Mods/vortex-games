@@ -14,7 +14,7 @@ import { actions, fs, log, selectors, tooltip, types, util } from 'vortex-api';
 import { Builder, parseStringPromise } from 'xml2js';
 import { ILoadOrderEntry, IModNode, IModSettings, IPakInfo, IXmlNode } from './types';
 
-import { GAME_ID, LSLIB_URL } from './common';
+import { DEFAULT_MOD_SETTINGS, GAME_ID, LSLIB_URL } from './common';
 import * as gitHubDownloader from './githubDownloader';
 
 const STOP_PATTERNS = ['[^/]*\\.pak$'];
@@ -38,7 +38,7 @@ const reducer: types.IReducerSpec = {
     },
   },
   defaults: {
-    playerProfile: '',
+    playerProfile: 'global',
     settingsWritten: {},
   },
 };
@@ -55,9 +55,30 @@ function profilesPath() {
   return path.join(documentsPath(), 'PlayerProfiles');
 }
 
+function globalProfilePath() {
+  return path.join(documentsPath(), 'global');
+}
+
 function findGame(): any {
   return util.GameStoreHelper.findByAppId(['1456460669', '1086940'])
     .then(game => game.gamePath);
+}
+
+async function ensureGlobalProfile(api: types.IExtensionApi, discovery: types.IDiscoveryResult) {
+  if (discovery?.path) {
+    const profilePath = globalProfilePath();
+    try {
+      await fs.ensureDirWritableAsync(profilePath);
+      const modSettingsFilePath = path.join(profilePath, 'modsettings.lsx');
+      try {
+        await fs.statAsync(modSettingsFilePath);
+      } catch (err) {
+        await fs.writeFileAsync(modSettingsFilePath, DEFAULT_MOD_SETTINGS, { encoding: 'utf8' });
+      }
+    } catch (err) {
+      return Promise.reject(err);
+    }
+  }
 }
 
 function prepareForModding(api: types.IExtensionApi, discovery): any {
@@ -82,7 +103,8 @@ function prepareForModding(api: types.IExtensionApi, discovery): any {
             + 'not work and/or break unrelated things within the game.<br/><br/>'
             + '[color="red"]Please don\'t report issues that happen in connection with mods to the '
             + 'game developers (Larian Studios) or through the Vortex feedback system.[/color]',
-      }, [ { label: 'I understand' } ])));
+      }, [ { label: 'I understand' } ])))
+    .finally(() => ensureGlobalProfile(api, discovery));
 }
 
 function getGamePath(api) {
@@ -299,7 +321,7 @@ function InfoPanel(props) {
           value={currentProfile}
           onChange={onSelect}
         >
-          <option key='' value=''>{t('Please select one')}</option>
+          <option key='global' value='global'>{t('All Profiles')}</option>
           {getPlayerProfiles().map(prof => (<option key={prof} value={prof}>{prof}</option>))}
         </FormControl>
       </div>
@@ -334,20 +356,24 @@ function InfoPanel(props) {
   );
 }
 
+function getActivePlayerProfile(api: types.IExtensionApi) {
+  return api.store.getState().settings.baldursgate3?.playerProfile || 'global';
+}
+
 async function writeLoadOrder(api: types.IExtensionApi,
                               loadOrder: { [key: string]: ILoadOrderEntry }) {
-  const bg3profile: string = api.store.getState().settings.baldursgate3?.playerProfile;
-
-  if (!bg3profile) {
+  const bg3profile: string = getActivePlayerProfile(api);
+  const playerProfiles = (bg3profile === 'global') ? getPlayerProfiles() : [bg3profile];
+  if (playerProfiles.length === 0) {
     api.sendNotification({
-      id: 'bg3-no-profile-selected',
+      id: 'bg3-no-profiles',
       type: 'warning',
-      title: 'No profile selected',
-      message: 'Please select the in-game profile to mod on the "Load Order" page',
+      title: 'No player profiles',
+      message: 'Please run the game at least once and create a profile in-game',
     });
     return;
   }
-  api.dismissNotification('bg3-no-profile-selected');
+  api.dismissNotification('bg3-no-profiles');
 
   try {
     const modSettings = await readModSettings(api);
@@ -395,8 +421,13 @@ async function writeLoadOrder(api: types.IExtensionApi,
     modsNode.children[0].node = descriptionNodes;
     loNode.children[0].node = loadOrderNodes;
 
-    writeModSettings(api, modSettings);
-    api.store.dispatch(settingsWritten(bg3profile, Date.now(), enabledPaks.length));
+    if (bg3profile === 'global') {
+      writeModSettings(api, modSettings, bg3profile);
+    }
+    for (const profile of playerProfiles) {
+      writeModSettings(api, modSettings, profile);
+      api.store.dispatch(settingsWritten(profile, Date.now(), enabledPaks.length));
+    }
   } catch (err) {
     api.showErrorNotification('Failed to write load order', err, {
       allowReport: false,
@@ -602,34 +633,28 @@ function parseModNode(node: IModNode) {
 }
 
 async function readModSettings(api: types.IExtensionApi): Promise<IModSettings> {
-  const state = api.store.getState();
-  let bg3profile: string = state.settings.baldursgate3?.playerProfile;
-  if (!bg3profile) {
-    const playerProfiles = getPlayerProfiles();
-    if (playerProfiles.length === 0) {
-      storedLO = [];
-      return;
-    }
-    bg3profile = getPlayerProfiles()[0];
+  const bg3profile: string = getActivePlayerProfile(api);
+  const playerProfiles = getPlayerProfiles();
+  if (playerProfiles.length === 0) {
+    storedLO = [];
+    return;
   }
 
-  const settingsPath = path.join(profilesPath(), bg3profile, 'modsettings.lsx');
+  const settingsPath = (bg3profile !== 'global')
+    ? path.join(profilesPath(), bg3profile, 'modsettings.lsx')
+    : path.join(globalProfilePath(), 'modsettings.lsx');
   const dat = await fs.readFileAsync(settingsPath);
   return parseStringPromise(dat);
 }
 
-async function writeModSettings(api: types.IExtensionApi, data: IModSettings): Promise<void> {
-  let bg3profile: string = api.store.getState().settings.baldursgate3?.playerProfile;
+async function writeModSettings(api: types.IExtensionApi, data: IModSettings, bg3profile: string): Promise<void> {
   if (!bg3profile) {
-    const playerProfiles = getPlayerProfiles();
-    if (playerProfiles.length === 0) {
-      storedLO = [];
-      return;
-    }
-    bg3profile = getPlayerProfiles()[0];
+    return;
   }
 
-  const settingsPath = path.join(profilesPath(), bg3profile, 'modsettings.lsx');
+  const settingsPath = (bg3profile !== 'global') 
+    ? path.join(profilesPath(), bg3profile, 'modsettings.lsx')
+    : path.join(globalProfilePath(), 'modsettings.lsx');
 
   const builder = new Builder();
   const xml = builder.buildObject(data);
