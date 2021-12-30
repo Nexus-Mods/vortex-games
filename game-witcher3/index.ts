@@ -38,6 +38,7 @@ import { W3Reducer } from './reducers';
 const GOG_ID = '1207664663';
 const GOG_ID_GOTY = '1495134320';
 const STEAM_ID = '499450';
+const STEAM_ID_WH = '292030';
 
 const CONFIG_MATRIX_REL_PATH = path.join('bin', 'config', 'r4game', 'user_config_matrix', 'pc');
 
@@ -194,7 +195,7 @@ function findGame(): Bluebird<string> {
     }
     return Bluebird.resolve(instPath.value as string);
   } catch (err) {
-    return util.GameStoreHelper.findByAppId([GOG_ID_GOTY, GOG_ID, STEAM_ID])
+    return util.GameStoreHelper.findByAppId([GOG_ID_GOTY, GOG_ID, STEAM_ID, STEAM_ID_WH])
       .then(game => game.gamePath);
   }
 }
