@@ -18,6 +18,13 @@ function findGame() {
   }
 }
 
+function getGameVersion(gamePath, exePath) {
+  const fullPath = path.join(gamePath, exePath);
+  const fileVersion = getFileVersion(fullPath);
+
+  return fileVersion + '-VR';
+}
+
 let tools = [
   {
     id: 'FO4VREdit',
@@ -49,6 +56,7 @@ function main(context) {
     queryModPath: () => 'data',
     logo: 'gameart.jpg',
     executable: () => 'Fallout4VR.exe',
+    getGameVersion,
     requiredFiles: [
       'Fallout4VR.exe',
     ],

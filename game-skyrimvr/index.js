@@ -23,9 +23,10 @@ function getGameVersion(gamePath, exePath) {
   const fullPath = path.join(gamePath, exePath);
   const fileVersion = getFileVersion(fullPath);
 
-  return Promise.resolve((fileVersion !== '1.0.0.0')
+  return (Promise.resolve((fileVersion !== '1.0.0.0')
     ? fileVersion
-    : getFileVersionLocalized(fullPath));
+    : getFileVersionLocalized(fullPath)))
+    .then(version => version + '-VR');
 }
 
 const tools = [
