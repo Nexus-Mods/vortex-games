@@ -257,9 +257,16 @@ async function installRootFolder(files, destinationPath) {
   return { instructions };
 }
 
+function isValidManifest(filePath) {
+  const segments = filePath.toLowerCase().split(path.sep);
+  const isManifestFile = segments[segments.length - 1] === MANIFEST_FILE;
+  const isLocale = segments.includes('locale');
+  return isManifestFile && !isLocale;
+}
+
 async function testSupported(files, gameId) {
   const supported = (gameId === GAME_ID)
-    && (files.find(file => path.basename(file).toLowerCase() === MANIFEST_FILE) !== undefined)
+    && (files.find(isValidManifest) !== undefined)
     && (files.find(file => {
       // We create a prefix fake directory just in case the content
       //  folder is in the archive's root folder. This is to ensure we
@@ -276,8 +283,7 @@ async function install(files,
                 progressDelegate) {
   // The archive may contain multiple manifest files which would
   //  imply that we're installing multiple mods.
-  const manifestFiles = files.filter(file =>
-    path.basename(file).toLowerCase() === MANIFEST_FILE);
+  const manifestFiles = files.filter(isValidManifest);
 
   const mods = manifestFiles.map(manifestFile => {
     const rootFolder = path.dirname(manifestFile);
