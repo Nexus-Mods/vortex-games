@@ -748,22 +748,29 @@ async function readPAKs(api: types.IExtensionApi)
   }
 
   const res = await Promise.all(paks.map(async fileName => {
-    return (util as any).withErrorContext('reading pak', fileName, async () => {
-      try {
-        const manifestEntry = manifest.files.find(entry => entry.relPath === fileName);
-        const mod = (manifestEntry !== undefined)
-          ? state.persistent.mods[GAME_ID]?.[manifestEntry.source]
-          : undefined;
+    return util.withErrorContext('reading pak', fileName, () => {
+      const func = async () => {
+        try {
+          const manifestEntry = manifest.files.find(entry => entry.relPath === fileName);
+          const mod = (manifestEntry !== undefined)
+            ? state.persistent.mods[GAME_ID]?.[manifestEntry.source]
+            : undefined;
 
-        return {
-          fileName,
-          mod,
-          info: await extractPakInfoImpl(api, path.join(modsPath(), fileName)),
-        };
-      } catch (err) {
-        api.showErrorNotification('Failed to read pak', err, { allowReport: true });
-        return undefined;
-      }
+          return {
+            fileName,
+            mod,
+            info: await extractPakInfoImpl(api, path.join(modsPath(), fileName)),
+          };
+        } catch (err) {
+          // could happen if the file got deleted since reading the list of paks.
+          // actually, this seems to be fairly common when updating a mod
+          if (err.code !== 'ENOENT') {
+            api.showErrorNotification('Failed to read pak', err, { allowReport: true });
+          }
+          return undefined;
+        }
+      };
+      return Bluebird.resolve(func());
     });
   }));
   return res.filter(iter => iter !== undefined);
@@ -913,6 +920,10 @@ async function onCheckModVersion(api: types.IExtensionApi, gameId: string, mods:
   }
 }
 
+function nop() {
+  // nop
+}
+
 async function onGameModeActivated(api: types.IExtensionApi, gameId: string) {
   if (gameId !== GAME_ID) {
     return;
@@ -992,7 +1003,7 @@ function main(context: types.IExtensionContext) {
     serializeLoadOrder: (loadOrder) => serializeLoadOrder(context.api, loadOrder),
     validate,
     toggleableEntries: true,
-    usageInstructions: (() => (<InfoPanelWrap api={context.api} refresh={() => {}} />)) as any,
+    usageInstructions: (() => (<InfoPanelWrap api={context.api} refresh={nop} />)) as any,
   });
 
   context.once(() => {
