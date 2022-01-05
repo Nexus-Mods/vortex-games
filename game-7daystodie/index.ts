@@ -10,6 +10,8 @@ import { genProps, getModName, toBlue } from './util';
 const STEAM_ID = '251570';
 const STEAM_DLL = 'steamclient64.dll';
 
+const ROOT_MOD_CANDIDATES = ['bepinex'];
+
 async function findGame() {
   return util.GameStoreHelper.findByAppId([STEAM_ID])
     .then(game => game.gamePath);
@@ -60,6 +62,40 @@ function testSupportedContent(files, gameId) {
   return Promise.resolve({
     supported,
     requiredFiles: [],
+  });
+}
+
+function findCandFile(files: string[]): string {
+  return files.find(file => file.toLowerCase().split(path.sep)
+    .find(seg => ROOT_MOD_CANDIDATES.includes(seg)) !== undefined);
+}
+
+function hasCandidate(files: string[]): boolean {
+  const candidate = findCandFile(files);
+  return candidate !== undefined;
+}
+
+async function installRootMod(files: string[],
+                              gameId: string): Promise<types.IInstallResult> {
+  const filtered = files.filter(file => !file.endsWith(path.sep));
+  const candidate = findCandFile(files);
+  const candIdx = candidate.toLowerCase().split(path.sep)
+    .findIndex(seg => ROOT_MOD_CANDIDATES.includes(seg));
+  const instructions: types.IInstruction[] = filtered.reduce((accum, iter) => {
+    accum.push({
+      type: 'copy',
+      source: iter,
+      destination: iter.split(path.sep).slice(candIdx).join(path.sep),
+    });
+    return accum;
+  }, []);
+  return Promise.resolve({ instructions });
+}
+
+async function testRootMod(files: string[], gameId: string): Promise<types.ISupportedResult> {
+  return Promise.resolve({
+    requiredFiles: [],
+    supported: hasCandidate(files) && gameId === GAME_ID,
   });
 }
 
@@ -122,8 +158,21 @@ function main(context: types.IExtensionContext) {
       + 'the directory names with "AAA, AAB, AAC, ..." to ensure they load in the order you set here.',
   });
 
+  const getOverhaulPath = (game: types.IGame) => {
+    const state = context.api.getState();
+    const discovery = selectors.discoveryByGame(state, GAME_ID);
+    return discovery?.path || '.';
+  };
+
   context.registerInstaller('7dtd-mod', 25,
     toBlue(testSupportedContent), toBlue(installContent));
+
+  context.registerInstaller('7dtd-root-mod', 20, toBlue(testRootMod), toBlue(installRootMod));
+
+  context.registerModType('7dtd-root-mod', 20, (gameId) => gameId === GAME_ID,
+    getOverhaulPath, (instructions) =>
+      (Promise.resolve(hasCandidate(instructions.map(instr => instr.destination))) as any),
+      { name: 'Root Directory Mod', mergeMods: true });
 
   context.registerMigration(toBlue(old => migrate020(context.api, old)));
   context.registerMigration(toBlue(old => migrate100(context, old)));

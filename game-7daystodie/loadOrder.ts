@@ -1,6 +1,6 @@
 import { fs, types, util } from 'vortex-api';
 
-import { GAME_ID } from './common';
+import { GAME_ID, INVALID_LO_MOD_TYPES } from './common';
 import { ILoadOrderEntry, IProps, ISerializableData, LoadOrder } from './types';
 import { ensureLOFile, genProps, makePrefix } from './util';
 
@@ -14,7 +14,8 @@ export async function serialize(context: types.IExtensionContext,
 
   // Make sure the LO file is created and ready to be written to.
   const loFilePath = await ensureLOFile(context, profileId, props);
-  const filteredLO = loadOrder.filter(lo => props.mods?.[lo?.modId]?.type !== 'collection');
+  const filteredLO = loadOrder.filter(lo => 
+    !INVALID_LO_MOD_TYPES.includes(props.mods?.[lo?.modId]?.type));
 
   // The array at this point is sorted in the order in which we want the game to load the
   //  mods, which means we can just loop through it and use the index to assign the prefix.
@@ -63,7 +64,7 @@ export async function deserialize(context: types.IExtensionContext): Promise<Loa
     const filteredData = data.filter(entry => enabledModIds.includes(entry.id));
 
     // Check if the user added any new mods.
-    const diff = enabledModIds.filter(id => (mods[id]?.type !== 'collection')
+    const diff = enabledModIds.filter(id => (!INVALID_LO_MOD_TYPES.includes(mods[id]?.type))
       && (filteredData.find(loEntry => loEntry.id === id) === undefined));
 
     // Add any newly added mods to the bottom of the loadOrder.
