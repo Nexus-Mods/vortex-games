@@ -507,7 +507,7 @@ function divine(api: types.IExtensionApi,
       args.push('--expression', options.expression);
     }
 
-    const proc = spawn(exe, args, { cwd: path.join(__dirname, 'tools') });
+    const proc = spawn(exe, args);
 
     proc.stdout.on('data', data => stdout += data);
     proc.stderr.on('data', data => log('warn', data));
