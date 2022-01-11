@@ -1174,7 +1174,7 @@ function main(context: types.IExtensionContext) {
     getModLimitPatcher: () => modLimitPatcher,
   });
 
-  context['registerCollectionFeature'](
+  context.optional.registerCollectionFeature(
     'witcher3_collection_data',
     (gameId: string, includedMods: string[], collection: types.IMod) =>
       genCollectionsData(context, gameId, includedMods, collection),

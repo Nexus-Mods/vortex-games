@@ -322,7 +322,7 @@ function main(context) {
     }),
   });
 
-  context['registerCollectionFeature'](
+  context.optional.registerCollectionFeature(
     'kcd_collection_data',
     (gameId: string, includedMods: string[]) =>
       genCollectionsData(context, gameId, includedMods),
