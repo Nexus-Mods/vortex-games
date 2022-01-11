@@ -65,6 +65,7 @@ function main(context) {
     },
     details: {
       steamAppId: 611660,
+      compatibleDownloads: ['fallout4'],
     }
   });
 
