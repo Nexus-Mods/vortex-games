@@ -1,8 +1,8 @@
 import Bluebird from 'bluebird';
-import { parseXmlString } from 'libxmljs';
 import path from 'path';
 import turbowalk from 'turbowalk';
 import { fs, selectors, types, util } from 'vortex-api';
+import { parseStringPromise } from 'xml2js';
 
 import { GAME_ID, LO_FILE_NAME, MOD_INFO } from './common';
 import { IProps } from './types';
@@ -69,10 +69,11 @@ export async function getModName(modInfoPath): Promise<any> {
   let modInfo;
   try {
     const xmlData = await fs.readFileAsync(modInfoPath);
-    modInfo = parseXmlString(xmlData);
-    const modName = modInfo.get('//Name');
-    return ((modName !== undefined) && (modName.attr('value').value() !== undefined))
-      ? Promise.resolve(modName.attr('value').value())
+    modInfo = await parseStringPromise(xmlData);
+    const modName = modInfo?.ModInfo?.[0].Name?.[0]?.$?.value
+                 || modInfo?.xml.ModInfo?.[0]?.Name?.[0]?.$?.value;
+    return (modName !== undefined)
+      ? Promise.resolve(modName)
       : Promise.reject(new util.DataInvalid('Unexpected modinfo.xml format'));
   } catch (err) {
     return Promise.reject(new util.DataInvalid('Failed to parse ModInfo.xml file'));
@@ -89,4 +90,16 @@ export async function getModInfoFiles(basePath: string): Promise<string[]> {
   .catch(err => ['ENOENT', 'ENOTFOUND'].includes(err.code)
     ? Promise.resolve() : Promise.reject(err))
   .then(() => Promise.resolve(filePaths));
+}
+
+export interface IAttribute extends IXmlNode<{ id: string, type: string, value: string }> {}
+export interface IXmlNode<AttributeT extends object> {
+  $: AttributeT;
+}
+export interface IModNameNode extends IXmlNode<{ id: 'Name' }> {
+  attribute: IAttribute;
+}
+export interface IModInfoNode extends IXmlNode<{ id: 'ModInfo' }> {
+  children?: [{ node: IModNameNode[] }];
+  attribute?: IAttribute[];
 }
