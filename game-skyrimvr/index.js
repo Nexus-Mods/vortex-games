@@ -84,6 +84,7 @@ function main(context) {
     },
     details: {
       steamAppId: 611670,
+      compatibleDownloads: ['skyrimse'],
     }
   });
 
