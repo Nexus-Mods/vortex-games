@@ -13,7 +13,8 @@ function findGame() {
     }
     return Promise.resolve(instPath.value);
   } catch (err) {
-    return util.steam.findByName('Fallout: New Vegas.*')
+    return util.GameStoreHelper.findByName('Fallout: New Vegas.*')
+      .catch(err => util.GameStoreHelper.findByAppId(['22380', '22490', '1454587428']))
       .then(game => game.gamePath);
   }
 }

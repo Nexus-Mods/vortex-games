@@ -1,6 +1,10 @@
 {
   "name": "Game: Stardew Valley",
   "author": "Pathoschild",
+<<<<<<< HEAD
   "version": "0.2.7",
+=======
+  "version": "0.2.5",
+>>>>>>> master
   "description": "Support for Stardew Valley"
 }

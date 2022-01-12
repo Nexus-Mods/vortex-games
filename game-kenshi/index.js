@@ -15,7 +15,30 @@ function findGame() {
   return util.steam.findByAppId('233860')
       .then(game => game.gamePath);
 }
-
+let tools = [
+  {
+    id: 'nvidiaProfileInspector',
+    name: 'Darkmod inspector',
+    logo: 'Nvidia logo.png',
+    executable: () => 'nvidiaProfileInspector.exe',
+    requiredFiles: [
+      'nvidiaProfileInspector.exe',
+      'nvidiaProfileInspector.pdb',
+      'CustomColors.xml',
+      'Reference.xml'
+    ],
+  },
+  {
+    id: 'WOCS.Patcher.Scar.PathFinding fix',
+    name: 'OCS.Patcher.Scar.PathFinding fix',
+    logo: 'OCS logo.png',
+    executable: () => 'OCS.Patcher.Scar.PathFinding.Steam.exe',
+    requiredFiles: [
+      'OCS.Patcher.Scar.PathFinding.exe',
+      'OpenConstructionSet.dll',
+    ],
+  },
+];
 function prepareForModding(discovery) {
   return fs.ensureDirWritableAsync(path.join(discovery.path, 'mods'),
     () => Promise.resolve());
@@ -83,7 +106,7 @@ function getExecutable(discoveryPath) {
 }
 
 function main(context) {
-  context.registerGame({
+context.registerGame({
     id: KENSHI_ID,
     name: 'Kenshi',
     mergeMods: true,
@@ -91,6 +114,7 @@ function main(context) {
     queryModPath: () => 'mods',
     logo: 'gameart.jpg',
     executable: (discoveryPath) => getExecutable(discoveryPath),
+    supportedToos: tools, // Assign the tools in the registerGame API call
     requiredFiles: [
       'OgreMain_x64.dll',
       path.join('data', 'kenshi.ico'),

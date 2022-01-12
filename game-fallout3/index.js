@@ -14,7 +14,8 @@ function findGame() {
     }
     return Promise.resolve(instPath.value);
   } catch (err) {
-    return util.steam.findByName('Fallout 3')
+    return util.GameStoreHelper.findByAppId(['22300', '22370', '1454315831'])
+      .catch(err => util.GameStoreHelper.findByName('Fallout 3.*'))
       .then(game => game.gamePath);
   }
 }

@@ -72,14 +72,7 @@ class MasterChiefCollectionGame {
   }
 
   queryModPath(gamePath) {
-    if (_GAME_STORE_ID !== 'xbox') {
-      return '.'
-    }
-  
-    const segments = gamePath.split(path.sep).filter(seg => !!seg);
-    const idx = segments.indexOf('WindowsApps');
-    const progFiles = segments.splice(0, idx).join(path.sep);
-    return path.join(progFiles, 'ModifiableWindowsApps', 'HaloMCC');
+    return '.';
   }
 
   executable() {
