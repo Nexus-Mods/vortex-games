@@ -1,3 +1,5 @@
+const { getFileVersion, getFileVersionLocalized } = require('exe-version');
+const path = require('path');
 const { util } = require('vortex-api');
 const winapi = require('winapi-bindings');
 
@@ -15,6 +17,16 @@ function findGame() {
     return util.GameStoreHelper.findByAppId(['611670'])
       .then(game => game.gamePath);
   }
+}
+
+function getGameVersion(gamePath, exePath) {
+  const fullPath = path.join(gamePath, exePath);
+  const fileVersion = getFileVersion(fullPath);
+
+  return (Promise.resolve((fileVersion !== '1.0.0.0')
+    ? fileVersion
+    : getFileVersionLocalized(fullPath)))
+    .then(version => version + '-VR');
 }
 
 const tools = [
@@ -63,6 +75,7 @@ function main(context) {
     queryModPath: () => 'data',
     logo: 'gameart.jpg',
     executable: () => 'SkyrimVR.exe',
+    getGameVersion,
     requiredFiles: [
       'SkyrimVR.exe',
     ],
@@ -71,6 +84,7 @@ function main(context) {
     },
     details: {
       steamAppId: 611670,
+      compatibleDownloads: ['skyrimse'],
     }
   });
 

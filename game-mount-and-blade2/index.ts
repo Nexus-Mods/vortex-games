@@ -1,41 +1,36 @@
 import { Promise as Bluebird } from 'bluebird';
-import { app, remote } from 'electron';
-import * as xml from 'libxmljs';
+
 import * as React from 'react';
 import * as BS from 'react-bootstrap';
 
-import { parseXmlString } from 'libxmljs';
+import { Element } from 'libxmljs';
+import getVersion from 'exe-version';
+
 import path from 'path';
 import semver from 'semver';
 import { actions, FlexLayout, fs, log, selectors, types, util } from 'vortex-api';
-import { getXMLData } from './util';
+import { getElementValue, getXMLData, refreshGameParams, walkAsync } from './util';
 
-import { GAME_ID, SUBMOD_FILE } from './common';
+import { BANNERLORD_EXEC, GAME_ID, LOCKED_MODULES, MODULES, OFFICIAL_MODULES, SUBMOD_FILE } from './common';
 import CustomItemRenderer from './customItemRenderer';
 import { migrate026 } from './migrations';
 
 import ComMetadataManager from './ComMetadataManager';
-import { ISortProps } from './types';
+import { getCache, getLauncherData, isInvalid, parseLauncherData, refreshCache } from './subModCache';
+import { ISortProps, ISubModCache } from './types';
+import { genCollectionsData, parseCollectionsData } from './collections/collections';
+import CollectionsDataView from './views/CollectionsDataView';
+import { ICollectionsData } from './collections/types';
 
-const APPUNI = app || remote.app;
 const LAUNCHER_EXEC = path.join('bin', 'Win64_Shipping_Client', 'TaleWorlds.MountAndBlade.Launcher.exe');
 const MODDING_KIT_EXEC = path.join('bin', 'Win64_Shipping_wEditor', 'TaleWorlds.MountAndBlade.Launcher.exe');
-const LAUNCHER_DATA_PATH = path.join(APPUNI.getPath('documents'), 'Mount and Blade II Bannerlord', 'Configs', 'LauncherData.xml');
-const LAUNCHER_DATA = {
-  singlePlayerSubMods: [],
-  multiplayerSubMods: [],
-};
 
 let STORE_ID;
-let CACHE = {};
 
 const STEAMAPP_ID = 261550;
 const EPICAPP_ID = 'Chickadee';
-const MODULES = 'Modules';
 
 const I18N_NAMESPACE = 'game-mount-and-blade2';
-
-const XML_EL_MULTIPLAYER = 'MultiplayerModule';
 
 // A set of folder names (lowercased) which are available alongside the
 //  game's modules folder. We could've used the fomod installer stop patterns
@@ -43,297 +38,6 @@ const XML_EL_MULTIPLAYER = 'MultiplayerModule';
 //  especially given that the game's modding pattern changes quite often.
 const ROOT_FOLDERS = new Set(['bin', 'data', 'gui', 'icons', 'modules',
   'music', 'shaders', 'sounds', 'xmlschemas']);
-
-const OFFICIAL_MODULES = new Set(['Native', 'CustomBattle', 'SandBoxCore', 'Sandbox', 'StoryMode']);
-const LOCKED_MODULES = new Set([]);
-
-// Used for the "custom launcher" tools.
-//  gameMode: singleplayer or multiplayer
-//  subModIds: the mod ids we want to load into the game.
-const PARAMS_TEMPLATE = ['/{{gameMode}}', '_MODULES_{{subModIds}}*_MODULES_'];
-
-// The relative path to the actual game executable, not the launcher.
-const BANNERLORD_EXEC = path.join('bin', 'Win64_Shipping_Client', 'Bannerlord.exe');
-
-async function walkAsync(dir, levelsDeep = 2) {
-  let entries = [];
-  return fs.readdirAsync(dir).then(files => {
-    const filtered = files.filter(file => !file.endsWith('.vortex_backup'));
-    return Bluebird.each(filtered, file => {
-      const fullPath = path.join(dir, file);
-      return fs.statAsync(fullPath).then(stats => {
-        if (stats.isDirectory() && levelsDeep > 0) {
-          return walkAsync(fullPath, levelsDeep - 1)
-            .then(nestedFiles => {
-              entries = entries.concat(nestedFiles);
-              return Promise.resolve();
-            });
-        } else {
-          entries.push(fullPath);
-          return Promise.resolve();
-        }
-      }).catch(err => {
-        // This is a valid use case, particularly if the file
-        //  is deployed by Vortex using symlinks, and the mod does
-        //  not exist within the staging folder.
-        log('error', 'MnB2: invalid symlink', err);
-        return (err.code === 'ENOENT')
-          ? Promise.resolve()
-          : Promise.reject(err);
-      });
-    });
-  })
-  .then(() => Promise.resolve(entries));
-}
-
-async function getDeployedSubModPaths(context) {
-  const state = context.api.store.getState();
-  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
-  if (discovery?.path === undefined) {
-    return Promise.reject(new util.ProcessCanceled('game discovery is incomplete'));
-  }
-  const modulePath = path.join(discovery.path, MODULES);
-  let moduleFiles;
-  try {
-    moduleFiles = await walkAsync(modulePath);
-  } catch (err) {
-    if (err instanceof util.UserCanceled) {
-      return Promise.resolve([]);
-    }
-    const isMissingOfficialModules = ((err.code === 'ENOENT')
-      && ([].concat([ MODULES ], Array.from(OFFICIAL_MODULES)))
-            .indexOf(path.basename(err.path)) !== -1);
-    const errorMsg = isMissingOfficialModules
-      ? 'Game files are missing - please re-install the game'
-      : err.message;
-    context.api.showErrorNotification(errorMsg, err);
-    return Promise.resolve([]);
-  }
-  const subModules = moduleFiles.filter(file => path.basename(file).toLowerCase() === SUBMOD_FILE);
-  return Promise.resolve(subModules);
-}
-
-async function getDeployedModData(context, subModuleFilePaths) {
-  const managedIds = await getManagedIds(context);
-  const getCleanVersion = (subModId, unsanitized) => {
-    if (!unsanitized) {
-      log('debug', 'failed to sanitize/coerce version', { subModId, unsanitized });
-      return undefined;
-    }
-    try {
-      const sanitized = unsanitized.replace(/[a-z]|[A-Z]/g, '');
-      const coerced = semver.coerce(sanitized);
-      return coerced.version;
-    } catch (err) {
-      log('debug', 'failed to sanitize/coerce version',
-        { subModId, unsanitized, error: err.message });
-      return undefined;
-    }
-  };
-
-  return Bluebird.reduce(subModuleFilePaths, async (accum, subModFile: string) => {
-    try {
-      const subModData = await getXMLData(subModFile);
-      const subModId = subModData.get<xml.Element>('//Id').attr('value').value();
-      const subModVerData = subModData.get<xml.Element>('//Version').attr('value').value();
-      const subModVer = getCleanVersion(subModId, subModVerData);
-      const managedEntry = managedIds.find(entry => entry.subModId === subModId);
-      const isMultiplayer = (!!subModData.get(`//${XML_EL_MULTIPLAYER}`));
-      const depNodes = subModData.find<xml.Element>('//DependedModule');
-      let dependencies = [];
-      try {
-        dependencies = depNodes.map(depNode => {
-          let depVersion;
-          const depId = depNode.attr('Id').value();
-          try {
-            const unsanitized = depNode.attr('DependentVersion').value();
-            depVersion = getCleanVersion(subModId, unsanitized);
-          } catch (err) {
-            // DependentVersion is an optional attribute, it's not a big deal if
-            //  it's missing.
-            log('debug', 'failed to resolve dependency version', { subModId, error: err.message });
-          }
-
-          return { depId, depVersion };
-        });
-      } catch (err) {
-        log('debug', 'submodule has no dependencies or is invalid', err);
-      }
-      const subModName = subModData.get<xml.Element>('//Name').attr('value').value();
-
-      accum[subModId] = {
-        subModId,
-        subModName,
-        subModVer,
-        subModFile,
-        vortexId: !!managedEntry ? managedEntry.vortexId : subModId,
-        isOfficial: OFFICIAL_MODULES.has(subModId),
-        isLocked: LOCKED_MODULES.has(subModId),
-        isMultiplayer,
-        dependencies,
-        invalid: {
-          // Will hold the submod ids of any detected cyclic dependencies.
-          cyclic: [],
-
-          // Will hold the submod ids of any missing dependencies.
-          missing: [],
-
-          // Will hold the submod ids of supposedly incompatible dependencies (version-wise)
-          incompatibleDeps: [],
-        },
-      };
-    } catch (err) {
-      const errorMessage = 'Vortex was unable to parse: ' + subModFile + ';\n\n'
-                         + 'You can either inform the mod author and wait for fix, or '
-                         + 'you can use an online xml validator to find and fix the '
-                         + 'error yourself.';
-      // libxmljs rarely produces useful error messages - it usually points
-      //  to the parent node of the actual problem and in this case nearly
-      //  always will point to the root of the XML file (Module) which is completely useless.
-      //  We're going to provide a human readable error to the user.
-      context.api.showErrorNotification('Unable to parse submodule file',
-        errorMessage, { allowReport: false });
-      log('error', 'MNB2: parsing error', err);
-    }
-    return Promise.resolve(accum);
-  }, {});
-}
-
-async function getManagedIds(context) {
-  const state = context.api.store.getState();
-  const activeProfile = selectors.activeProfile(state);
-  if (activeProfile === undefined) {
-    // This is a valid use case if the gamemode
-    //  has failed activation.
-    return Promise.resolve([]);
-  }
-
-  const modState = util.getSafe(state,
-    ['persistent', 'profiles', activeProfile.id, 'modState'], {});
-  const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
-  const enabledMods = Object.keys(modState)
-    .filter(key => !!mods[key] && modState[key].enabled)
-    .map(key => mods[key]);
-
-  const invalidMods = [];
-  const installationDir = selectors.installPathForGame(state, GAME_ID);
-  if (installationDir === undefined) {
-    log('error', 'failed to get managed ids', 'undefined staging folder');
-    return Promise.resolve([]);
-  }
-  return Bluebird.reduce(enabledMods, async (accum, entry) => {
-    if (entry?.installationPath === undefined) {
-      // Invalid mod entry - skip it.
-      return Promise.resolve(accum);
-    }
-    const modInstallationPath = path.join(installationDir, entry.installationPath);
-    let files;
-    try {
-      files = await walkAsync(modInstallationPath, 3);
-    } catch (err) {
-      // The mod must've been removed manually by the user from
-      //  the staging folder - good job buddy!
-      //  Going to log this, but otherwise allow it to proceed.
-      invalidMods.push(entry.id);
-      log('error', 'failed to read mod staging folder', { modId: entry.id, error: err.message });
-      return Promise.resolve(accum);
-    }
-
-    const subModFile = files.find(file => path.basename(file).toLowerCase() === SUBMOD_FILE);
-    if (subModFile === undefined) {
-      // No submod file - no LO
-      return Promise.resolve(accum);
-    }
-
-    let subModId;
-    try {
-      subModId = await getElementValue(subModFile, 'Id');
-    } catch (err) {
-      // The submodule would've never managed to install correctly
-      //  if the xml file had been invalid - this suggests that the user
-      //  or a 3rd party application has tampered with the file...
-      //  We simply log this here as the parse-ing failure will be highlighted
-      //  by the CACHE logic.
-      log('error', '[MnB2] Unable to parse submodule file', err);
-      return Promise.resolve(accum);
-    }
-    accum.push({
-      subModId,
-      subModFile,
-      vortexId: entry.id,
-    });
-
-    return Promise.resolve(accum);
-  }, [])
-  .tap((res) => {
-    if (invalidMods.length > 0) {
-      const errMessage = 'The following mods are inaccessible or are missing '
-        + 'in the staging folder:\n\n' + invalidMods.join('\n') + '\n\nPlease ensure '
-        + 'these mods and their content are not open in any other application '
-        + '(including the game itself). If the mod is missing entirely, please re-install it '
-        + 'or remove it from your mods page. Please check your vortex log file for details.';
-      context.api.showErrorNotification('Invalid Mods in Staging',
-                                        new Error(errMessage), { allowReport: false });
-    }
-    return Promise.resolve(res);
-  });
-}
-
-async function refreshGameParams(context, loadOrder) {
-  // Go through the enabled entries so we can form our game parameters.
-  const enabled = (!!loadOrder && Object.keys(loadOrder).length > 0)
-    ? Object.keys(loadOrder)
-        .filter(key => loadOrder[key].enabled)
-        .sort((lhs, rhs) => loadOrder[lhs].pos - loadOrder[rhs].pos)
-        .reduce((accum, key) => {
-          const cacheKeys = Object.keys(CACHE);
-          const entry = cacheKeys.find(cacheElement => CACHE[cacheElement].vortexId === key);
-          if (!!entry) {
-            accum.push(entry);
-          }
-          return accum;
-        }, [])
-    : LAUNCHER_DATA.singlePlayerSubMods
-        .filter(subMod => subMod.enabled)
-        .map(subMod => subMod.subModId);
-
-  // Currently Singleplayer only! (more research into MP needs to be done)
-  const parameters = [
-    PARAMS_TEMPLATE[0].replace('{{gameMode}}', 'singleplayer'),
-    PARAMS_TEMPLATE[1].replace('{{subModIds}}', enabled.map(key => `*${key}`).join('')),
-  ];
-
-  // This launcher will not function unless the path is guaranteed to point
-  //  towards the bannerlord executable. Given that earlier versions of this
-  //  extension had targeted TaleWorlds.Launcher.exe instead - we need to make
-  //  sure this is set correctly.
-  context.api.store.dispatch(actions.setGameParameters(GAME_ID, {
-    executable: BANNERLORD_EXEC,
-    parameters,
-  }));
-
-  return Promise.resolve();
-}
-
-async function getElementValue(subModuleFilePath, elementName) {
-  const logAndContinue = () => {
-    log('error', 'Unable to parse xml element', elementName);
-    return Promise.resolve(undefined);
-  };
-  return fs.readFileAsync(subModuleFilePath, { encoding: 'utf-8' })
-    .then(xmlData => {
-      try {
-        const modInfo = parseXmlString(xmlData);
-        const element = modInfo.get<xml.Element>(`//${elementName}`);
-        return ((element !== undefined) && (element.attr('value').value() !== undefined))
-          ? Promise.resolve(element.attr('value').value())
-          : logAndContinue();
-      } catch (err) {
-        const errorMessage = 'Vortex was unable to parse: ' + subModuleFilePath + '; please inform the mod author';
-        return Promise.reject(new util.DataInvalid(errorMessage));
-      }
-    });
-}
 
 function findGame() {
   return util.GameStoreHelper.findByAppId([EPICAPP_ID, STEAMAPP_ID.toString()])
@@ -502,69 +206,19 @@ async function prepareForModding(context, discovery, metaManager: ComMetadataMan
       ? util.GameStoreHelper.launchGameStore(context.api, STORE_ID, undefined, true)
       : Promise.resolve());
 
-  const idRegexp = /\<Id\>(.*?)\<\/Id\>/gm;
-  const enabledRegexp = /\<IsSelected\>(.*?)\<\/IsSelected\>/gm;
-  const trimTagsRegexp = /<[^>]*>?/gm;
-  const createDataElement = (xmlNode) => {
-    const nodeString = xmlNode.toString({ whitespace: false }).replace(/[ \t\r\n]/gm, '');
-    if (!!nodeString) {
-      return {
-        subModId: nodeString.match(idRegexp)[0].replace(trimTagsRegexp, ''),
-        enabled: nodeString.match(enabledRegexp)[0]
-          .toLowerCase()
-          .replace(trimTagsRegexp, '') === 'true',
-      };
-    } else {
-      return undefined;
-    }
-  };
-
   // Check if we've already set the load order object for this profile
   //  and create it if we haven't.
-  return startSteam().then(() => getXMLData(LAUNCHER_DATA_PATH)).then(launcherData => {
+  return startSteam().then(() => parseLauncherData()).then(async () => {
     try {
-      const singlePlayerMods =
-        launcherData.get<xml.Element>('//UserData/SingleplayerData/ModDatas').childNodes();
-      const multiPlayerMods =
-        launcherData.get<xml.Element>('//UserData/MultiplayerData/ModDatas').childNodes();
-      LAUNCHER_DATA.singlePlayerSubMods = singlePlayerMods.reduce((accum, spm) => {
-        const dataElement = createDataElement(spm);
-        if (!!dataElement) {
-          accum.push(dataElement);
-        }
-        return accum;
-      }, []);
-      LAUNCHER_DATA.multiplayerSubMods = multiPlayerMods.reduce((accum, mpm) => {
-        const dataElement = createDataElement(mpm);
-        if (!!dataElement) {
-          accum.push(dataElement);
-        }
-        return accum;
-      }, []);
+      await refreshCache(context);
     } catch (err) {
-      // This is potentially due to the game not being installed correctly
-      //  or perhaps the users are using a 3rd party launcher which overwrites
-      //  the default launcher configuration... Lets just default to the data
-      //  we expect and let the user deal with whatever is broken later on
-      //  his environment later.
-      log('error', 'failed to parse launcher data', err);
-      LAUNCHER_DATA.singlePlayerSubMods = [
-        { subModId: 'Native', enabled: true },
-        { subModId: 'SandBoxCore', enabled: true },
-        { subModId: 'CustomBattle', enabled: true },
-        { subModId: 'Sandbox', enabled: true },
-        { subModId: 'StoryMode', enabled: true },
-      ];
-      LAUNCHER_DATA.multiplayerSubMods = [];
-      return Promise.resolve();
+      return Promise.reject(err);
     }
-  }).then(async () => {
-    const deployedSubModules = await getDeployedSubModPaths(context);
-    CACHE = await getDeployedModData(context, deployedSubModules);
 
     // We're going to do a quick tSort at this point - not going to
     //  change the user's load order, but this will highlight any
     //  cyclic or missing dependencies.
+    const CACHE = getCache();
     const modIds = Object.keys(CACHE);
     const sorted = tSort({ subModIds: modIds, allowLocked: true, metaManager });
   })
@@ -594,29 +248,9 @@ async function prepareForModding(context, discovery, metaManager: ComMetadataMan
   });
 }
 
-function isInvalid(subModId) {
-  const cyclicErrors = util.getSafe(CACHE[subModId], ['invalid', 'cyclic'], []);
-  const missingDeps = util.getSafe(CACHE[subModId], ['invalid', 'missing'], []);
-  return ((cyclicErrors.length > 0) || (missingDeps.length > 0));
-}
-
-function getValidationInfo(modVortexId) {
-  // We expect the method caller to provide the vortexId of the subMod, as
-  //  this is how we store this information in the load order object.
-  //  Reason why we need to search the cache by vortexId rather than subModId.
-  const subModId = Object.keys(CACHE).find(key => CACHE[key].vortexId === modVortexId);
-  const cyclic = util.getSafe(CACHE[subModId], ['invalid', 'cyclic'], []);
-  const missing = util.getSafe(CACHE[subModId], ['invalid', 'missing'], []);
-  const incompatible = util.getSafe(CACHE[subModId], ['invalid', 'incompatibleDeps'], []);
-  return {
-    cyclic,
-    missing,
-    incompatible,
-  };
-}
-
 function tSort(sortProps: ISortProps, test: boolean = false) {
   const { subModIds, allowLocked, loadOrder, metaManager } = sortProps;
+  const CACHE = getCache();
   // Topological sort - we need to:
   //  - Identify cyclic dependencies.
   //  - Identify missing dependencies.
@@ -753,7 +387,6 @@ let refreshFunc;
 async function refreshCacheOnEvent(context: types.IExtensionContext,
                                    profileId: string,
                                    metaManager: ComMetadataManager) {
-  CACHE = {};
   if (profileId === undefined) {
     return Promise.resolve();
   }
@@ -770,8 +403,7 @@ async function refreshCacheOnEvent(context: types.IExtensionContext,
   await metaManager.updateDependencyMap(profileId);
 
   try {
-    const deployedSubModules = await getDeployedSubModPaths(context);
-    CACHE = await getDeployedModData(context, deployedSubModules);
+    await refreshCache(context);
   } catch (err) {
     // ProcessCanceled means that we were unable to scan for deployed
     //  subModules, probably because game discovery is incomplete.
@@ -787,6 +419,7 @@ async function refreshCacheOnEvent(context: types.IExtensionContext,
   // We're going to do a quick tSort at this point - not going to
   //  change the user's load order, but this will highlight any
   //  cyclic or missing dependencies.
+  const CACHE = getCache();
   const modIds = Object.keys(CACHE);
   const sortProps: ISortProps = {
     subModIds: modIds,
@@ -806,6 +439,7 @@ async function refreshCacheOnEvent(context: types.IExtensionContext,
 async function preSort(context, items, direction, updateType, metaManager) {
   const state = context.api.store.getState();
   const activeProfile = selectors.activeProfile(state);
+  const CACHE = getCache();
   if (activeProfile?.id === undefined || activeProfile?.gameId !== GAME_ID) {
     // Race condition ?
     return items;
@@ -848,6 +482,8 @@ async function preSort(context, items, direction, updateType, metaManager) {
     locked: true,
     official: OFFICIAL_MODULES.has(id),
   }));
+
+  const LAUNCHER_DATA = getLauncherData();
 
   // External ids will include official modules as well but not locked entries.
   const externalIds = modIds.filter(id => (!CACHE[id].isLocked) && (CACHE[id].vortexId === id));
@@ -963,6 +599,26 @@ function infoComponent(context, props) {
                                       + 'be ignored by auto-sort maintaining its locked position.', { ns: I18N_NAMESPACE })))));
 }
 
+async function resolveGameVersion(discoveryPath: string) {
+  if (process.env.NODE_ENV !== 'development' && semver.satisfies(util.getApplication().version, '<1.4.0')) {
+    return Promise.reject(new util.ProcessCanceled('not supported in older Vortex versions'));
+  }
+  try {
+    const data = await getXMLData(path.join(discoveryPath, 'bin', 'Win64_Shipping_Client', 'Version.xml'));
+    const exePath = path.join(discoveryPath, BANNERLORD_EXEC);
+    const value = data.get<Element>('//Singleplayer')
+      .attr('Value')
+      .value()
+      .slice(1)
+      .split('.')
+      .slice(0, 3)
+      .join('.');
+    return (semver.valid(value)) ? Promise.resolve(value) : getVersion(exePath);
+  } catch (err) {
+    return Promise.reject(err);
+  }
+}
+
 let _IS_SORTING = false;
 function main(context) {
   const metaManager = new ComMetadataManager(context.api);
@@ -972,6 +628,7 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: () => '.',
+    getGameVersion: resolveGameVersion,
     logo: 'gameart.jpg',
     executable: () => BANNERLORD_EXEC,
     setup: (discovery) => prepareForModding(context, discovery, metaManager),
@@ -990,6 +647,18 @@ function main(context) {
     },
   });
 
+  context.optional.registerCollectionFeature(
+    'mountandblade2_collection_data',
+    (gameId: string, includedMods: string[]) =>
+      genCollectionsData(context, gameId, includedMods),
+    (gameId: string, collection: ICollectionsData) =>
+      parseCollectionsData(context, gameId, collection),
+    () => Promise.resolve(),
+    (t) => t('Mount and Blade 2 Data'),
+    (state: types.IState, gameId: string) => gameId === GAME_ID,
+    CollectionsDataView,
+  );
+
   // Register the LO page.
   context.registerLoadOrderPage({
     gameId: GAME_ID,
@@ -997,6 +666,7 @@ function main(context) {
       refreshFunc = props.refresh;
       return infoComponent(context, props);
     },
+    noCollectionGeneration: true,
     gameArtURL: `${__dirname}/gameart.jpg`,
     preSort: (items, direction, updateType) =>
       preSort(context, items, direction, updateType, metaManager),
@@ -1026,15 +696,14 @@ function main(context) {
 
       try {
         await metaManager.updateDependencyMap();
-        CACHE = {};
-        const deployedSubModules = await getDeployedSubModPaths(context);
-        CACHE = await getDeployedModData(context, deployedSubModules);
+        await refreshCache(context);
       } catch (err) {
         context.api.showErrorNotification('Failed to resolve submodule file data', err);
         _IS_SORTING = false;
         return;
       }
 
+      const CACHE = getCache();
       const modIds = Object.keys(CACHE);
       const lockedIds = modIds.filter(id => CACHE[id].isLocked);
       const subModIds = modIds.filter(id => !CACHE[id].isLocked);
@@ -1152,5 +821,4 @@ function main(context) {
 
 module.exports = {
   default: main,
-  getValidationInfo,
 };

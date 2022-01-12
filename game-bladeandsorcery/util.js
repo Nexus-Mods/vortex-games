@@ -171,7 +171,7 @@ function getDiscoveryPath(api) {
   const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
   if ((discovery === undefined) || (discovery.path === undefined)) {
     // should never happen and if it does it will cause errors elsewhere as well
-    log('error', 'bladeandsorcery was not discovered');
+    log('debug', 'bladeandsorcery was not discovered');
     return undefined;
   }
 

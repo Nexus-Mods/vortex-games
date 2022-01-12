@@ -1,292 +1,168 @@
-const Promise = require('bluebird');
-const React = require('react');
-const BS = require('react-bootstrap');
-const { connect } = require('react-redux');
-const winapi = require('winapi-bindings');
-const path = require('path');
-const semver = require('semver');
-const { actions, fs, DraggableList, FlexLayout, MainPage, Panel, selectors, util } = require('vortex-api');
-const { parseXmlString } = require('libxmljs');
-
-const STEAM_DLL = 'steamclient64.dll';
-const GAME_ID = '7daystodie';
-const MOD_INFO = 'modinfo.xml';
-const I18N_NAMESPACE = `game-${GAME_ID}`;
-
-function findGame() {
-  try {
-    const instPath = winapi.RegGetValue(
-      'HKEY_LOCAL_MACHINE',
-      'Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Steam App 251570',
-      'InstallLocation');
-    if (!instPath) {
-      throw new Error('empty registry key');
-    }
-    return Promise.resolve(instPath.value);
-  } catch (err) {
-    return util.steam.findByName('7 Days to Die')
-      .catch(() => util.steam.findByAppId('251570'))
-      .then(game => game.gamePath);
-  }
-}
-
-function gameExecutable() {
-  return '7DaysToDie.exe';
-}
-
-function getModName(modInfoPath) {
-  let modInfo;
-  return fs.readFileAsync(modInfoPath)
-    .then(xmlData => {
-      try {
-        modInfo = parseXmlString(xmlData);
-        const modName = modInfo.get('//Name');
-        return ((modName !== undefined) && (modName.attr('value').value() !== undefined))
-          ? Promise.resolve(modName.attr('value').value())
-          : Promise.reject(new util.DataInvalid('Unexpected modinfo.xml format'));
-      } catch (err) {
-        return Promise.reject(new util.DataInvalid('Failed to parse ModInfo.xml file'))
-      }
-    })
-}
-
-function installContent(files,
-                        destinationPath,
-                        gameId,
-                        progressDelegate) {
-  // The modinfo.xml file is expected to always be positioned in the root directory
-  //  of the mod itself; we're going to disregard anything placed outside the root.
-  const modFile = files.find(file => path.basename(file).toLowerCase() === MOD_INFO);
-  const rootPath = path.dirname(modFile);
-  return getModName(path.join(destinationPath, modFile))
-    .then(modName => {
-      modName = modName.replace(/[^a-zA-Z0-9]/g, '');
-
-      // Remove directories and anything that isn't in the rootPath (also directories).
-      const filtered = files.filter(filePath =>
-        filePath.startsWith(rootPath) && !filePath.endsWith(path.sep));
-
-      const instructions = filtered.map(filePath => {
-        return {
-          type: 'copy',
-          source: filePath,
-          destination: path.relative(rootPath, filePath),
-        };
-      });
-
-      return Promise.resolve({ instructions });
+"use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
-}
-
-function testSupportedContent(files, gameId) {
-  // Make sure we're able to support this mod.
-  const supported = (gameId === GAME_ID) &&
-    (files.find(file => path.basename(file).toLowerCase() === MOD_INFO) !== undefined);
-  return Promise.resolve({
-    supported,
-    requiredFiles: [],
-  });
-}
-
-function prepareForModding(discovery) {
-  return fs.ensureDirWritableAsync(path.join(discovery.path, 'Mods'),
-    () => Promise.resolve());
-}
-
-function makePrefix(input) {
-  let res = '';
-  let rest = input;
-  while (rest > 0) {
-    res = String.fromCharCode(65 + (rest % 25)) + res;
-    rest = Math.floor(rest / 25);
-  }
-  return util.pad(res, 'A', 3);
-}
-
-function loadOrderPrefix(api, mod) {
-  const state = api.store.getState();
-  const gameProfile = selectors.lastActiveProfileForGame(state, GAME_ID);
-  if (gameProfile === undefined) {
-    return 'ZZZZ-';
-  }
-  const profile = selectors.profileById(state, gameProfile);
-  const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile?.id], []);
-
-  const pos = loadOrder.indexOf(mod.id);
-  if (pos === -1) {
-    return 'ZZZZ-';
-  }
-
-  return makePrefix(pos) + '-';
-}
-
-function LoadOrderBase(props) {
-  const loValue = (input) => {
-    const idx = props.order.indexOf(input);
-    return idx !== -1 ? idx : Number.MAX_SAFE_INTEGER;
-  }
-
-  const sorted = Object.keys(props.mods).sort((lhs, rhs) =>
-    loValue(lhs) - loValue(rhs));
-
-  class ItemRenderer extends React.Component {
-    render() {
-      return React.createElement(BS.ListGroupItem, {
-        style: { backgroundColor: 'var(--brand-bg, black)' },
-      }, util.renderModName(props.mods[this.props.item]))
-    }
-  }
-
-  return React.createElement(MainPage, {},
-    React.createElement(MainPage.Body, {},
-      React.createElement(BS.Panel, { id: 'sevendtd-loadorder-panel' },
-        React.createElement(BS.Panel.Body, {},
-          React.createElement(FlexLayout, { type: 'row' }, 
-            React.createElement(FlexLayout.Flex, {}, 
-              React.createElement(DraggableList, {
-                id: '7dtd-loadorder',
-                itemTypeId: '7dtd-loadorder-item',
-                items: sorted,
-                itemRenderer: ItemRenderer,
-                style: {
-                  height: '100%',
-                  overflow: 'auto',
-                  borderWidth: 'var(--border-width, 1px)',
-                  borderStyle: 'solid',
-                  borderColor: 'var(--border-color, white)',
-                },
-                apply: ordered => props.onSetOrder(props.profile.id, ordered),
-              })
-            ),
-            React.createElement(FlexLayout.Flex, {},
-              React.createElement('div', {
-                style: {
-                  padding: 'var(--half-gutter, 15px)',
-                }
-              },
-                React.createElement('p', {}, 
-                  props.t('Change the load order with drag&drop.', { ns: I18N_NAMESPACE })),
-                React.createElement('p', {}, 
-                  props.t('7 Days to Die loads mods in alphabetic order so Vortex prefixes '
-                      + 'the directory names with "AAA, AAB, AAC, ..." to ensure they '
-                      + 'load in the order you set here.', { ns: I18N_NAMESPACE })),
-              ))
-        )))));
-}
-
-function mapStateToProps(state) {
-  const profile = selectors.activeProfile(state);
-  return {
-    profile,
-    mods: util.getSafe(state, ['persistent', 'mods', profile.gameId], []),
-    order: util.getSafe(state, ['persistent', 'loadOrder', profile.id], []),
-  };
-}
-
-function mapDispatchToProps(dispatch) {
-  return {
-    onSetOrder: (profileId, ordered) => dispatch(actions.setLoadOrder(profileId, ordered)),
-  };
-}
-
-const LoadOrder = connect(mapStateToProps, mapDispatchToProps)(LoadOrderBase);
-
-function migrate020(api, oldVersion) {
-  if (semver.gte(oldVersion, '0.2.0')) {
-    return Promise.resolve();
-  }
-
-  const state = api.store.getState();
-  const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
-  const hasMods = Object.keys(mods).length > 0;
-
-  if (!hasMods) {
-    return Promise.resolve();
-  }
-
-  return new Promise((resolve) => {
-    return api.sendNotification({
-      id: '7dtd-requires-upgrade',
-      type: 'warning',
-      message: api.translate('Mods for 7 Days to Die need to be reinstalled',
-        { ns: I18N_NAMESPACE }),
-      noDismiss: true,
-      actions: [
-        {
-          title: 'Explain',
-          action: () => {
-            api.showDialog('info', '7 Days to Die', {
-              text: 'In version 17 of the game 7 Days to Die the way mods are installed '
-                  + 'has changed considerably. Unfortunately we are now not able to support '
-                  + 'this change with the way mods were previously installed.\n'
-                  + 'This means that for the mods to work correctly you have to reinstall '
-                  + 'them.\n'
-                  + 'We are sorry for the inconvenience.',
-            }, [
-              { label: 'Close' },
-            ]);
-          },
-        },
-        {
-          title: 'Understood',
-          action: dismiss => {
-            dismiss();
-            resolve();
-          }
-        }
-      ],
-    });
-  });
-}
-
-function requiresLauncher(gamePath) {
-  return fs.readdirAsync(gamePath)
-    .then(files => (files.find(file => file.endsWith(STEAM_DLL)) !== undefined)
-      ? Promise.resolve({ launcher: 'steam' })
-      : Promise.resolve(undefined))
-    .catch(err => Promise.reject(err));
-}
-
-function main(context) {
-  context.registerGame({
-    id: GAME_ID,
-    name: '7 Days to Die',
-    mergeMods: mod => loadOrderPrefix(context.api, mod) + mod.id,
-    requiresCleanup: true,
-    queryPath: findGame,
-    queryModPath: () => 'Mods',
-    requiresLauncher,
-    logo: 'gameart.jpg',
-    executable: gameExecutable,
-    requiredFiles: [
-      '7DaysToDie.exe',
-    ],
-    setup: prepareForModding,
-    environment: {
-      SteamAPPId: '251570',
-    },
-    details: {
-      steamAppId: 251570,
-    },
-  });
-
-  context.registerInstaller('7dtd-mod', 25, testSupportedContent, installContent);
-
-  context.registerMigration(old => migrate020(context.api, old));
-
-  context.registerMainPage('sort-none', 'Load Order', LoadOrder, {
-    id: '7dtd-plugins',
-    hotkey: 'E',
-    group: 'per-game',
-    visible: () => selectors.activeGameId(context.api.store.getState()) === GAME_ID,
-    props: () => ({
-      t: context.api.translate,
-    }),
-  });
-
-  return true;
-}
-
-module.exports = {
-  default: main
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const path_1 = __importDefault(require("path"));
+const vortex_api_1 = require("vortex-api");
+const common_1 = require("./common");
+const loadOrder_1 = require("./loadOrder");
+const migrations_1 = require("./migrations");
+const util_1 = require("./util");
+const STEAM_ID = '251570';
+const STEAM_DLL = 'steamclient64.dll';
+const ROOT_MOD_CANDIDATES = ['bepinex'];
+function findGame() {
+    return __awaiter(this, void 0, void 0, function* () {
+        return vortex_api_1.util.GameStoreHelper.findByAppId([STEAM_ID])
+            .then(game => game.gamePath);
+    });
+}
+function prepareForModding(context, discovery) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const state = context.api.getState();
+        const modsPath = path_1.default.join(discovery.path, (0, common_1.modsRelPath)());
+        try {
+            yield vortex_api_1.fs.ensureDirWritableAsync(modsPath);
+        }
+        catch (err) {
+            return Promise.reject(err);
+        }
+    });
+}
+function installContent(files, destinationPath, gameId) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const modFile = files.find(file => path_1.default.basename(file).toLowerCase() === common_1.MOD_INFO);
+        const rootPath = path_1.default.dirname(modFile);
+        return (0, util_1.getModName)(path_1.default.join(destinationPath, modFile))
+            .then(modName => {
+            modName = modName.replace(/[^a-zA-Z0-9]/g, '');
+            const filtered = files.filter(filePath => filePath.startsWith(rootPath) && !filePath.endsWith(path_1.default.sep));
+            const instructions = filtered.map(filePath => {
+                return {
+                    type: 'copy',
+                    source: filePath,
+                    destination: path_1.default.relative(rootPath, filePath),
+                };
+            });
+            return Promise.resolve({ instructions });
+        });
+    });
+}
+function testSupportedContent(files, gameId) {
+    const supported = (gameId === common_1.GAME_ID) &&
+        (files.find(file => path_1.default.basename(file).toLowerCase() === common_1.MOD_INFO) !== undefined);
+    return Promise.resolve({
+        supported,
+        requiredFiles: [],
+    });
+}
+function findCandFile(files) {
+    return files.find(file => file.toLowerCase().split(path_1.default.sep)
+        .find(seg => ROOT_MOD_CANDIDATES.includes(seg)) !== undefined);
+}
+function hasCandidate(files) {
+    const candidate = findCandFile(files);
+    return candidate !== undefined;
+}
+function installRootMod(files, gameId) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const filtered = files.filter(file => !file.endsWith(path_1.default.sep));
+        const candidate = findCandFile(files);
+        const candIdx = candidate.toLowerCase().split(path_1.default.sep)
+            .findIndex(seg => ROOT_MOD_CANDIDATES.includes(seg));
+        const instructions = filtered.reduce((accum, iter) => {
+            accum.push({
+                type: 'copy',
+                source: iter,
+                destination: iter.split(path_1.default.sep).slice(candIdx).join(path_1.default.sep),
+            });
+            return accum;
+        }, []);
+        return Promise.resolve({ instructions });
+    });
+}
+function testRootMod(files, gameId) {
+    return __awaiter(this, void 0, void 0, function* () {
+        return Promise.resolve({
+            requiredFiles: [],
+            supported: hasCandidate(files) && gameId === common_1.GAME_ID,
+        });
+    });
+}
+function toLOPrefix(context, mod) {
+    var _a;
+    const props = (0, util_1.genProps)(context);
+    if (props === undefined) {
+        return 'ZZZZ-' + mod.id;
+    }
+    const loadOrder = vortex_api_1.util.getSafe(props.state, ['persistent', 'loadOrder', props.profile.id], []);
+    const loEntry = loadOrder.find(loEntry => loEntry.id === mod.id);
+    return (((_a = loEntry === null || loEntry === void 0 ? void 0 : loEntry.data) === null || _a === void 0 ? void 0 : _a.prefix) !== undefined)
+        ? loEntry.data.prefix + '-' + mod.id
+        : 'ZZZZ-' + mod.id;
+}
+function requiresLauncher(gamePath) {
+    return vortex_api_1.fs.readdirAsync(gamePath)
+        .then(files => (files.find(file => file.endsWith(STEAM_DLL)) !== undefined)
+        ? Promise.resolve({ launcher: 'steam' })
+        : Promise.resolve(undefined))
+        .catch(err => Promise.reject(err));
+}
+function main(context) {
+    context.registerGame({
+        id: common_1.GAME_ID,
+        name: '7 Days to Die',
+        mergeMods: (mod) => toLOPrefix(context, mod),
+        queryPath: (0, util_1.toBlue)(findGame),
+        requiresCleanup: true,
+        supportedTools: [],
+        queryModPath: () => (0, common_1.modsRelPath)(),
+        logo: 'gameart.jpg',
+        executable: common_1.gameExecutable,
+        requiredFiles: [
+            (0, common_1.gameExecutable)(),
+        ],
+        requiresLauncher,
+        setup: (0, util_1.toBlue)((discovery) => prepareForModding(context, discovery)),
+        environment: {
+            SteamAPPId: STEAM_ID,
+        },
+        details: {
+            steamAppId: +STEAM_ID,
+        },
+    });
+    context.registerLoadOrder({
+        deserializeLoadOrder: () => (0, loadOrder_1.deserialize)(context),
+        serializeLoadOrder: (loadOrder) => (0, loadOrder_1.serialize)(context, loadOrder),
+        validate: loadOrder_1.validate,
+        gameId: common_1.GAME_ID,
+        toggleableEntries: false,
+        usageInstructions: '7 Days to Die loads mods in alphabetic order so Vortex prefixes '
+            + 'the directory names with "AAA, AAB, AAC, ..." to ensure they load in the order you set here.',
+    });
+    const getOverhaulPath = (game) => {
+        const state = context.api.getState();
+        const discovery = vortex_api_1.selectors.discoveryByGame(state, common_1.GAME_ID);
+        return (discovery === null || discovery === void 0 ? void 0 : discovery.path) || '.';
+    };
+    context.registerInstaller('7dtd-mod', 25, (0, util_1.toBlue)(testSupportedContent), (0, util_1.toBlue)(installContent));
+    context.registerInstaller('7dtd-root-mod', 20, (0, util_1.toBlue)(testRootMod), (0, util_1.toBlue)(installRootMod));
+    context.registerModType('7dtd-root-mod', 20, (gameId) => gameId === common_1.GAME_ID, getOverhaulPath, (instructions) => Promise.resolve(hasCandidate(instructions.map(instr => instr.destination))), { name: 'Root Directory Mod', mergeMods: true });
+    context.registerMigration((0, util_1.toBlue)(old => (0, migrations_1.migrate020)(context.api, old)));
+    context.registerMigration((0, util_1.toBlue)(old => (0, migrations_1.migrate100)(context, old)));
+    return true;
+}
+module.exports = {
+    default: main,
+};
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiaW5kZXguanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyJpbmRleC50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiOzs7Ozs7Ozs7Ozs7OztBQUFBLGdEQUF3QjtBQUN4QiwyQ0FBNkQ7QUFFN0QscUNBQTBFO0FBQzFFLDJDQUErRDtBQUMvRCw2Q0FBc0Q7QUFFdEQsaUNBQXNEO0FBRXRELE1BQU0sUUFBUSxHQUFHLFFBQVEsQ0FBQztBQUMxQixNQUFNLFNBQVMsR0FBRyxtQkFBbUIsQ0FBQztBQUV0QyxNQUFNLG1CQUFtQixHQUFHLENBQUMsU0FBUyxDQUFDLENBQUM7QUFFeEMsU0FBZSxRQUFROztRQUNyQixPQUFPLGlCQUFJLENBQUMsZUFBZSxDQUFDLFdBQVcsQ0FBQyxDQUFDLFFBQVEsQ0FBQyxDQUFDO2FBQ2hELElBQUksQ0FBQyxJQUFJLENBQUMsRUFBRSxDQUFDLElBQUksQ0FBQyxRQUFRLENBQUMsQ0FBQztJQUNqQyxDQUFDO0NBQUE7QUFFRCxTQUFlLGlCQUFpQixDQUFDLE9BQWdDLEVBQ2hDLFNBQWlDOztRQUNoRSxNQUFNLEtBQUssR0FBRyxPQUFPLENBQUMsR0FBRyxDQUFDLFFBQVEsRUFBRSxDQUFDO1FBQ3JDLE1BQU0sUUFBUSxHQUFHLGNBQUksQ0FBQyxJQUFJLENBQUMsU0FBUyxDQUFDLElBQUksRUFBRSxJQUFBLG9CQUFXLEdBQUUsQ0FBQyxDQUFDO1FBQzFELElBQUk7WUFDRixNQUFNLGVBQUUsQ0FBQyxzQkFBc0IsQ0FBQyxRQUFRLENBQUMsQ0FBQztTQUMzQztRQUFDLE9BQU8sR0FBRyxFQUFFO1lBQ1osT0FBTyxPQUFPLENBQUMsTUFBTSxDQUFDLEdBQUcsQ0FBQyxDQUFDO1NBQzVCO0lBQ0gsQ0FBQztDQUFBO0FBRUQsU0FBZSxjQUFjLENBQUMsS0FBZSxFQUNmLGVBQXVCLEVBQ3ZCLE1BQWM7O1FBRzFDLE1BQU0sT0FBTyxHQUFHLEtBQUssQ0FBQyxJQUFJLENBQUMsSUFBSSxDQUFDLEVBQUUsQ0FBQyxjQUFJLENBQUMs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QUMsb0JBQW9CLENBQUMsRUFBRSxJQUFBLGFBQU0sRUFBQyxjQUFjLENBQUMsQ0FBQyxDQUFDO0lBRXhELE9BQU8sQ0FBQyxpQkFBaUIsQ0FBQyxlQUFlLEVBQUUsRUFBRSxFQUFFLElBQUEsYUFBTSxFQUFDLFdBQVcsQ0FBQyxFQUFFLElBQUEsYUFBTSxFQUFDLGNBQWMsQ0FBQyxDQUFDLENBQUM7SUFFNUYsT0FBTyxDQUFDLGVBQWUsQ0FBQyxlQUFlLEVBQUUsRUFBRSxFQUFFLENBQUMsTUFBTSxFQUFFLEVBQUUsQ0FBQyxNQUFNLEtBQUssZ0JBQU8sRUFDekUsZUFBZSxFQUFFLENBQUMsWUFBWSxFQUFFLEVBQUUsQ0FDL0IsT0FBTyxDQUFDLE9BQU8sQ0FBQyxZQUFZLENBQUMsWUFBWSxDQUFDLEdBQUcsQ0FBQyxLQUFLLENBQUMsRUFBRSxDQUFDLEtBQUssQ0FBQyxXQUFXLENBQUMsQ0FBQyxDQUFTLEVBQ3BGLEVBQUUsSUFBSSxFQUFFLG9CQUFvQixFQUFFLFNBQVMsRUFBRSxJQUFJLEVBQUUsQ0FBQyxDQUFDO0lBRXJELE9BQU8sQ0FBQyxpQkFBaUIsQ0FBQyxJQUFBLGFBQU0sRUFBQyxHQUFHLENBQUMsRUFBRSxDQUFDLElBQUEsdUJBQVUsRUFBQyxPQUFPLENBQUMsR0FBRyxFQUFFLEdBQUcsQ0FBQyxDQUFDLENBQUMsQ0FBQztJQUN2RSxPQUFPLENBQUMsaUJBQWlCLENBQUMsSUFBQSxhQUFNLEVBQUMsR0FBRyxDQUFDLEVBQUUsQ0FBQyxJQUFBLHVCQUFVLEVBQUMsT0FBTyxFQUFFLEdBQUcsQ0FBQyxDQUFDLENBQUMsQ0FBQztJQUVuRSxPQUFPLElBQUksQ0FBQztBQUNkLENBQUM7QUFFRCxNQUFNLENBQUMsT0FBTyxHQUFHO0lBQ2YsT0FBTyxFQUFFLElBQUk7Q0FDZCxDQUFDIiwic291cmNlc0NvbnRlbnQiOlsiaW1wb3J0IHBhdGggZnJvbSAncGF0aCc7XHJcbmltcG9ydCB7IGZzLCBsb2csIHNlbGVjdG9ycywgdHlwZXMsIHV0aWwgfSBmcm9tICd2b3J0ZXgtYXBpJztcclxuXHJcbmltcG9ydCB7IEdBTUVfSUQsIGdhbWVFeGVjdXRhYmxlLCBNT0RfSU5GTywgbW9kc1JlbFBhdGggfSBmcm9tICcuL2NvbW1vbic7XHJcbmltcG9ydCB7IGRlc2VyaWFsaXplLCBzZXJpYWxpemUsIHZhbGlkYXRlIH0gZnJvbSAnLi9sb2FkT3JkZXInO1xyXG5pbXBvcnQgeyBtaWdyYXRlMDIwLCBtaWdyYXRlMTAwIH0gZnJvbSAnLi9taWdyYXRpb25zJztcclxuaW1wb3J0IHsgSUxvYWRPcmRlckVudHJ5LCBJUHJvcHMgfSBmcm9tICcuL3R5cGVzJztcclxuaW1wb3J0IHsgZ2VuUHJvcHMsIGdldE1vZE5hbWUsIHRvQmx1ZSB9IGZyb20gJy4vdXRpbCc7XHJcblxyXG5jb25zdCBTVEVBTV9JRCA9ICcyNTE1NzAnO1xyXG5jb25zdCBTVEVBTV9ETEwgPSAnc3RlYW1jbGllbnQ2NC5kbGwnO1xyXG5cclxuY29uc3QgUk9PVF9NT0RfQ0FORElEQVRFUyA9IFsnYmVwaW5leCddO1xyXG5cclxuYXN5bmMgZnVuY3Rpb24gZmluZEdhbWUoKSB7XHJcbiAgcmV0dXJuIHV0aWwuR2FtZVN0b3JlSGVscGVyLmZpbmRCeUFwcElkKFtTVEVBTV9JRF0pXHJcbiAgICAudGhlbihnYW1lID0+IGdhbWUuZ2FtZVBhdGgpO1xyXG59XHJcblxyXG5hc3luYyBmdW5jdGlvbiBwcmVwYXJlRm9yTW9kZGluZyhjb250ZXh0OiB0eXBlcy5JRXh0ZW5zaW9uQ29udGV4dCxcclxuICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgZGlzY292ZXJ5OiB0eXBlcy5JRGlzY292ZXJ5UmVzdWx0KSB7XHJcbiAgY29uc3Qgc3RhdGUgPSBjb250ZXh0LmFwaS5nZXRTdGF0ZSgpO1xyXG4gIGNvbnN0IG1vZHNQYXRoID0gcGF0aC5qb2luKGRpc2NvdmVyeS5wYXRoLCBtb2RzUmVsUGF0aCgpKTtcclxuICB0cnkge1xyXG4gICAgYXdhaXQgZnMuZW5zdXJlRGlyV3JpdGFibGVBc3luYyhtb2RzUGF0aCk7XHJcbiAgfSBjYXRjaCAoZXJyKSB7XHJcbiAgICByZXR1cm4gUHJvbWlzZS5yZWplY3QoZXJyKTtcclxuICB9XHJcbn1cclxuXHJcbmFzeW5jIGZ1bmN0aW9uIGluc3RhbGxDb250ZW50KGZpbGVzOiBzdHJpbmdbXSxcclxuICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgZGVzdGluYXRpb25QYXRoOiBzdHJpbmcsXHJcbiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIGdhbWVJZDogc3RyaW5nKTogUHJvbWlzZTx0eXBlcy5JSW5zdGFsbFJlc3VsdD4ge1xyXG4gIC8vIFRoZSBtb2RpbmZvLnhtbCBmaWxlIGlzIGV4cGVjdGVkIHRvIGFsd2F5cyBiZSBwb3NpdGlvbmVkIGluIHRoZSByb290IGRpcmVjdG9yeVxyXG4gIC8vICBvZiB0aGUgbW9kIGl0c2VsZjsgd2UncmUgZ29pbmcgdG8gZGlzcmVnYXJkIGFueXRoaW5nIHBsYWNlZCBvdXRzaWRlIHRoZSByb290LlxyXG4gIGNvbnN0IG1vZEZpbGUgPSBmaWxlcy5maW5kKGZpbGUgPT4gcGF0aC5iYXNlbmFtZShmaWxlKS50b0xvd2VyQ2FzZSgpID09PSBNT0RfSU5GTyk7XHJcbiAgY29uc3Qgcm9vdFBhdGggPSBwYXRoLmRpcm5hbWUobW9kRmlsZSk7XHJcbiAgcmV0dXJuIGdldE1vZE5hbWUocGF0aC5qb2luKGRlc3RpbmF0aW9uUGF0aCwgbW9kRmlsZSkpXHJcbiAgICAudGhlbihtb2ROYW1lID0+IHtcclxuICAgICAgbW9kTmFtZSA9IG1vZE5hbWUucmVwbGFjZSgvW15hLXpBLVowLTldL2csICcnKTtcclxuXHJcbiAgICAgIC8vIFJlbW92ZSBkaXJlY3RvcmllcyBhbmQgYW55dGhpbmcgdGhhdCBpc24ndCBpbiB0aGUgcm9vdFBhdGggKGFsc28gZGlyZWN0b3JpZXMpLlxyXG4gICAgICBjb25zdCBmaWx0ZXJlZCA9IGZpbGVzLmZpbHRlcihmaWxlUGF0aCA9PlxyXG4gICAgICAgIGZpbGVQYXRoLnN0YXJ0c1dpdGgocm9vdFBhdGgpICYmICFmaWxlUGF0aC5lbmRzV2l0aChwYXRoLnNlcCkpO1xyXG5cclxuICAgICAgY29uc3QgaW5zdHJ1Y3Rpb25zOiB0eXBlcy5JSW5zdHJ1Y3Rpb25bXSA9IGZpbHRlcmVkLm1hcChmaWxlUGF0aCA9PiB7XHJcbiAgICAgICAgcmV0dXJuIHtcclxuICAgICAgICAgIHR5cGU6ICdjb3B5JyxcclxuICAgICAgICAgIHNvdXJjZTogZmlsZVBhdGgsXHJcbiAgICAgICAgICBkZXN0aW5hdGlvbjogcGF0aC5yZWxhdGl2ZShyb290UGF0aCwgZmlsZVBhdGgpLFxyXG4gICAgICAgIH07XHJcbiAgICAgIH0pO1xyXG5cclxuICAgICAgcmV0dXJuIFByb21pc2UucmVzb2x2ZSh7IGluc3RydWN0aW9ucyB9KTtcclxuICAgIH0pO1xyXG59XHJcblxyXG5mdW5jdGlvbiB0ZXN0U3VwcG9ydGVkQ29udGVudChmaWxlcywgZ2FtZUlkKSB7XHJcbiAgLy8gTWFrZSBzdXJlIHdlJ3JlIGFibGUgdG8gc3VwcG9ydCB0aGlzIG1vZC5cclxuICBjb25zdCBzdXBwb3J0ZWQgPSAoZ2FtZUlkID09PSBHQU1FX0lEKSAmJlxyXG4gICAgKGZpbGVzLmZpbmQoZmlsZSA9PiBwYXRoLmJhc2VuYW1lKGZpbGUpLnRvTG93ZXJDYXNlKCkgPT09IE1PRF9JTkZPKSAhPT0gdW5kZWZpbmVkKTtcclxuICByZXR1cm4gUHJvbWlzZS5yZXNvbHZlKHtcclxuICAgIHN1cHBvcnRlZCxcclxuICAgIHJlcXVpcmVkRmlsZXM6IFtdLFxyXG4gIH0pO1xyXG59XHJcblxyXG5mdW5jdGlvbiBmaW5kQ2FuZEZpbGUoZmlsZXM6IHN0cmluZ1tdKTogc3RyaW5nIHtcclxuICByZXR1cm4gZmlsZXMuZmluZChmaWxlID0+IGZpbGUudG9Mb3dlckNhc2UoKS5zcGxpdChwYXRoLnNlcClcclxuICAgIC5maW5kKHNlZyA9PiBST09UX01PRF9DQU5ESURBVEVTLmluY2x1ZGVzKHNlZykpICE9PSB1bmRlZmluZWQpO1xyXG59XHJcblxyXG5mdW5jdGlvbiBoYXNDYW5kaWRhdGUoZmlsZXM6IHN0cmluZ1tdKTogYm9vbGVhbiB7XHJcbiAgY29uc3QgY2FuZGlkYXRlID0gZmluZENhbmRGaWxlKGZpbGVzKTtcclxuICByZXR1cm4gY2FuZGlkYXRlICE9PSB1bmRlZmluZWQ7XHJcbn1cclxuXHJcbmFzeW5jIGZ1bmN0aW9uIGluc3RhbGxSb290TW9kKGZpbGVzOiBzdHJpbmdbXSxcclxuICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgZ2FtZUlkOiBzdHJpbmcpOiBQcm9taXNlPHR5cGVzLklJbnN0YWxsUmVzdWx0PiB7XHJcbiAgY29uc3QgZmlsdGVyZWQgPSBmaWxlcy5maWx0ZXIoZmlsZSA9PiAhZmlsZS5lbmRzV2l0aChwYXRoLnNlcCkpO1xyXG4gIGNvbnN0IGNhbmRpZGF0ZSA9IGZpbmRDYW5kRmlsZShmaWxlcyk7XHJcbiAgY29uc3QgY2FuZElkeCA9IGNhbmRpZGF0ZS50b0xvd2VyQ2FzZSgpLnNwbGl0KHBhdGguc2VwKVxyXG4gICAgLmZpbmRJbmRleChzZWcgPT4gUk9PVF9NT0RfQ0FORElEQVRFUy5pbmNsdWRlcyhzZWcpKTtcclxuICBjb25zdCBpbnN0cnVjdGlvbnM6IHR5cGVzLklJbnN0cnVjdGlvbltdID0gZmlsdGVyZWQucmVkdWNlKChhY2N1bSwgaXRlcikgPT4ge1xyXG4gICAgYWNjdW0ucHVzaCh7XHJcbiAgICAgIHR5cGU6ICdjb3B5JyxcclxuICAgICAgc291cmNlOiBpdGVyLFxyXG4gICAgICBkZXN0aW5hdGlvbjogaXRlci5zcGxpdChwYXRoLnNlcCkuc2xpY2UoY2FuZElkeCkuam9pbihwYXRoLnNlcCksXHJcbiAgICB9KTtcclxuICAgIHJldHVybiBhY2N1bTtcclxuICB9LCBbXSk7XHJcbiAgcmV0dXJuIFByb21pc2UucmVzb2x2ZSh7IGluc3RydWN0aW9ucyB9KTtcclxufVxyXG5cclxuYXN5bmMgZnVuY3Rpb24gdGVzdFJvb3RNb2QoZmlsZXM6IHN0cmluZ1tdLCBnYW1lSWQ6IHN0cmluZyk6IFByb21pc2U8dHlwZXMuSVN1cHBvcnRlZFJlc3VsdD4ge1xyXG4gIHJldHVybiBQcm9taXNlLnJlc29sdmUoe1xyXG4gICAgcmVxdWlyZWRGaWxlczogW10sXHJcbiAgICBzdXBwb3J0ZWQ6IGhhc0NhbmRpZGF0ZShmaWxlcykgJiYgZ2FtZUlkID09PSBHQU1FX0lELFxyXG4gIH0pO1xyXG59XHJcblxyXG5mdW5jdGlvbiB0b0xPUHJlZml4KGNvbnRleHQ6IHR5cGVzLklFeHRlbnNpb25Db250ZXh0LCBtb2Q6IHR5cGVzLklNb2QpOiBzdHJpbmcge1xyXG4gIGNvbnN0IHByb3BzOiBJUHJvcHMgPSBnZW5Qcm9wcyhjb250ZXh0KTtcclxuICBpZiAocHJvcHMgPT09IHVuZGVmaW5lZCkge1xyXG4gICAgcmV0dXJuICdaWlpaLScgKyBtb2QuaWQ7XHJcbiAgfVxyXG5cclxuICAvLyBSZXRyaWV2ZSB0aGUgbG9hZCBvcmRlciBhcyBzdG9yZWQgaW4gVm9ydGV4J3MgYXBwbGljYXRpb24gc3RhdGUuXHJcbiAgY29uc3QgbG9hZE9yZGVyID0gdXRpbC5nZXRTYWZlKHByb3BzLnN0YXRlLCBbJ3BlcnNpc3RlbnQnLCAnbG9hZE9yZGVyJywgcHJvcHMucHJvZmlsZS5pZF0sIFtdKTtcclxuXHJcbiAgLy8gRmluZCB0aGUgbW9kIGVudHJ5IGluIHRoZSBsb2FkIG9yZGVyIHN0YXRlIGFuZCBpbnNlcnQgdGhlIHByZWZpeCBpbiBmcm9udFxyXG4gIC8vICBvZiB0aGUgbW9kJ3MgbmFtZS9pZC93aGF0ZXZlclxyXG4gIGNvbnN0IGxvRW50cnk6IElMb2FkT3JkZXJFbnRyeSA9IGxvYWRPcmRlci5maW5kKGxvRW50cnkgPT4gbG9FbnRyeS5pZCA9PT0gbW9kLmlkKTtcclxuICByZXR1cm4gKGxvRW50cnk/LmRhdGE/LnByZWZpeCAhPT0gdW5kZWZpbmVkKVxyXG4gICAgPyBsb0VudHJ5LmRhdGEucHJlZml4ICsgJy0nICsgbW9kLmlkXHJcbiAgICA6ICdaWlpaLScgKyBtb2QuaWQ7XHJcbn1cclxuXHJcbmZ1bmN0aW9uIHJlcXVpcmVzTGF1bmNoZXIoZ2FtZVBhdGgpIHtcclxuICByZXR1cm4gZnMucmVhZGRpckFzeW5jKGdhbWVQYXRoKVxyXG4gICAgLnRoZW4oZmlsZXMgPT4gKGZpbGVzLmZpbmQoZmlsZSA9PiBmaWxlLmVuZHNXaXRoKFNURUFNX0RMTCkpICE9PSB1bmRlZmluZWQpXHJcbiAgICAgID8gUHJvbWlzZS5yZXNvbHZlKHsgbGF1bmNoZXI6ICdzdGVhbScgfSlcclxuICAgICAgOiBQcm9taXNlLnJlc29sdmUodW5kZWZpbmVkKSlcclxuICAgIC5jYXRjaChlcnIgPT4gUHJvbWlzZS5yZWplY3QoZXJyKSk7XHJcbn1cclxuXHJcbmZ1bmN0aW9uIG1haW4oY29udGV4dDogdHlwZXMuSUV4dGVuc2lvbkNvbnRleHQpIHtcclxuICBjb250ZXh0LnJlZ2lzdGVyR2FtZSh7XHJcbiAgICBpZDogR0FNRV9JRCxcclxuICAgIG5hbWU6ICc3IERheXMgdG8gRGllJyxcclxuICAgIG1lcmdlTW9kczogKG1vZCkgPT4gdG9MT1ByZWZpeChjb250ZXh0LCBtb2QpLFxyXG4gICAgcXVlcnlQYXRoOiB0b0JsdWUoZmluZEdhbWUpLFxyXG4gICAgcmVxdWlyZXNDbGVhbnVwOiB0cnVlLFxyXG4gICAgc3VwcG9ydGVkVG9vbHM6IFtdLFxyXG4gICAgcXVlcnlNb2RQYXRoOiAoKSA9PiBtb2RzUmVsUGF0aCgpLFxyXG4gICAgbG9nbzogJ2dhbWVhcnQuanBnJyxcclxuICAgIGV4ZWN1dGFibGU6IGdhbWVFeGVjdXRhYmxlLFxyXG4gICAgcmVxdWlyZWRGaWxlczogW1xyXG4gICAgICBnYW1lRXhlY3V0YWJsZSgpLFxyXG4gICAgXSxcclxuICAgIHJlcXVpcmVzTGF1bmNoZXIsXHJcbiAgICBzZXR1cDogdG9CbHVlKChkaXNjb3ZlcnkpID0+IHByZXBhcmVGb3JNb2RkaW5nKGNvbnRleHQsIGRpc2NvdmVyeSkpLFxyXG4gICAgZW52aXJvbm1lbnQ6IHtcclxuICAgICAgU3RlYW1BUFBJZDogU1RFQU1fSUQsXHJcbiAgICB9LFxyXG4gICAgZGV0YWlsczoge1xyXG4gICAgICBzdGVhbUFwcElkOiArU1RFQU1fSUQsXHJcbiAgICB9LFxyXG4gIH0pO1xyXG5cclxuICBjb250ZXh0LnJlZ2lzdGVyTG9hZE9yZGVyKHtcclxuICAgIGRlc2VyaWFsaXplTG9hZE9yZGVyOiAoKSA9PiBkZXNlcmlhbGl6ZShjb250ZXh0KSxcclxuICAgIHNlcmlhbGl6ZUxvYWRPcmRlcjogKGxvYWRPcmRlcikgPT4gc2VyaWFsaXplKGNvbnRleHQsIGxvYWRPcmRlciksXHJcbiAgICB2YWxpZGF0ZSxcclxuICAgIGdhbWVJZDogR0FNRV9JRCxcclxuICAgIHRvZ2dsZWFibGVFbnRyaWVzOiBmYWxzZSxcclxuICAgIHVzYWdlSW5zdHJ1Y3Rpb25zOiAnNyBEYXlzIHRvIERpZSBsb2FkcyBtb2RzIGluIGFscGhhYmV0aWMgb3JkZXIgc28gVm9ydGV4IHByZWZpeGVzICdcclxuICAgICAgKyAndGhlIGRpcmVjdG9yeSBuYW1lcyB3aXRoIFwiQUFBLCBBQUIsIEFBQywgLi4uXCIgdG8gZW5zdXJlIHRoZXkgbG9hZCBpbiB0aGUgb3JkZXIgeW91IHNldCBoZXJlLicsXHJcbiAgfSk7XHJcblxyXG4gIGNvbnN0IGdldE92ZXJoYXVsUGF0aCA9IChnYW1lOiB0eXBlcy5JR2FtZSkgPT4ge1xyXG4gICAgY29uc3Qgc3RhdGUgPSBjb250ZXh0LmFwaS5nZXRTdGF0ZSgpO1xyXG4gICAgY29uc3QgZGlzY292ZXJ5ID0gc2VsZWN0b3JzLmRpc2NvdmVyeUJ5R2FtZShzdGF0ZSwgR0FNRV9JRCk7XHJcbiAgICByZXR1cm4gZGlzY292ZXJ5Py5wYXRoIHx8ICcuJztcclxuICB9O1xyXG5cclxuICBjb250ZXh0LnJlZ2lzdGVySW5zdGFsbGVyKCc3ZHRkLW1vZCcsIDI1LFxyXG4gICAgdG9CbHVlKHRlc3RTdXBwb3J0ZWRDb250ZW50KSwgdG9CbHVlKGluc3RhbGxDb250ZW50KSk7XHJcblxyXG4gIGNvbnRleHQucmVnaXN0ZXJJbnN0YWxsZXIoJzdkdGQtcm9vdC1tb2QnLCAyMCwgdG9CbHVlKHRlc3RSb290TW9kKSwgdG9CbHVlKGluc3RhbGxSb290TW9kKSk7XHJcblxyXG4gIGNvbnRleHQucmVnaXN0ZXJNb2RUeXBlKCc3ZHRkLXJvb3QtbW9kJywgMjAsIChnYW1lSWQpID0+IGdhbWVJZCA9PT0gR0FNRV9JRCxcclxuICAgIGdldE92ZXJoYXVsUGF0aCwgKGluc3RydWN0aW9ucykgPT5cclxuICAgICAgKFByb21pc2UucmVzb2x2ZShoYXNDYW5kaWRhdGUoaW5zdHJ1Y3Rpb25zLm1hcChpbnN0ciA9PiBpbnN0ci5kZXN0aW5hdGlvbikpKSBhcyBhbnkpLFxyXG4gICAgICB7IG5hbWU6ICdSb290IERpcmVjdG9yeSBNb2QnLCBtZXJnZU1vZHM6IHRydWUgfSk7XHJcblxyXG4gIGNvbnRleHQucmVnaXN0ZXJNaWdyYXRpb24odG9CbHVlKG9sZCA9PiBtaWdyYXRlMDIwKGNvbnRleHQuYXBpLCBvbGQpKSk7XHJcbiAgY29udGV4dC5yZWdpc3Rlck1pZ3JhdGlvbih0b0JsdWUob2xkID0+IG1pZ3JhdGUxMDAoY29udGV4dCwgb2xkKSkpO1xyXG5cclxuICByZXR1cm4gdHJ1ZTtcclxufVxyXG5cclxubW9kdWxlLmV4cG9ydHMgPSB7XHJcbiAgZGVmYXVsdDogbWFpbixcclxufTtcclxuIl19

@@ -45,8 +45,8 @@ export class PriorityManager {
     return this.mPriorityType;
   }
 
-  public resetMaxPriority = () => {
-    const props: IProps = this.genProps();
+  public resetMaxPriority = (min?: number) => {
+    const props: IProps = this.genProps(min);
     if (props === undefined) {
       this.mMaxPriority = 0;
       return;
@@ -65,7 +65,7 @@ export class PriorityManager {
       if (this.mPriorityType === 'position-based') {
         const position = loadOrder[itemKey].pos + 1;
         return (position > minPriority)
-          ? position : this.mMaxPriority++;
+          ? position : ++this.mMaxPriority;
       } else {
         const prefixVal = (loadOrder[itemKey]?.prefix !== undefined)
         ? parseInt(loadOrder[itemKey].prefix, 10) : loadOrder[itemKey].pos;
@@ -74,15 +74,15 @@ export class PriorityManager {
           return prefixVal;
         } else {
           return (posVal > minPriority)
-            ? posVal : this.mMaxPriority++;
+            ? posVal : ++this.mMaxPriority;
         }
       }
     }
 
-    return this.mMaxPriority++;
+    return ++this.mMaxPriority;
   }
 
-  private genProps = (): IProps => {
+  private genProps = (min?: number): IProps => {
     const state: types.IState = this.mApi.getState();
     const lastProfId = selectors.lastActiveProfileForGame(state, GAME_ID);
     if (lastProfId === undefined) {
@@ -97,7 +97,7 @@ export class PriorityManager {
       ['persistent', 'loadOrder', lastProfId], {});
 
     const lockedEntries = Object.keys(loadOrder).filter(key => loadOrder[key]?.locked);
-    const minPriority = lockedEntries.length;
+    const minPriority = (min) ? min : lockedEntries.length;
     return { state, profile, loadOrder, minPriority };
   }
 
