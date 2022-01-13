@@ -1,7 +1,7 @@
 const { app, remote } = require('electron');
 const path = require('path');
 const { fs, util } = require('vortex-api');
-const { parseXmlString } = require('libxmljs');
+const { Builder, parseStringPromise } = require('xml2js');
 const winapi = require('winapi-bindings');
 
 const appUni = app || remote.app;
@@ -108,35 +108,42 @@ function readAddinsData(mergeDir) {
 function merge(filePath, mergeDir) {
   let manifest;
   return fs.readFileAsync(filePath)
-      .then(xmlData => {
+      .then(async xmlData => {
         try {
-          manifest = parseXmlString(xmlData);
+          manifest = await parseStringPromise(xmlData);
         } catch (err) {
           return Promise.reject(new util.ProcessCanceled(`File invalid "${filePath}"`));
         }
         return Promise.resolve();
       })
       .then(() => readAddinsData(mergeDir))
-      .then(addinsData => new Promise((resolve, reject) => {
+      .then(async addinsData => new Promise(async (resolve, reject) => {
         try {
-          resolve(parseXmlString(addinsData));
+          const data = await parseStringPromise(addinsData);
+          return resolve(data);
         } catch (err) {
-          resolve(parseXmlString(emptyAddins));
+          return resolve(await parseStringPromise(emptyAddins));
         }
       }))
-      .then(addins => {
-        const list = addins.get('//AddInsList');
+      .then(async addinsData => {
+        const list = addinsData?.AddInsList?.AddInItem;
+        const manifestList = manifest?.Manifest?.AddInsList !== undefined
+          ? manifest.Manifest.AddInsList.reduce((accum, add) => {
+            accum = accum.concat(...add?.AddInItem);
+            return accum;
+          }, [])
+          : [];
         if (list === undefined) {
           return Promise.reject(new util.ProcessCanceled(`Addins file is invalid - "${path.join(mergeDir, 'Settings', ADDINS_FILE)}"`));
         }
-
-        manifest.find('//Manifest/AddInsList/AddInItem').forEach(item => {
-          list.addChild(item);
-        });
+        addinsData.AddInsList.AddInItem = [].concat([...list], [...manifestList]);
         const destPath = path.join(mergeDir, 'Settings');
-        return fs.ensureDirAsync(destPath)
-          .then(() => fs.writeFileAsync(path.join(destPath, ADDINS_FILE),
-            addins.toString(), { encoding: 'utf-8' }));
+        return fs.ensureDirWritableAsync(destPath)
+          .then(async () => {
+            const builder = new Builder();
+            const xml = builder.buildObject(addinsData);
+            return fs.writeFileAsync(path.join(destPath, ADDINS_FILE), xml, { encoding: 'utf-8' })
+          });
       });
 }
 
