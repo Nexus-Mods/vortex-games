@@ -1,5 +1,5 @@
 const fs = require('fs');
-const { parseXmlString } = require('libxmljs');
+const { parseString } = require('xml2js');
 const path = require('path');
 const winapi = require('winapi-bindings');
 const { util } = require('vortex-api');
@@ -34,11 +34,14 @@ function queryModPath(api, gamePath) {
   if (version === undefined) {
     try {
       const data = fs.readFileSync(path.join(gamePath, 'version.xml'), { encoding: 'utf8' });
-      const versionXML = parseXmlString(data);
-
-      version = versionXML.get('//version.xml/version').text();
-      version = version.replace(/ ?v.([0-9.]*) .*/, '$1');
-      fs.statSync(path.join(gamePath, 'res_mods', version));
+      parseString(data, (err, res) => {
+        if (err) {
+          throw err;
+        }
+        version = res?.['version.xml']?.version?.[0];
+        version = version.replace(/ ?v.([0-9.]*) .*/, '$1');
+        fs.statSync(path.join(gamePath, 'res_mods', version));
+      });
     } catch (parseErr) {
       version = undefined;
       api.showErrorNotification('Game not installed',
