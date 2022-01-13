@@ -1,7 +1,6 @@
 //const { app, remote } = require('electron');
 const path = require('path');
 const Promise = require('bluebird');
-const { parseXmlString } = require('libxmljs');
 const { actions, fs, FlexLayout, OptionsFilter, log, selectors, util } = require('vortex-api');
 const rjson = require('relaxed-json');
 
@@ -181,31 +180,31 @@ class MasterChiefCollectionGame {
   }
 }
 
-function getXboxId(internalId, filePath, encoding) {
-  // This function will return the xbox id of the last player
-  //  who ran the game. This can potentially be used to mod the game
-  //  only for specific xbox ids while leaving others in an untampered state. (WIP)
-  return fs.readFileAsync(filePath, { encoding })
-    .then(fileData => {
-      let xmlDoc;
-      try {
-        xmlDoc = parseXmlString(fileData);
-      } catch (err) {
-        return Promise.reject(err);
-      }
+// function getXboxId(internalId, filePath, encoding) {
+//   // This function will return the xbox id of the last player
+//   //  who ran the game. This can potentially be used to mod the game
+//   //  only for specific xbox ids while leaving others in an untampered state. (WIP)
+//   return fs.readFileAsync(filePath, { encoding })
+//     .then(fileData => {
+//       let xmlDoc;
+//       try {
+//         xmlDoc = parseXmlString(fileData);
+//       } catch (err) {
+//         return Promise.reject(err);
+//       }
 
-      const generalData = xmlDoc.find('//CampaignCarnageReport/GeneralData');
-      if (generalData[0].attr('GameId').value() === internalId) {
-        const players = xmlDoc.find('//CampaignCarnageReport/Players/PlayerInfo');
-        const mainPlayer = players.find(player => player.attr('isGuest').value() === 'false');
-        const xboxId = mainPlayer.attr('mXboxUserId').value();
-        // The userId is prefixed with "0x" which is not needed.
-        return Promise.resolve(xboxId.substring(2));
-      } else {
-        return Promise.reject(new util.DataInvalid('Wrong internal gameId'));
-      }
-    });
-}
+//       const generalData = xmlDoc.find('//CampaignCarnageReport/GeneralData');
+//       if (generalData[0].attr('GameId').value() === internalId) {
+//         const players = xmlDoc.find('//CampaignCarnageReport/Players/PlayerInfo');
+//         const mainPlayer = players.find(player => player.attr('isGuest').value() === 'false');
+//         const xboxId = mainPlayer.attr('mXboxUserId').value();
+//         // The userId is prefixed with "0x" which is not needed.
+//         return Promise.resolve(xboxId.substring(2));
+//       } else {
+//         return Promise.reject(new util.DataInvalid('Wrong internal gameId'));
+//       }
+//     });
+// }
 
 function identifyHaloGames(files) {
   // Function aims to identify the relevant halo game entry using the
