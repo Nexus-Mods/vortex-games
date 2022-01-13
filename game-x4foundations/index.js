@@ -1,7 +1,7 @@
 const { app, remote } = require('electron');
 const Big = require('big.js');
 const Promise = require('bluebird');
-const { parseXmlString } = require('libxmljs');
+const { parseStringPromise } = require('xml2js');
 const path = require('path');
 const { fs, log, selectors, util } = require('vortex-api');
 const winapi = require('winapi-bindings');
@@ -60,16 +60,16 @@ async function parseIndexFiles(indexPath) {
     const xmlFiles = files.filter(file => path.extname(file) === '.xml');
     return Promise.reduce(xmlFiles, (modName, file) => {
       return fs.readFileAsync(path.join(indexPath, file))
-      .then(data => {
+      .then(async data => {
         if (modName !== '') {
           return Promise.resolve(modName);
         }
 
         let parsed;
         try {
-          parsed = parseXmlString(data);
-          const entries = parsed.find('//entry');
-          const entryValue = entries[0]?.attr('value').value();
+          parsed = await parseStringPromise(data);
+          const entries = parsed?.diff?.add?.[0]?.entry;
+          const entryValue = entries[0]?.$?.value;
           if (entryValue !== undefined && entryValue.startsWith('extensions')) {
             const segments = entryValue.split(path.sep);
             return Promise.resolve(segments[1]);
@@ -110,10 +110,10 @@ async function installContent(files,
   let outputPath = basePath;
 
   const contentFile = path.join(destinationPath, contentPath);
-  return fs.readFileAsync(contentFile, { encoding: 'utf8' }).then(data => {
+  return fs.readFileAsync(contentFile, { encoding: 'utf8' }).then(async data => {
     let parsed;
     try {
-      parsed = parseXmlString(data);
+      parsed = await parseStringPromise(data);
     } catch (err) {
       return Promise.reject(new util.DataInvalid('content.xml invalid: ' + err.message));
     }
@@ -121,7 +121,7 @@ async function installContent(files,
 
     const getAttr = key => {
       try {
-        return parsed.get('//content').attr(key).value();
+        return parsed?.content?.$?.[key];
       } catch (err) {
         log('info', 'attribute missing in content.xml',  { key });
       }
