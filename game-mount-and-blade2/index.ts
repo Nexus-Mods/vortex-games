@@ -3,7 +3,6 @@ import { Promise as Bluebird } from 'bluebird';
 import * as React from 'react';
 import * as BS from 'react-bootstrap';
 
-import { Element } from 'libxmljs';
 import getVersion from 'exe-version';
 
 import path from 'path';
@@ -606,9 +605,7 @@ async function resolveGameVersion(discoveryPath: string) {
   try {
     const data = await getXMLData(path.join(discoveryPath, 'bin', 'Win64_Shipping_Client', 'Version.xml'));
     const exePath = path.join(discoveryPath, BANNERLORD_EXEC);
-    const value = data.get<Element>('//Singleplayer')
-      .attr('Value')
-      .value()
+    const value = data?.Version?.Singleplayer?.$?.Value
       .slice(1)
       .split('.')
       .slice(0, 3)

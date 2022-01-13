@@ -8,7 +8,7 @@ import { ComponentEx, EmptyPlaceholder, FlexLayout,
   selectors, types, Icon, util } from 'vortex-api';
 
 import { IExtendedInterfaceProps } from '../collections/types';
-import { genCollectionLoadOrder } from '../collections/util';
+import { genCollectionLoadOrder } from '../collections/collectionUtil';
 import { ILoadOrder, ILoadOrderEntry } from '../types';
 
 const NAMESPACE: string = 'mnb2-collections-data';

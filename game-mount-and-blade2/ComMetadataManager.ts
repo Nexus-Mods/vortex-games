@@ -1,4 +1,3 @@
-import { Element } from 'libxmljs';
 import path from 'path';
 import turbowalk, { IEntry } from 'turbowalk';
 import { fs, log, selectors, types, util } from 'vortex-api';
@@ -7,6 +6,7 @@ import { GAME_ID, SUBMOD_FILE } from './common';
 import { IDependency, IProps, ISubModule } from './types';
 import { genProps, getXMLData } from './util';
 
+const DEP_XML_LIST = 'DependedModuleMetadatas';
 const DEP_XML_ELEMENT = 'DependedModuleMetadata';
 
 // This component aims to cater for the community developed metadata
@@ -60,14 +60,14 @@ class ComMetadataManager {
   }
 
   private async parseSubModFile(filePath: string): Promise<ISubModule> {
-    const getAttributeValue = async (node: any, attrib: string, optional: boolean = true) => {
+    const getAttrValue = (node, attr, optional = true) => {
       try {
-        const value = node.attr(attrib).value();
+        const value = node?.$?.[attr];
         return Promise.resolve(value);
       } catch (err) {
         return optional
           ? Promise.resolve(undefined)
-          : Promise.reject(new Error(`missing ${attrib}`));
+          : Promise.reject(new Error(`missing ${attr}`));
       }
     };
 
@@ -75,16 +75,16 @@ class ComMetadataManager {
     const dependencies: IDependency[] = [];
     try {
       const data = await getXMLData(filePath);
-      subModId = data.get<Element>('//Id').attr('value').value();
-      const depNodes = data.find(`//${DEP_XML_ELEMENT}`);
+      subModId = data?.Module?.Id?.[0]?.$?.value;
+      const depNodes = data?.Module?.DependedModuleMetadatas?.[0]?.DependedModuleMetadata;
       for (const node of depNodes) {
         try {
           const dep: IDependency = {
-            id: await getAttributeValue(node, 'id', false),
-            optional: await getAttributeValue(node, 'optional') === 'true',
-            order: await getAttributeValue(node, 'order'),
-            version: await getAttributeValue(node, 'version'),
-            incompatible: await getAttributeValue(node, 'incompatible') === 'true',
+            id: await getAttrValue(node, 'id', false),
+            optional: await getAttrValue(node, 'optional') === 'true',
+            order: await getAttrValue(node, 'order'),
+            version: await getAttrValue(node, 'version'),
+            incompatible: await getAttrValue(node, 'incompatible') === 'true',
           };
           dependencies.push(dep);
         } catch (err) {

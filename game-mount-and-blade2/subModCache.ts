@@ -81,20 +81,22 @@ async function getDeployedModData(context: types.IExtensionContext, subModuleFil
 
   return Bluebird.reduce(subModuleFilePaths, async (accum, subModFile: string) => {
     try {
+      const getAttrValue = (node, attr) => node?.[attr]?.[0]?.$?.value;
       const subModData = await getXMLData(subModFile);
-      const subModId = subModData.get<Element>('//Id').attr('value').value();
-      const subModVerData = subModData.get<Element>('//Version').attr('value').value();
+      const module = subModData?.Module;
+      const subModId = getAttrValue(module, 'Id');
+      const subModVerData = getAttrValue(module, 'Version');
       const subModVer = getCleanVersion(subModId, subModVerData);
       const managedEntry = managedIds.find(entry => entry.subModId === subModId);
-      const isMultiplayer = (!!subModData.get(`//${XML_EL_MULTIPLAYER}`));
-      const depNodes = subModData.find<Element>('//DependedModule');
+      const isMultiplayer = getAttrValue(module, XML_EL_MULTIPLAYER) !== undefined;
+      const depNodes = module?.DependedModules?.[0]?.DependedModule;
       let dependencies = [];
       try {
         dependencies = depNodes.map(depNode => {
           let depVersion;
-          const depId = depNode.attr('Id').value();
+          const depId = depNode?.$?.Id;
           try {
-            const unsanitized = depNode.attr('DependentVersion').value();
+            const unsanitized = depNode?.$?.DependentVersion;
             depVersion = getCleanVersion(subModId, unsanitized);
           } catch (err) {
             // DependentVersion is an optional attribute, it's not a big deal if
@@ -107,7 +109,7 @@ async function getDeployedModData(context: types.IExtensionContext, subModuleFil
       } catch (err) {
         log('debug', 'submodule has no dependencies or is invalid', err);
       }
-      const subModName = subModData.get<Element>('//Name').attr('value').value();
+      const subModName = getAttrValue(module, 'Name');
 
       accum[subModId] = {
         subModId,
@@ -148,30 +150,20 @@ async function getDeployedModData(context: types.IExtensionContext, subModuleFil
 }
 
 export async function parseLauncherData() {
-  const idRegexp = /\<Id\>(.*?)\<\/Id\>/gm;
-  const enabledRegexp = /\<IsSelected\>(.*?)\<\/IsSelected\>/gm;
-  const trimTagsRegexp = /<[^>]*>?/gm;
-
   const createDataElement = (xmlNode) => {
-    const nodeString = xmlNode.toString({ whitespace: false }).replace(/[ \t\r\n]/gm, '');
-    if (!!nodeString) {
-      return {
-        subModId: nodeString.match(idRegexp)[0].replace(trimTagsRegexp, ''),
-        enabled: nodeString.match(enabledRegexp)[0]
-          .toLowerCase()
-          .replace(trimTagsRegexp, '') === 'true',
-      };
-    } else {
+    if (xmlNode === undefined) {
       return undefined;
     }
+    return {
+      subModId: xmlNode?.Id[0],
+      enabled: xmlNode?.IsSelected[0] === 'true',
+    };
   };
 
   const launcherData = await getXMLData(LAUNCHER_DATA_PATH);
   try {
-    const singlePlayerMods =
-      launcherData.get<Element>('//UserData/SingleplayerData/ModDatas').childNodes();
-    const multiPlayerMods = launcherData.get<Element>('//UserData/MultiplayerData/ModDatas')
-      .childNodes();
+    const singlePlayerMods = launcherData?.UserData?.SingleplayerData?.[0]?.ModDatas?.[0]?.UserModData;
+    const multiPlayerMods = launcherData?.UserData?.MultiplayerData?.[0]?.ModDatas?.[0]?.UserModData;
     LAUNCHER_DATA.singlePlayerSubMods = singlePlayerMods.reduce((accum, spm) => {
       const dataElement = createDataElement(spm);
       if (!!dataElement) {

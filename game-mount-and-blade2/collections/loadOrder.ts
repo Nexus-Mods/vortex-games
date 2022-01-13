@@ -4,7 +4,7 @@ import { ILoadOrder, ILoadOrderEntry } from '../types';
 import { ICollectionsData } from './types';
 
 import { CollectionGenerateError, CollectionParseError,
-  genCollectionLoadOrder, isModInCollection, isValidMod } from './util';
+  genCollectionLoadOrder, isModInCollection, isValidMod } from './collectionUtil';
 
 export async function exportLoadOrder(state: types.IState,
                                       modIds: string[],

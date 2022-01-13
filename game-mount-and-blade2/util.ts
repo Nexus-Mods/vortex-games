@@ -1,7 +1,7 @@
 import Bluebird from 'bluebird';
-import { Element, parseXmlString } from 'libxmljs';
 import path from 'path';
 import { actions, fs, log, selectors, types, util } from 'vortex-api';
+import { parseStringPromise } from 'xml2js';
 
 import { BANNERLORD_EXEC, GAME_ID } from './common';
 import { getCache, getLauncherData } from './subModCache';
@@ -14,9 +14,9 @@ const PARAMS_TEMPLATE = ['/{{gameMode}}', '_MODULES_{{subModIds}}*_MODULES_'];
 
 export async function getXMLData(xmlFilePath: string) {
   return fs.readFileAsync(xmlFilePath)
-    .then(data => {
+    .then(async data => {
       try {
-        const xmlData = parseXmlString(data);
+        const xmlData = await parseStringPromise(data);
         return Promise.resolve(xmlData);
       } catch (err) {
         return Promise.reject(new util.DataInvalid(err.message));
@@ -62,12 +62,12 @@ export async function getElementValue(subModuleFilePath: string, elementName: st
     return Promise.resolve(undefined);
   };
   return fs.readFileAsync(subModuleFilePath, { encoding: 'utf-8' })
-    .then(xmlData => {
+    .then(async xmlData => {
       try {
-        const modInfo = parseXmlString(xmlData);
-        const element = modInfo.get<Element>(`//${elementName}`);
-        return ((element !== undefined) && (element.attr('value').value() !== undefined))
-          ? Promise.resolve(element.attr('value').value())
+        const modInfo = await parseStringPromise(xmlData);
+        const element = modInfo?.Module?.[elementName];
+        return ((element !== undefined) && (element?.[0]?.$?.value !== undefined))
+          ? Promise.resolve(element?.[0]?.$?.value)
           : logAndContinue();
       } catch (err) {
         const errorMessage = 'Vortex was unable to parse: ' + subModuleFilePath + '; please inform the mod author';

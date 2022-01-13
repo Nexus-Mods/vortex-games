@@ -7,7 +7,7 @@ import { ICollectionsData  } from './types';
 
 import { exportLoadOrder, importLoadOrder } from './loadOrder';
 
-import { CollectionParseError } from './util';
+import { CollectionParseError } from './collectionUtil';
 
 export async function genCollectionsData(context: types.IExtensionContext,
                                          gameId: string,
