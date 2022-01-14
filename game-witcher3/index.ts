@@ -1,11 +1,12 @@
 import Bluebird, { all } from 'bluebird';
-import { Element, parseXmlString } from 'libxmljs';
 import path from 'path';
 import React from 'react';
 import * as BS from 'react-bootstrap';
 import { actions, FlexLayout, fs, log, selectors, types, util } from 'vortex-api';
 import * as IniParser from 'vortex-parse-ini';
 import winapi from 'winapi-bindings';
+
+import { Builder, parseStringPromise } from 'xml2js';
 
 import { genCollectionsData, parseCollectionsData } from './collections/collections';
 import { IW3CollectionsData } from './collections/types';
@@ -951,9 +952,9 @@ const emptyXml = '<?xml version="1.0" encoding="UTF-8"?><metadata></metadata>';
 function merge(filePath, mergeDir, context) {
   let modData;
   return fs.readFileAsync(filePath)
-    .then(xmlData => {
+    .then(async xmlData => {
       try {
-        modData = parseXmlString(xmlData, { ignore_enc: true, noblanks: true });
+        modData = await parseStringPromise(xmlData);
         return Promise.resolve();
       } catch (err) {
         // The mod itself has invalid xml data.
@@ -964,9 +965,9 @@ function merge(filePath, mergeDir, context) {
       }
     })
     .then(() => readInputFile(context, mergeDir))
-    .then(mergedData => {
+    .then(async mergedData => {
       try {
-        const merged = parseXmlString(mergedData, { ignore_enc: true, noblanks: true });
+        const merged = await parseStringPromise(mergedData);
         return Promise.resolve(merged);
       } catch (err) {
         // This is the merged file - if it's invalid chances are we messed up
@@ -987,66 +988,34 @@ function merge(filePath, mergeDir, context) {
       }
     })
     .then(gameIndexFile => {
-      const modVars = modData.find('//Var');
-      const gameVars = gameIndexFile.find<Element>('//Var');
-
-      modVars.forEach(modVar => {
-        const matcher = (gameVar) => {
-          let gameVarParent;
-          let modVarParent;
-          try {
-            gameVarParent = gameVar.parent().parent();
-            modVarParent = modVar.parent().parent();
-          } catch (err) {
-            // This game variable must've been replaced in a previous
-            //  iteration.
-            return false;
+      const modGroups = modData?.UserConfig?.Group;
+      for (let i = 0; i < modGroups.length; i++) {
+        const gameGroups = gameIndexFile?.UserConfig?.Group;
+        const iter = modGroups[i];
+        const modVars = iter?.VisibleVars?.[0]?.Var;
+        const gameGroupIdx = gameGroups.findIndex(group => group?.$?.id === iter?.$?.id);
+        if (gameGroupIdx !== -1) {
+          const gameGroup = gameGroups[gameGroupIdx];
+          const gameVars = gameGroup?.VisibleVars?.[0]?.Var;
+          for (let j = 0; j < modVars.length; j++) {
+            const modVar = modVars[j];
+            const id = modVar?.$?.id;
+            const gameVarIdx = gameVars.findIndex(v => v?.$?.id === id);
+            if (gameVarIdx !== -1) {
+              gameIndexFile.UserConfig.Group[gameGroupIdx].VisibleVars[0].Var[gameVarIdx] = modVar;
+            } else {
+              gameIndexFile.UserConfig.Group[gameGroupIdx].VisibleVars[0].Var.push(modVar);
+            }
           }
-
-          if ((typeof(gameVarParent?.attr) !== 'function')
-           || (typeof(modVarParent?.attr) !== 'function')) {
-             // This is actually quite problematic - it pretty much means
-             //  that either the mod or the game itself has game variables
-             //  located outside a group. Either the game input file is corrupted
-             //  (manual tampering?) or the mod itself is. Thankfully we will be
-             //  creating the missing group, but it leads to the question, what
-             //  other surprises are we going to encounter further down the line ?
-             log('error', 'failed to find parent group of mod variable', modVar);
-             return false;
-           }
-
-          return ((gameVarParent.attr('id').value() === modVarParent.attr('id').value())
-            && (gameVar.attr('id').value() === modVar.attr('id').value()));
-        };
-
-        const existingVar = gameVars.find(matcher);
-        if (existingVar) {
-          existingVar.replace(modVar.clone());
         } else {
-          const parentGroup = modVar.parent().parent();
-          const groupId = parentGroup.attr('id').value();
-          const matchingIndexGroup = gameIndexFile.find<Element>('//Group')
-            .filter(group => group.attr('id').value() === groupId);
-          if (matchingIndexGroup.length > 1) {
-            // Something's wrong with the file - back off.
-            const err = new util.DataInvalid('Duplicate group entries found in game input.xml'
-              + `\n\n${path.join(mergeDir, INPUT_XML_FILENAME)}\n\n`
-              + 'file - please fix this manually before attempting to re-install the mod');
-            context.api.showErrorNotification('Duplicate group entries detected', err,
-              { allowReport: false });
-            return Promise.reject(err);
-          } else if (matchingIndexGroup.length === 0) {
-            // Need to add the group AND the var.
-            const userConfig = gameIndexFile.get<Element>('//UserConfig');
-            userConfig.addChild(parentGroup.clone());
-          } else {
-            (matchingIndexGroup[0].child(0) as Element).addChild(modVar.clone());
-          }
+          gameIndexFile.UserConfig.Group.push(modGroups[i]);
         }
-      });
-
-      return fs.writeFileAsync(path.join(mergeDir, CONFIG_MATRIX_REL_PATH, INPUT_XML_FILENAME),
-        gameIndexFile);
+      }
+      const builder = new Builder();
+      const xml = builder.buildObject(gameIndexFile);
+      return fs.writeFileAsync(
+        path.join(mergeDir, CONFIG_MATRIX_REL_PATH, INPUT_XML_FILENAME),
+        xml);
     })
     .catch(err => {
       log('error', 'input.xml merge failed', err);
