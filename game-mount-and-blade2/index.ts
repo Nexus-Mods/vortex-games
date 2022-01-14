@@ -26,6 +26,7 @@ const MODDING_KIT_EXEC = path.join('bin', 'Win64_Shipping_wEditor', 'TaleWorlds.
 
 let STORE_ID;
 
+const GOG_IDS = ['1802539526', '1564781494'];
 const STEAMAPP_ID = 261550;
 const EPICAPP_ID = 'Chickadee';
 
@@ -39,7 +40,7 @@ const ROOT_FOLDERS = new Set(['bin', 'data', 'gui', 'icons', 'modules',
   'music', 'shaders', 'sounds', 'xmlschemas']);
 
 function findGame() {
-  return util.GameStoreHelper.findByAppId([EPICAPP_ID, STEAMAPP_ID.toString()])
+  return util.GameStoreHelper.findByAppId([EPICAPP_ID, STEAMAPP_ID.toString(), ...GOG_IDS])
     .then(game => {
       STORE_ID = game.gameStoreId;
       return Promise.resolve(game.gamePath);
