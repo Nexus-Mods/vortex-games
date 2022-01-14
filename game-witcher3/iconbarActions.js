@@ -7,7 +7,7 @@ exports.registerActions = void 0;
 const path_1 = __importDefault(require("path"));
 const vortex_api_1 = require("vortex-api");
 const common_1 = require("./common");
-const priorityTypeButton_1 = __importDefault(require("./priorityTypeButton"));
+//const priorityTypeButton_1 = __importDefault(require("./priorityTypeButton"));
 function resetPriorities(props) {
     const { context, refreshFunc } = props;
     const state = context.api.getState();
@@ -38,7 +38,7 @@ exports.registerActions = (props) => {
         const gameMode = vortex_api_1.selectors.activeGameId(state);
         return (gameMode === common_1.GAME_ID);
     };
-    context.registerAction('generic-load-order-icons', 300, priorityTypeButton_1.default, {}, undefined, isTW3);
+    //context.registerAction('generic-load-order-icons', 300, priorityTypeButton_1.default, {}, undefined, isTW3);
     context.registerAction('mod-icons', 300, 'open-ext', {}, 'Open TW3 Documents Folder', openTW3DocPath, isTW3);
     context.registerAction('generic-load-order-icons', 300, 'open-ext', {}, 'Open TW3 Documents Folder', openTW3DocPath, isTW3);
     context.registerAction('generic-load-order-icons', 100, 'loot-sort', {}, 'Reset Priorities', () => {
