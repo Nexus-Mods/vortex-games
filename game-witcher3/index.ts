@@ -6,6 +6,8 @@ import { actions, FlexLayout, fs, log, selectors, types, util } from 'vortex-api
 import * as IniParser from 'vortex-parse-ini';
 import winapi from 'winapi-bindings';
 
+import { migrate148 } from './migrations';
+
 import { Builder, parseStringPromise } from 'xml2js';
 
 import { genCollectionsData, parseCollectionsData } from './collections/collections';
@@ -1135,6 +1137,8 @@ function main(context: types.IExtensionContext) {
 
   context.registerMerge(canMerge,
     (filePath, mergeDir) => merge(filePath, mergeDir, context), 'witcher3menumodroot');
+
+  context.registerMigration((oldVersion) => (migrate148(context, oldVersion) as any));
 
   registerActions({
     context,

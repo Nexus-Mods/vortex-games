@@ -12,6 +12,8 @@ const RANGE_END = 0xB98000;
 const UNPATCHED_SEQ = [0xBA, 0xC0, 0x00, 0x00, 0x00, 0x48, 0x8D, 0x4B];
 const PATCHED_SEQ = [0xBA, 0xF4, 0x01, 0x00, 0x00, 0x48, 0x8D, 0x4B];
 
+const OFFSET = 65536;
+
 export class ModLimitPatcher {
   private mApi: types.IExtensionApi;
   private mIsPatched: boolean;
@@ -176,9 +178,7 @@ export class ModLimitPatcher {
       });
       stream.on('error', onError);
       stream.on('data', ((chunk: Buffer) => {
-        if (this.mIsPatched
-          || (stream.bytesRead < (start + chunk.length))
-          || (stream.bytesRead > (end + chunk.length))) {
+        if (this.mIsPatched || (stream.bytesRead + OFFSET) < start || stream.bytesRead > end + OFFSET) {
           writer.write(chunk);
         } else {
           if (this.hasSequence(unpatched, chunk)) {
