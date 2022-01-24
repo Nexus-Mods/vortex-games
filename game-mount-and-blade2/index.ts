@@ -606,7 +606,7 @@ async function resolveGameVersion(discoveryPath: string) {
   try {
     const data = await getXMLData(path.join(discoveryPath, 'bin', 'Win64_Shipping_Client', 'Version.xml'));
     const exePath = path.join(discoveryPath, BANNERLORD_EXEC);
-    const value = data?.Version?.Singleplayer?.$?.Value
+    const value = data?.Version?.Singleplayer?.[0]?.$?.Value
       .slice(1)
       .split('.')
       .slice(0, 3)
