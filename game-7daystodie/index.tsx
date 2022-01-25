@@ -1,16 +1,99 @@
 import path from 'path';
-import { fs, log, selectors, types, util } from 'vortex-api';
+import { useSelector } from 'react-redux';
+import { createAction } from 'redux-act';
+import { actions, fs, log, selectors, types, util } from 'vortex-api';
+
+import * as React from 'react';
 
 import { GAME_ID, gameExecutable, MOD_INFO, modsRelPath } from './common';
 import { deserialize, serialize, validate } from './loadOrder';
 import { migrate020, migrate100 } from './migrations';
 import { ILoadOrderEntry, IProps } from './types';
-import { genProps, getModName, toBlue } from './util';
+import { genProps, getModName, makePrefix, reversePrefix, toBlue } from './util';
 
 const STEAM_ID = '251570';
 const STEAM_DLL = 'steamclient64.dll';
 
 const ROOT_MOD_CANDIDATES = ['bepinex'];
+
+const setPrefixOffset = createAction('7DTD_SET_PREFIX_OFFSET',
+  (profile: string, offset: number) => ({ profile, offset }));
+
+const reducer: types.IReducerSpec = {
+  reducers: {
+    [setPrefixOffset as any]: (state, payload) => {
+      const { profile, offset } = payload;
+      return util.setSafe(state, ['prefixOffset', profile], offset);
+    },
+  },
+  defaults: {},
+};
+
+function resetPrefixOffset(api: types.IExtensionApi) {
+  const state = api.getState();
+  const profileId = selectors.activeProfile(state)?.id;
+  if (profileId === undefined) {
+    // How ?
+    api.showErrorNotification('No active profile for 7dtd', undefined, { allowReport: false });
+    return;
+  }
+
+  api.store.dispatch(setPrefixOffset(profileId, 0));
+  const loadOrder = util.getSafe(api.getState(), ['persistent', 'loadOrder', profileId], []);
+  const newLO = loadOrder.map((entry, idx) => ({
+    ...entry,
+    data: {
+      prefix: makePrefix(idx),
+    },
+  }));
+  api.store.dispatch(actions.setLoadOrder(profileId, newLO));
+}
+
+function setPrefixOffsetDialog(api: types.IExtensionApi) {
+  return api.showDialog('question', 'Set New Prefix Offset', {
+    text: api.translate('Insert new prefix offset for modlets (AAA-ZZZ):'),
+    input: [
+      {
+        id: '7dtdprefixoffsetinput',
+        label: 'Prefix Offset',
+        type: 'text',
+        placeholder: 'AAA',
+      }],
+  }, [ { label: 'Cancel' }, { label: 'Set', default: true } ])
+  .then(result => {
+    if (result.action === 'Set') {
+      const prefix = result.input['7dtdprefixoffsetinput'];
+      let offset = 0;
+      try {
+        offset = reversePrefix(prefix);
+      } catch (err) {
+        return Promise.reject(err);
+      }
+      const state = api.getState();
+      const profileId = selectors.activeProfile(state)?.id;
+      if (profileId === undefined) {
+        // How ?
+        api.showErrorNotification('No active profile for 7dtd', undefined, { allowReport: false });
+        return;
+      }
+
+      api.store.dispatch(setPrefixOffset(profileId, offset));
+      const loadOrder = util.getSafe(api.getState(), ['persistent', 'loadOrder', profileId], []);
+      const newLO = loadOrder.map(entry => ({
+        ...entry,
+        data: {
+          prefix: makePrefix(reversePrefix(entry.data.prefix) + offset),
+        },
+      }));
+      api.store.dispatch(actions.setLoadOrder(profileId, newLO));
+    }
+    return Promise.resolve();
+  })
+  .catch(err => {
+    api.showErrorNotification('Failed to set prefix offset', err, { allowReport: false });
+    return Promise.resolve();
+  });
+}
 
 async function findGame() {
   return util.GameStoreHelper.findByAppId([STEAM_ID])
@@ -19,7 +102,6 @@ async function findGame() {
 
 async function prepareForModding(context: types.IExtensionContext,
                                  discovery: types.IDiscoveryResult) {
-  const state = context.api.getState();
   const modsPath = path.join(discovery.path, modsRelPath());
   try {
     await fs.ensureDirWritableAsync(modsPath);
@@ -124,7 +206,41 @@ function requiresLauncher(gamePath) {
     .catch(err => Promise.reject(err));
 }
 
+function InfoPanel(props) {
+  const { t, currentOffset } = props;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', padding: '16px' }}>
+      <div style={{ display: 'flex', whiteSpace: 'nowrap', alignItems: 'center' }}>
+        {t('Current Prefix Offset: ')}
+        <hr/>
+        <label style={{ color: 'red' }}>{currentOffset}</label>
+      </div>
+      <hr/>
+      <div>
+        {t('7 Days to Die loads mods in alphabetic order so Vortex prefixes '
+         + 'the directory names with "AAA, AAB, AAC, ..." to ensure they load in the order you set here.')}
+      </div>
+    </div>
+  );
+}
+
+function InfoPanelWrap(props: { api: types.IExtensionApi, profileId: string }) {
+  const { api, profileId } = props;
+  const currentOffset = useSelector((state: types.IState) =>
+    makePrefix(util.getSafe(state,
+      ['settings', '7daystodie', 'prefixOffset', profileId], 0)));
+
+  return (
+    <InfoPanel
+      t={api.translate}
+      currentOffset={currentOffset}
+    />
+  );
+}
+
 function main(context: types.IExtensionContext) {
+  context.registerReducer(['settings', '7daystodie'], reducer);
   context.registerGame({
     id: GAME_ID,
     name: '7 Days to Die',
@@ -154,8 +270,26 @@ function main(context: types.IExtensionContext) {
     validate,
     gameId: GAME_ID,
     toggleableEntries: false,
-    usageInstructions: '7 Days to Die loads mods in alphabetic order so Vortex prefixes '
-      + 'the directory names with "AAA, AAB, AAC, ..." to ensure they load in the order you set here.',
+    usageInstructions: (() => {
+      const state = context.api.getState();
+      const profileId = selectors.activeProfile(state)?.id;
+      if (profileId === undefined) {
+        return null;
+      }
+      return (
+        <InfoPanelWrap api={context.api} profileId={profileId} />
+      );
+    }) as any,
+  });
+
+  context.registerAction('fb-load-order-icons', 150, 'loot-sort', {},
+                         'Prefix Offset Assign', () => {
+    setPrefixOffsetDialog(context.api);
+  });
+
+  context.registerAction('fb-load-order-icons', 150, 'loot-sort', {},
+                         'Prefix Offset Reset', () => {
+    resetPrefixOffset(context.api);
   });
 
   const getOverhaulPath = (game: types.IGame) => {

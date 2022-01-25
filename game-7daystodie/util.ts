@@ -55,6 +55,35 @@ export async function ensureLOFile(context: types.IExtensionContext,
   }
 }
 
+export function getPrefixOffset(api: types.IExtensionApi): number {
+  const state = api.getState();
+  const profileId = selectors.activeProfile(state)?.id;
+  if (profileId === undefined) {
+    // How ?
+    api.showErrorNotification('No active profile for 7dtd', undefined, { allowReport: false });
+    return;
+  }
+
+  return util.getSafe(state, ['settings', '7daystodie', 'prefixOffset', profileId], 0);
+}
+
+export function reversePrefix(input: string): number {
+  if (input.length !== 3 || input.match(/[A-Z][A-Z][A-Z]/g) === null) {
+    throw new util.DataInvalid('Invalid input, please provide a valid prefix (AAA-ZZZ)');
+  }
+  const prefix = input.split('');
+
+  const offset = prefix.reduce((prev, iter, idx) => {
+    const pow = 2 - idx;
+    const mult = Math.pow(25, pow);
+    const charCode = (iter.charCodeAt(0) % 65);
+    prev = prev + (charCode * mult);
+    return prev;
+  }, 0);
+
+  return offset;
+}
+
 export function makePrefix(input: number) {
   let res = '';
   let rest = input;

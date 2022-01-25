@@ -1,8 +1,18 @@
-import { fs, types, util } from 'vortex-api';
+import * as _ from 'lodash';
+import { actions, fs, types, util } from 'vortex-api';
 
 import { GAME_ID, INVALID_LO_MOD_TYPES } from './common';
 import { ILoadOrderEntry, IProps, ISerializableData, LoadOrder } from './types';
-import { ensureLOFile, genProps, makePrefix } from './util';
+import { ensureLOFile, genProps, getPrefixOffset, makePrefix } from './util';
+
+function isLODifferent(prev: LoadOrder, current: LoadOrder) {
+  const diff = _.difference(prev, current);
+  if (diff.length > 0) {
+    return true;
+  }
+
+  return false;
+}
 
 export async function serialize(context: types.IExtensionContext,
                                 loadOrder: LoadOrder,
@@ -14,18 +24,26 @@ export async function serialize(context: types.IExtensionContext,
 
   // Make sure the LO file is created and ready to be written to.
   const loFilePath = await ensureLOFile(context, profileId, props);
-  const filteredLO = loadOrder.filter(lo => 
+  const filteredLO = loadOrder.filter(lo =>
     !INVALID_LO_MOD_TYPES.includes(props.mods?.[lo?.modId]?.type));
+
+  const offset = getPrefixOffset(context.api);
 
   // The array at this point is sorted in the order in which we want the game to load the
   //  mods, which means we can just loop through it and use the index to assign the prefix.
   const prefixedLO = filteredLO.map((loEntry: ILoadOrderEntry, idx: number) => {
-    const prefix = makePrefix(idx);
+    const prefix = makePrefix(idx + offset);
     const data: ISerializableData = {
       prefix,
     };
     return { ...loEntry, data };
   });
+
+  const fileData = await fs.readFileAsync(loFilePath, { encoding: 'utf8' });
+  const savedLO: ILoadOrderEntry[] = JSON.parse(fileData);
+  if (isLODifferent(savedLO, prefixedLO)) {
+    context.api.store.dispatch(actions.setLoadOrder(props.profile.id, prefixedLO));
+  }
 
   // Write the prefixed LO to file.
   await fs.removeAsync(loFilePath).catch({ code: 'ENOENT' }, () => Promise.resolve());
@@ -62,13 +80,13 @@ export async function deserialize(context: types.IExtensionContext): Promise<Loa
     // User may have disabled/removed a mod - we need to filter out any existing
     //  entries from the data we parsed.
     const filteredData = data.filter(entry => enabledModIds.includes(entry.id));
-
+    const offset = getPrefixOffset(context.api);
     // Check if the user added any new mods.
     const diff = enabledModIds.filter(id => (!INVALID_LO_MOD_TYPES.includes(mods[id]?.type))
       && (filteredData.find(loEntry => loEntry.id === id) === undefined));
 
     // Add any newly added mods to the bottom of the loadOrder.
-    diff.forEach(missingEntry => {
+    diff.forEach((missingEntry, idx) => {
       filteredData.push({
         id: missingEntry,
         modId: missingEntry,
@@ -76,6 +94,9 @@ export async function deserialize(context: types.IExtensionContext): Promise<Loa
         name: mods[missingEntry] !== undefined
           ? util.renderModName(mods[missingEntry])
           : missingEntry,
+        data: {
+          prefix: makePrefix(idx + filteredData.length + offset),
+        },
       });
     });
 
