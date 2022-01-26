@@ -524,7 +524,9 @@ function divine(api: types.IExtensionApi,
       if (!returned) {
         returned = true;
         if (code === 0) {
-          resolve({ stdout, returnCode: 0 });
+          return resolve({ stdout, returnCode: 0 });
+        } else if (code === 2) {
+          return resolve({ stdout: '', returnCode: 2 });
         } else {
           // divine.exe returns the actual error code + 100 if a fatal error occured
           if (code > 100) {
@@ -532,7 +534,7 @@ function divine(api: types.IExtensionApi,
           }
           const err = new Error(`divine.exe failed: ${code}`);
           err['attachLogOnReport'] = true;
-          reject(err);
+          return reject(err);
         }
       }
     });
@@ -771,7 +773,10 @@ async function readPAKs(api: types.IExtensionApi)
           // could happen if the file got deleted since reading the list of paks.
           // actually, this seems to be fairly common when updating a mod
           if (err.code !== 'ENOENT') {
-            api.showErrorNotification('Failed to read pak', err, { allowReport: true });
+            api.showErrorNotification('Failed to read pak', err, {
+              allowReport: true,
+              message: fileName,
+            });
           }
           return undefined;
         }
@@ -803,7 +808,16 @@ function serializeLoadOrder(api: types.IExtensionApi, order): Promise<void> {
   return writeLoadOrder(api, order);
 }
 
+const deserializeDebouncer = new util.Debouncer(() => {
+  return Promise.resolve();
+}, 1000);
+
 async function deserializeLoadOrder(api: types.IExtensionApi): Promise<any> {
+  // this function might be invoked by the lslib mod being (un)installed in which case it might be
+  // in the middle of being unpacked or removed which leads to weird error messages.
+  // this is a hack hopefully ensureing the it's either fully there or not at all
+  await util.toPromise(cb => deserializeDebouncer.schedule(cb));
+
   const paks = await readPAKs(api);
 
   const order = await readLO(api);
