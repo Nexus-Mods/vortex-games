@@ -1,5 +1,4 @@
 import Bluebird from 'bluebird';
-import { Element } from 'libxmljs';
 import path from 'path';
 import semver from 'semver';
 import { log, selectors, types, util } from 'vortex-api';
@@ -137,10 +136,6 @@ async function getDeployedModData(context: types.IExtensionContext, subModuleFil
                          + 'You can either inform the mod author and wait for fix, or '
                          + 'you can use an online xml validator to find and fix the '
                          + 'error yourself.';
-      // libxmljs rarely produces useful error messages - it usually points
-      //  to the parent node of the actual problem and in this case nearly
-      //  always will point to the root of the XML file (Module) which is completely useless.
-      //  We're going to provide a human readable error to the user.
       context.api.showErrorNotification('Unable to parse submodule file',
         errorMessage, { allowReport: false });
       log('error', 'MNB2: parsing error', err);
