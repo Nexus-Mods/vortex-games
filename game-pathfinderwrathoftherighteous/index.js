@@ -7,7 +7,7 @@ const IsWin = process.platform === 'win32';
 
 const NexusId = 'pathfinderwrathoftherighteous';
 const Name = 'Pathfinder: Wrath\tof the Righteous';
-const ExeName = 'Solasta.exe';
+const ExeName = 'Wrath.exe';
 const SteamId = 1184370;
 const GogId = 0;
 
