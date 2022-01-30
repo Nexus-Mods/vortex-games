@@ -8,8 +8,8 @@ const IsWin = process.platform === 'win32';
 const NexusId = 'solastacrownofthemagister';
 const Name = 'Solasta - Crown of The Magister';
 const ExeName = 'Solasta.exe';
-const SteamId = 1096530;
-const GogId = 2035493674;
+const SteamId = '1096530';
+const GogId = '2035493674';
 
 const ummDll = 'UnityModManager.dll';
 const ummModInfo = 'Info.json';
@@ -27,7 +27,7 @@ function main(context) {
       executable: () => ExeName,
       requiredFiles: [ExeName],
       environment: {
-        SteamAPPId: SteamId.toString(),
+        SteamAPPId: SteamId,
       }, 
       details:
       {
@@ -38,7 +38,7 @@ function main(context) {
   context.registerInstaller(NexusId + '-mod', 25, testMod, installMod);
 
   function findGame() {
-    return util.steam.findByAppId(SteamId.toString())
+    return util.steam.findByAppId(SteamId)
       .then(game => game.gamePath)
       .catch(() => readRegistryKey('HKEY_LOCAL_MACHINE',
         `SOFTWARE\\WOW6432Node\\GOG.com\\Games\\${GogId}`,
