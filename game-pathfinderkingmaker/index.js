@@ -7,10 +7,12 @@ const IsWin = process.platform === 'win32';
 
 const NexusId = 'pathfinderkingmaker';
 const Name = 'Pathfinder:\tKingmaker';
-const ExeName = 'Kingmaker';
+const ExeName = 'Kingmaker.exe';
 const SteamId = 640820;
+const GogId = 0;
 
-const UMM_DLL = 'UnityModManager.dll';
+const ummDll = 'UnityModManager.dll';
+const ummModInfo = 'Info.json';
 
 function main(context) {
   context.requireExtension('modtype-umm');
@@ -22,8 +24,8 @@ function main(context) {
       mergeMods: true,
       queryPath: findGame,
       queryModPath: () => 'Mods',
-      executable: () => ExeName + '.exe',
-      requiredFiles: [ExeName + '.exe'],
+      executable: () => ExeName,
+      requiredFiles: [ExeName],
       environment: {
         SteamAPPId: SteamId.toString(),
       }, 
@@ -33,9 +35,17 @@ function main(context) {
       },
       setup: setup,
     });
+  context.registerInstaller(NexusId + '-mod', 25, testMod, installMod);
 
   function findGame() {
-    return util.steam.findByAppId(SteamId.toString()).then(game => game.gamePath);
+    return util.steam.findByAppId(SteamId.toString())
+      .then(game => game.gamePath)
+      .catch(() => readRegistryKey('HKEY_LOCAL_MACHINE',
+        `SOFTWARE\\WOW6432Node\\GOG.com\\Games\\${GogId}`,
+        'PATH'))
+      .catch(() => readRegistryKey('HKEY_LOCAL_MACHINE',
+        `SOFTWARE\\GOG.com\\Games\\${GogId}`,
+        'PATH'))
   }
 
   function readRegistryKey(hive, key, name) {
@@ -56,7 +66,7 @@ function main(context) {
 
   function findUnityModManager() {
     return readRegistryKey('HKEY_CURRENT_USER', 'Software\\UnityModManager', 'Path')
-      .then(value => fs.statAsync(path.join(value, UMM_DLL)));
+      .then(value => fs.statAsync(path.join(value, ummDll)));
   }
 
   function setup(discovery) {
@@ -82,6 +92,38 @@ function main(context) {
             );
           });
         }))
+  }
+
+  function installMod(files, destinationPath) {
+    const infoFile = files.find(file => file.endsWith(ummModInfo));
+    const idx = infoFile.indexOf(ummModInfo);
+    const rootPath = path.dirname(infoFile);
+    const modName = path.basename(destinationPath, '.installing')
+      .replace(/[^A-Za-z]/g, '');
+  
+    const filtered = files.filter(file => (!file.endsWith(path.sep))
+      && (file.indexOf(rootPath) !== -1));
+  
+    const instructions = filtered.map(file => {
+      return {
+        type: 'copy',
+        source: file,
+        destination: path.join(modName, file.substr(idx)),
+      };
+    });
+  
+    return Promise.resolve({ instructions });
+  }
+  
+  function isUMMMod(files) {
+    return files.find(file => file.endsWith(ummModInfo)) !== undefined;
+  }
+  
+  function testMod(files, gameId) {
+    return Promise.resolve({
+      supported: ((gameId === NexusId) && (isUMMMod(files))),
+      requiredFiles: []
+    });
   }
 
   return true;

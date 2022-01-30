@@ -1,46 +1,134 @@
+const Promise = require('bluebird');
 const path = require('path');
-const { fs, types, util } = require('vortex-api');
-const GAME_ID = 'pathfinderwrathoftherighteous';
-const NAME = 'Pathfinder: Wrath\tof the Righteous';
-const STEAM_ID = '1184370';
-const GOG_ID = '1207187357';
-function findGame() {
-    return util.GameStoreHelper.findByAppId([STEAM_ID, GOG_ID])
-        .then(game => game.gamePath);
-}
-function setup(discovery) {
-    return fs.ensureDirWritableAsync(path.join(discovery.path, 'Mods'));
-}
+const winapi = require('winapi-bindings');
+const {actions, fs, util} = require('vortex-api');
+
+const IsWin = process.platform === 'win32';
+
+const NexusId = 'pathfinderwrathoftherighteous';
+const Name = 'Pathfinder: Wrath\tof the Righteous';
+const ExeName = 'Solasta.exe';
+const SteamId = 1184370;
+const GogId = 0;
+
+const ummDll = 'UnityModManager.dll';
+const ummModInfo = 'Info.json';
+
 function main(context) {
-    context.requireExtension('modtype-umm');
-    context.registerGame({
-        id: GAME_ID,
-        name: NAME,
-        logo: 'gameart.jpg',
-        mergeMods: true,
-        queryPath: findGame,
-        queryModPath: () => 'Mods',
-        executable: () => 'Wrath.exe',
-        requiredFiles: ['Wrath.exe'],
-        environment: {
-            SteamAPPId: STEAM_ID,
-        },
-        details: {
-            steamAppId: +STEAM_ID,
-        },
-        setup,
+  context.requireExtension('modtype-umm');
+  context.registerGame(
+    {
+      id: NexusId,
+      name: Name,
+      logo: 'gameart.jpg',
+      mergeMods: true,
+      queryPath: findGame,
+      queryModPath: () => 'Mods',
+      executable: () => ExeName,
+      requiredFiles: [ExeName],
+      environment: {
+        SteamAPPId: SteamId.toString(),
+      }, 
+      details:
+      {
+        steamAppId: SteamId,
+      },
+      setup: setup,
     });
-    context.once(() => {
-        if (context.api.ext.ummAddGame !== undefined) {
-            context.api.ext.ummAddGame({
-                gameId: GAME_ID,
-                autoDownloadUMM: true,
-            });
-        }
+  context.registerInstaller(NexusId + '-mod', 25, testMod, installMod);
+
+  function findGame() {
+    return util.steam.findByAppId(SteamId.toString())
+      .then(game => game.gamePath)
+      .catch(() => readRegistryKey('HKEY_LOCAL_MACHINE',
+        `SOFTWARE\\WOW6432Node\\GOG.com\\Games\\${GogId}`,
+        'PATH'))
+      .catch(() => readRegistryKey('HKEY_LOCAL_MACHINE',
+        `SOFTWARE\\GOG.com\\Games\\${GogId}`,
+        'PATH'))
+  }
+
+  function readRegistryKey(hive, key, name) {
+    if (!IsWin) {
+      return Promise.reject(new util.UnsupportedOperatingSystem());
+    }
+
+    try {
+      const instPath = winapi.RegGetValue(hive, key, name);
+      if (!instPath) {
+        throw new Error('empty registry key');
+      }
+      return Promise.resolve(instPath.value);
+    } catch (err) {
+      return Promise.reject(new util.ProcessCanceled(err));
+    }
+  }
+
+  function findUnityModManager() {
+    return readRegistryKey('HKEY_CURRENT_USER', 'Software\\UnityModManager', 'Path')
+      .then(value => fs.statAsync(path.join(value, ummDll)));
+  }
+
+  function setup(discovery) {
+    return fs.ensureDirWritableAsync(path.join(discovery.path, 'Mods'), () => Promise.resolve())
+      .then(() => findUnityModManager()
+        .catch(err => {
+          return new Promise((resolve, reject) => {
+            context.api.store.dispatch(
+              actions.showDialog(
+                'question',
+                'Action required',
+                { message: 'You must install Unity Mod Manager to use mods with ' + Name + '.' },
+                [
+                  { label: 'Cancel', action: () => reject(new util.UserCanceled()) },
+                  {
+                    label: 'Go to the Unity Mod Manager page', action: () => {
+                      util.opn('https://www.nexusmods.com/site/mods/21/').catch(err => undefined);
+                      reject(new util.UserCanceled());
+                    }
+                  }
+                ]
+              )
+            );
+          });
+        }))
+  }
+
+  function installMod(files, destinationPath) {
+    const infoFile = files.find(file => file.endsWith(ummModInfo));
+    const idx = infoFile.indexOf(ummModInfo);
+    const rootPath = path.dirname(infoFile);
+    const modName = path.basename(destinationPath, '.installing')
+      .replace(/[^A-Za-z]/g, '');
+  
+    const filtered = files.filter(file => (!file.endsWith(path.sep))
+      && (file.indexOf(rootPath) !== -1));
+  
+    const instructions = filtered.map(file => {
+      return {
+        type: 'copy',
+        source: file,
+        destination: path.join(modName, file.substr(idx)),
+      };
     });
-    return true;
+  
+    return Promise.resolve({ instructions });
+  }
+  
+  function isUMMMod(files) {
+    return files.find(file => file.endsWith(ummModInfo)) !== undefined;
+  }
+  
+  function testMod(files, gameId) {
+    return Promise.resolve({
+      supported: ((gameId === NexusId) && (isUMMMod(files))),
+      requiredFiles: []
+    });
+  }
+
+  return true;
 }
+
 module.exports = {
     default: main
 };
-//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiaW5kZXguanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyJpbmRleC50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSxNQUFNLElBQUksR0FBRyxPQUFPLENBQUMsTUFBTSxDQUFDLENBQUM7QUFDN0IsTUFBTSxFQUFFLEVBQUUsRUFBRSxLQUFLLEVBQUUsSUFBSSxFQUFFLEdBQUcsT0FBTyxDQUFDLFlBQVksQ0FBQyxDQUFDO0FBRWxELE1BQU0sT0FBTyxHQUFHLCtCQUErQixDQUFDO0FBQ2hELE1BQU0sSUFBSSxHQUFHLHFDQUFxQyxDQUFDO0FBQ25ELE1BQU0sUUFBUSxHQUFHLFNBQVMsQ0FBQztBQUMzQixNQUFNLE1BQU0sR0FBRyxZQUFZLENBQUM7QUFFNUIsU0FBUyxRQUFRO0lBQ2YsT0FBTyxJQUFJLENBQUMsZUFBZSxDQUFDLFdBQVcsQ0FBQyxDQUFDLFFBQVEsRUFBRSxNQUFNLENBQUMsQ0FBQztTQUN4RCxJQUFJLENBQUMsSUFBSSxDQUFDLEVBQUUsQ0FBQyxJQUFJLENBQUMsUUFBUSxDQUFDLENBQUM7QUFDakMsQ0FBQztBQUVELFNBQVMsS0FBSyxDQUFDLFNBQVM7SUFDdEIsT0FBTyxFQUFFLENBQUMsc0JBQXNCLENBQUMsSUFBSSxDQUFDLElBQUksQ0FBQyxTQUFTLENBQUMsSUFBSSxFQUFFLE1BQU0sQ0FBQyxDQUFDLENBQUM7QUFDdEUsQ0FBQztBQUVELFNBQVMsSUFBSSxDQUFDLE9BQU87SUFDbkIsT0FBTyxDQUFDLGdCQUFnQixDQUFDLGFBQWEsQ0FBQyxDQUFDO0lBQ3hDLE9BQU8sQ0FBQyxZQUFZLENBQ2xCO1FBQ0UsRUFBRSxFQUFFLE9BQU87UUFDWCxJQUFJLEVBQUUsSUFBSTtRQUNWLElBQUksRUFBRSxhQUFhO1FBQ25CLFNBQVMsRUFBRSxJQUFJO1FBQ2YsU0FBUyxFQUFFLFFBQVE7UUFDbkIsWUFBWSxFQUFFLEdBQUcsRUFBRSxDQUFDLE1BQU07UUFDMUIsVUFBVSxFQUFFLEdBQUcsRUFBRSxDQUFDLFdBQVc7UUFDN0IsYUFBYSxFQUFFLENBQUMsV0FBVyxDQUFDO1FBQzVCLFdBQVcsRUFBRTtZQUNYLFVBQVUsRUFBRSxRQUFRO1NBQ3JCO1FBQ0QsT0FBTyxFQUNQO1lBQ0UsVUFBVSxFQUFFLENBQUMsUUFBUTtTQUN0QjtRQUNELEtBQUs7S0FDTixDQUFDLENBQUM7SUFDTCxPQUFPLENBQUMsSUFBSSxDQUFDLEdBQUcsRUFBRTtRQUNoQixJQUFJLE9BQU8sQ0FBQyxHQUFHLENBQUMsR0FBRyxDQUFDLFVBQVUsS0FBSyxTQUFTLEVBQUU7WUFDNUMsT0FBTyxDQUFDLEdBQUcsQ0FBQyxHQUFHLENBQUMsVUFBVSxDQUFDO2dCQUN6QixNQUFNLEVBQUUsT0FBTztnQkFDZixlQUFlLEVBQUUsSUFBSTthQUN0QixDQUFDLENBQUM7U0FDSjtJQUNILENBQUMsQ0FBQyxDQUFBO0lBRUYsT0FBTyxJQUFJLENBQUM7QUFDZCxDQUFDO0FBRUQsTUFBTSxDQUFDLE9BQU8sR0FBRztJQUNiLE9BQU8sRUFBRSxJQUFJO0NBQ2hCLENBQUMiLCJzb3VyY2VzQ29udGVudCI6WyJjb25zdCBwYXRoID0gcmVxdWlyZSgncGF0aCcpO1xyXG5jb25zdCB7IGZzLCB0eXBlcywgdXRpbCB9ID0gcmVxdWlyZSgndm9ydGV4LWFwaScpO1xyXG5cclxuY29uc3QgR0FNRV9JRCA9ICdwYXRoZmluZGVyd3JhdGhvZnRoZXJpZ2h0ZW91cyc7XHJcbmNvbnN0IE5BTUUgPSAnUGF0aGZpbmRlcjogV3JhdGhcXHRvZiB0aGUgUmlnaHRlb3VzJztcclxuY29uc3QgU1RFQU1fSUQgPSAnMTE4NDM3MCc7XHJcbmNvbnN0IEdPR19JRCA9ICcxMjA3MTg3MzU3JztcclxuXHJcbmZ1bmN0aW9uIGZpbmRHYW1lKCkge1xyXG4gIHJldHVybiB1dGlsLkdhbWVTdG9yZUhlbHBlci5maW5kQnlBcHBJZChbU1RFQU1fSUQsIEdPR19JRF0pXHJcbiAgICAudGhlbihnYW1lID0+IGdhbWUuZ2FtZVBhdGgpO1xyXG59XHJcblxyXG5mdW5jdGlvbiBzZXR1cChkaXNjb3ZlcnkpIHtcclxuICByZXR1cm4gZnMuZW5zdXJlRGlyV3JpdGFibGVBc3luYyhwYXRoLmpvaW4oZGlzY292ZXJ5LnBhdGgsICdNb2RzJykpO1xyXG59XHJcblxyXG5mdW5jdGlvbiBtYWluKGNvbnRleHQpIHtcclxuICBjb250ZXh0LnJlcXVpcmVFeHRlbnNpb24oJ21vZHR5cGUtdW1tJyk7XHJcbiAgY29udGV4dC5yZWdpc3RlckdhbWUoXHJcbiAgICB7XHJcbiAgICAgIGlkOiBHQU1FX0lELFxyXG4gICAgICBuYW1lOiBOQU1FLFxyXG4gICAgICBsb2dvOiAnZ2FtZWFydC5qcGcnLFxyXG4gICAgICBtZXJnZU1vZHM6IHRydWUsXHJcbiAgICAgIHF1ZXJ5UGF0aDogZmluZEdhbWUsXHJcbiAgICAgIHF1ZXJ5TW9kUGF0aDogKCkgPT4gJ01vZHMnLFxyXG4gICAgICBleGVjdXRhYmxlOiAoKSA9PiAnV3JhdGguZXhlJyxcclxuICAgICAgcmVxdWlyZWRGaWxlczogWydXcmF0aC5leGUnXSxcclxuICAgICAgZW52aXJvbm1lbnQ6IHtcclxuICAgICAgICBTdGVhbUFQUElkOiBTVEVBTV9JRCxcclxuICAgICAgfSwgXHJcbiAgICAgIGRldGFpbHM6XHJcbiAgICAgIHtcclxuICAgICAgICBzdGVhbUFwcElkOiArU1RFQU1fSUQsXHJcbiAgICAgIH0sXHJcbiAgICAgIHNldHVwLFxyXG4gICAgfSk7XHJcbiAgY29udGV4dC5vbmNlKCgpID0+IHtcclxuICAgIGlmIChjb250ZXh0LmFwaS5leHQudW1tQWRkR2FtZSAhPT0gdW5kZWZpbmVkKSB7XHJcbiAgICAgIGNvbnRleHQuYXBpLmV4dC51bW1BZGRHYW1lKHtcclxuICAgICAgICBnYW1lSWQ6IEdBTUVfSUQsXHJcbiAgICAgICAgYXV0b0Rvd25sb2FkVU1NOiB0cnVlLFxyXG4gICAgICB9KTtcclxuICAgIH1cclxuICB9KVxyXG5cclxuICByZXR1cm4gdHJ1ZTtcclxufVxyXG5cclxubW9kdWxlLmV4cG9ydHMgPSB7XHJcbiAgICBkZWZhdWx0OiBtYWluXHJcbn07XHJcbiJdfQ==
