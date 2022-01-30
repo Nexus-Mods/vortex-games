@@ -8,8 +8,8 @@ const IsWin = process.platform === 'win32';
 const NexusId = 'pathfinderwrathoftherighteous';
 const Name = 'Pathfinder: Wrath\tof the Righteous';
 const ExeName = 'Wrath.exe';
-const SteamId = 1184370;
-const GogId = 0;
+const SteamId = '1184370';
+const GogId = '1207187357';
 
 const ummDll = 'UnityModManager.dll';
 const ummModInfo = 'Info.json';
@@ -27,7 +27,7 @@ function main(context) {
       executable: () => ExeName,
       requiredFiles: [ExeName],
       environment: {
-        SteamAPPId: SteamId.toString(),
+        SteamAPPId: SteamId,
       }, 
       details:
       {
@@ -38,7 +38,7 @@ function main(context) {
   context.registerInstaller(NexusId + '-mod', 25, testMod, installMod);
 
   function findGame() {
-    return util.steam.findByAppId(SteamId.toString())
+    return util.steam.findByAppId(SteamId)
       .then(game => game.gamePath)
       .catch(() => readRegistryKey('HKEY_LOCAL_MACHINE',
         `SOFTWARE\\WOW6432Node\\GOG.com\\Games\\${GogId}`,
