@@ -6,7 +6,7 @@ const semver = require('semver');
 const { app, remote } = require('electron');
 const uniApp = app || remote.app;
 
-const { GAME_ID, I18N_NAMESPACE, MOD_MANIFEST } = require('./common');
+const { GAME_ID, I18N_NAMESPACE, MOD_MANIFEST, GameNotDiscoveredException } = require('./common');
 const { testModInstaller, installMulleMod, installOfficialMod } = require('./installers');
 
 const { migrate010, migrate020 } = require('./migrations');
@@ -104,7 +104,7 @@ async function getOfficialModType(api, discovery = undefined) {
     ? discovery.path
     : getDiscoveryPath(api);
   if (discoveryPath === undefined) {
-    return Promise.reject(new Error('Game is not discovered'));
+    return Promise.reject(new GameNotDiscoveredException());
   }
   let gameVersion;
   try {
@@ -201,7 +201,7 @@ async function ensureLOFile(discoveryPath) {
 async function readLOFromFile(api) {
   const discoveryPath = getDiscoveryPath(api);
   if (discoveryPath === undefined) {
-    return Promise.reject(new Error('Game is not discovered'));
+    return Promise.reject(new GameNotDiscoveredException());
   }
 
   try {
@@ -224,7 +224,7 @@ async function readLOFromFile(api) {
 async function writeLOToFile(api, loadOrder) {
   const discoveryPath = getDiscoveryPath(api);
   if (discoveryPath === undefined) {
-    return Promise.reject(new Error('Game is not discovered'));
+    return Promise.reject(new GameNotDiscoveredException());
   }
 
   let loFilePath;
@@ -439,8 +439,9 @@ function main(context) {
     callback: (loadOrder) => {
       writeLOToFile(context.api, loadOrder)
         .catch(err => {
+          const allowReport = !['EPERM', 'EISDIR'].includes(err.code) && !(err instanceof GameNotDiscoveredException)
           context.api.showErrorNotification('failed to write to load order file', err,
-            { allowReport: !['EPERM', 'EISDIR'].includes(err.code) });
+            { allowReport });
         });
     },
   });
@@ -448,7 +449,7 @@ function main(context) {
   context.registerAction('generic-load-order-icons', 200, 'open-ext', {}, 'View Load Order File', async () => {
     const discoveryPath = getDiscoveryPath(context.api);
     if (discoveryPath === undefined) {
-      log('error', 'Game is not discovered');
+      log('debug', 'Game is not discovered');
       return;
     }
     util.opn(path.join(discoveryPath, streamingAssetsPath(), 'Mods')).catch(err => null);
@@ -459,17 +460,16 @@ function main(context) {
   });
 
   const refreshOnDeployEvent = async (profileId) => {
-    try {
-      await getOfficialModType(context.api);
-    } catch (err) {
-      // no point to attempt a refresh if we can't ascertain the required
-      //  modType - this suggests that the game may have been removed.
-      return Promise.resolve();
-    }
-
     const state = context.api.getState();
     const prof = selectors.profileById(state, profileId);
     if (refreshFunc !== undefined && prof?.gameId === GAME_ID) {
+      try {
+        await getOfficialModType(context.api);
+      } catch (err) {
+        // no point to attempt a refresh if we can't ascertain the required
+        //  modType - this suggests that the game may have been removed.
+        return Promise.resolve();
+      }
       refreshFunc();
     }
 

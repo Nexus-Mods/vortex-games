@@ -6,7 +6,7 @@ const { util } = require('vortex-api');
 const { app, remote } = require('electron');
 const uniApp = app || remote.app;
 
-const { GAME_ID, MOD_MANIFEST } = require('./common');
+const { GAME_ID, MOD_MANIFEST, GameNotDiscoveredException } = require('./common');
 const { getModName, checkModGameVersion, getGameVersion,
   getMinModVersion, getDiscoveryPath } = require('./util');
 
@@ -30,7 +30,7 @@ async function installOfficialMod(files,
   let gameVersion;
   const discoveryPath = getDiscoveryPath(api);
   if (discoveryPath === undefined) {
-    return Promise.reject(new Error('Game is not discovered'));
+    return Promise.reject(new GameNotDiscoveredException());
   }
   let isEngineInject;
   try {
