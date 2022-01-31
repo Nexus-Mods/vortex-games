@@ -302,10 +302,13 @@ function main(context: types.IExtensionContext) {
     toBlue(testSupportedContent), toBlue(installContent));
 
   context.registerInstaller('7dtd-root-mod', 20, toBlue(testRootMod), toBlue(installRootMod));
-
   context.registerModType('7dtd-root-mod', 20, (gameId) => gameId === GAME_ID,
-    getOverhaulPath, (instructions) =>
-      (Promise.resolve(hasCandidate(instructions.map(instr => instr.destination))) as any),
+    getOverhaulPath, (instructions) => {
+      const candidateFound = hasCandidate(instructions
+        .filter(instr => !!instr.destination)
+        .map(instr => instr.destination));
+      return Promise.resolve(candidateFound) as any;
+    },
       { name: 'Root Directory Mod', mergeMods: true });
 
   context.registerMigration(toBlue(old => migrate020(context.api, old)));
