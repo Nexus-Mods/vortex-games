@@ -12,7 +12,7 @@ export async function testModLimitBreach(
   const state: types.IState = api.store.getState();
   const isSuppressed = util.getSafe(state, getSuppressModLimitBranch(), false);
   const profile: types.IProfile = selectors.activeProfile(state);
-  if (profile.gameId !== GAME_ID || isSuppressed) {
+  if (profile?.gameId !== GAME_ID || isSuppressed) {
     return Promise.resolve(undefined);
   }
 
