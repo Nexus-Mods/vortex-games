@@ -203,13 +203,16 @@ class StardewValley {
 
 async function getModName(destinationPath, manifestFile) {
   const manifestPath = path.join(destinationPath, manifestFile);
+  const resolveNameEntry = (data) =>
+    ['Name', 'uniqueid', 'name'].find(entry => data.hasOwnProperty(entry));
   try {
     const file = await fs.readFileAsync(manifestPath, { encoding: 'utf8' });
     // it seems to be not uncommon that these files are not valid json,
     // so we use relaxed-json to improve our chances of parsing successfully
     const data = rjson.parse(util.deBOM(file));
-    return (data.Name !== undefined)
-      ? Promise.resolve(data.Name.replace(/[^a-zA-Z0-9]/g, ''))
+    const nameElement = resolveNameEntry(data);
+    return (data[nameElement] !== undefined)
+      ? Promise.resolve(data[nameElement].replace(/[^a-zA-Z0-9]/g, ''))
       : Promise.reject(new util.DataInvalid('Invalid manifest.json file'));
   } catch(err) {
     log('error', 'Unable to parse manifest.json file', manifestPath);
