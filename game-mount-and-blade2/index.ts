@@ -10,9 +10,12 @@ import semver from 'semver';
 import { actions, FlexLayout, fs, log, selectors, types, util } from 'vortex-api';
 import { getElementValue, getXMLData, refreshGameParams, walkAsync } from './util';
 
-import { BANNERLORD_EXEC, GAME_ID, LOCKED_MODULES, MODULES, OFFICIAL_MODULES, SUBMOD_FILE } from './common';
+import {
+  BANNERLORD_EXEC, GAME_ID, I18N_NAMESPACE, LOCKED_MODULES,
+  MODULES, OFFICIAL_MODULES, SUBMOD_FILE
+} from './common';
 import CustomItemRenderer from './customItemRenderer';
-import { migrate026 } from './migrations';
+import { migrate026, migrate045 } from './migrations';
 
 import ComMetadataManager from './ComMetadataManager';
 import { getCache, getLauncherData, isInvalid, parseLauncherData, refreshCache } from './subModCache';
@@ -20,6 +23,9 @@ import { ISortProps, ISubModCache } from './types';
 import { genCollectionsData, parseCollectionsData } from './collections/collections';
 import CollectionsDataView from './views/CollectionsDataView';
 import { ICollectionsData } from './collections/types';
+import { createAction } from 'redux-act';
+
+import Settings from './views/Settings';
 
 const LAUNCHER_EXEC = path.join('bin', 'Win64_Shipping_Client', 'TaleWorlds.MountAndBlade.Launcher.exe');
 const MODDING_KIT_EXEC = path.join('bin', 'Win64_Shipping_wEditor', 'TaleWorlds.MountAndBlade.Launcher.exe');
@@ -30,14 +36,24 @@ const GOG_IDS = ['1802539526', '1564781494'];
 const STEAMAPP_ID = 261550;
 const EPICAPP_ID = 'Chickadee';
 
-const I18N_NAMESPACE = 'game-mount-and-blade2';
-
 // A set of folder names (lowercased) which are available alongside the
 //  game's modules folder. We could've used the fomod installer stop patterns
 //  functionality for this, but it's better if this extension is self contained;
 //  especially given that the game's modding pattern changes quite often.
 const ROOT_FOLDERS = new Set(['bin', 'data', 'gui', 'icons', 'modules',
   'music', 'shaders', 'sounds', 'xmlschemas']);
+
+const setSortOnDeploy = createAction('MNB2_SET_SORT_ON_DEPLOY',
+  (profileId: string, sort: boolean) => ({ profileId, sort }));
+const reducer: types.IReducerSpec = {
+  reducers: {
+    [setSortOnDeploy as any]: (state, payload) =>
+      util.setSafe(state, ['sortOnDeploy', payload.profileId], payload.sort)
+  },
+  defaults: {
+    sortOnDeploy: {},
+  },
+};
 
 function findGame() {
   return util.GameStoreHelper.findByAppId([EPICAPP_ID, STEAMAPP_ID.toString(), ...GOG_IDS])
@@ -416,24 +432,28 @@ async function refreshCacheOnEvent(context: types.IExtensionContext,
 
   const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profileId], {});
 
-  // We're going to do a quick tSort at this point - not going to
-  //  change the user's load order, but this will highlight any
-  //  cyclic or missing dependencies.
-  const CACHE = getCache();
-  const modIds = Object.keys(CACHE);
-  const sortProps: ISortProps = {
-    subModIds: modIds,
-    allowLocked: true,
-    loadOrder,
-    metaManager,
-  };
-  const sorted = tSort(sortProps);
+  if (util.getSafe(state, ['settings', 'mountandblade2', 'sortOnDeploy', activeProfile.id], true)) {
+    return sortImpl(context, metaManager);
+  } else {
+    // We're going to do a quick tSort at this point - not going to
+    //  change the user's load order, but this will highlight any
+    //  cyclic or missing dependencies.
+    const CACHE = getCache();
+    const modIds = Object.keys(CACHE);
+    const sortProps: ISortProps = {
+      subModIds: modIds,
+      allowLocked: true,
+      loadOrder,
+      metaManager,
+    };
+    const sorted = tSort(sortProps);
 
-  if (refreshFunc !== undefined) {
-    refreshFunc();
+    if (refreshFunc !== undefined) {
+      refreshFunc();
+    }
+
+    return refreshGameParams(context, loadOrder);
   }
-
-  return refreshGameParams(context, loadOrder);
 }
 
 async function preSort(context, items, direction, updateType, metaManager) {
@@ -618,7 +638,73 @@ async function resolveGameVersion(discoveryPath: string) {
 }
 
 let _IS_SORTING = false;
+function sortImpl(context: types.IExtensionContext, metaManager: ComMetadataManager) {
+  const CACHE = getCache();
+  const modIds = Object.keys(CACHE);
+  const lockedIds = modIds.filter(id => CACHE[id].isLocked);
+  const subModIds = modIds.filter(id => !CACHE[id].isLocked);
+
+  let sortedLocked = [];
+  let sortedSubMods = [];
+
+  const state = context.api.store.getState();
+  const activeProfile = selectors.activeProfile(state);
+  if (activeProfile?.id === undefined) {
+    // Probably best that we don't report this via notification as a number
+    //  of things may have occurred that caused this issue. We log it instead.
+    log('error', 'Failed to sort mods', { reason: 'No active profile' });
+    _IS_SORTING = false;
+    return;
+  }
+
+  const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
+
+  try {
+    sortedLocked = tSort({ subModIds: lockedIds, allowLocked: true, metaManager });
+    sortedSubMods = tSort({ subModIds, allowLocked: false, loadOrder, metaManager }, true);
+  } catch (err) {
+    context.api.showErrorNotification('Failed to sort mods', err);
+    return;
+  }
+
+  const newOrder = [].concat(sortedLocked, sortedSubMods).reduce((accum, id, idx) => {
+    const vortexId = CACHE[id].vortexId;
+    const newEntry = {
+      pos: idx,
+      enabled: CACHE[id].isOfficial
+        ? true
+        : (!!loadOrder[vortexId])
+          ? loadOrder[vortexId].enabled
+          : true,
+      locked: (loadOrder[vortexId]?.locked === true),
+    };
+
+    accum[vortexId] = newEntry;
+    return accum;
+  }, {});
+
+  context.api.store.dispatch(actions.setLoadOrder(activeProfile.id, newOrder));
+  return refreshGameParams(context, newOrder)
+    .then(() => context.api.sendNotification({
+      id: 'mnb2-sort-finished',
+      type: 'info',
+      message: context.api.translate('Finished sorting', { ns: I18N_NAMESPACE }),
+      displayMS: 3000,
+    })).finally(() => _IS_SORTING = false);
+}
+
 function main(context) {
+  context.registerReducer(['settings', 'mountandblade2'], reducer);
+  (context.registerSettings as any)('Interface', Settings, () => ({
+    t: context.api.translate,
+    onSetSortOnDeploy: (profileId: string, sort: boolean) =>
+      context.api.store.dispatch(setSortOnDeploy(profileId, sort)),
+  }), () => {
+    const state = context.api.getState();
+    const profile = selectors.activeProfile(state);
+    return profile !== undefined && profile?.gameId === GAME_ID;
+  }, 51);
+
   const metaManager = new ComMetadataManager(context.api);
   context.registerGame({
     id: GAME_ID,
@@ -682,77 +768,11 @@ function main(context) {
   //  not report any errors. Side effects of the migration not working correctly
   //  will not affect the user's existing environment.
   context.registerMigration(old => migrate026(context.api, old));
+  context.registerMigration(old => migrate045(context.api, old));
 
   context.registerAction('generic-load-order-icons', 200,
-    _IS_SORTING ? 'spinner' : 'loot-sort', {}, 'Auto Sort', async () => {
-      if (_IS_SORTING) {
-        // Already sorting - don't do anything.
-        return Promise.resolve();
-      }
-
-      _IS_SORTING = true;
-
-      try {
-        await metaManager.updateDependencyMap();
-        await refreshCache(context);
-      } catch (err) {
-        context.api.showErrorNotification('Failed to resolve submodule file data', err);
-        _IS_SORTING = false;
-        return;
-      }
-
-      const CACHE = getCache();
-      const modIds = Object.keys(CACHE);
-      const lockedIds = modIds.filter(id => CACHE[id].isLocked);
-      const subModIds = modIds.filter(id => !CACHE[id].isLocked);
-
-      let sortedLocked = [];
-      let sortedSubMods = [];
-
-      const state = context.api.store.getState();
-      const activeProfile = selectors.activeProfile(state);
-      if (activeProfile?.id === undefined) {
-        // Probably best that we don't report this via notification as a number
-        //  of things may have occurred that caused this issue. We log it instead.
-        log('error', 'Failed to sort mods', { reason: 'No active profile' });
-        _IS_SORTING = false;
-        return;
-      }
-
-      const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
-
-      try {
-        sortedLocked = tSort({ subModIds: lockedIds, allowLocked: true, metaManager });
-        sortedSubMods = tSort({ subModIds, allowLocked: false, loadOrder, metaManager }, true);
-      } catch (err) {
-        context.api.showErrorNotification('Failed to sort mods', err);
-        return;
-      }
-
-      const newOrder = [].concat(sortedLocked, sortedSubMods).reduce((accum, id, idx) => {
-        const vortexId = CACHE[id].vortexId;
-        const newEntry = {
-          pos: idx,
-          enabled: CACHE[id].isOfficial
-            ? true
-            : (!!loadOrder[vortexId])
-              ? loadOrder[vortexId].enabled
-              : true,
-          locked: (loadOrder[vortexId]?.locked === true),
-        };
-
-        accum[vortexId] = newEntry;
-        return accum;
-      }, {});
-
-      context.api.store.dispatch(actions.setLoadOrder(activeProfile.id, newOrder));
-      return refreshGameParams(context, newOrder)
-        .then(() => context.api.sendNotification({
-          id: 'mnb2-sort-finished',
-          type: 'info',
-          message: context.api.translate('Finished sorting', { ns: I18N_NAMESPACE }),
-          displayMS: 3000,
-        })).finally(() => _IS_SORTING = false);
+    _IS_SORTING ? 'spinner' : 'loot-sort', {}, 'Auto Sort', () => {
+      sortImpl(context, metaManager);
   }, () => {
     const state = context.api.store.getState();
     const gameId = selectors.activeGameId(state);
