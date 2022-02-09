@@ -910,10 +910,18 @@ function getLatestInstalledLSLibVer(api: types.IExtensionApi) {
         //  to use the correct version.
         const fileName = path.basename(dl.localPath, path.extname(dl.localPath));
         const idx = fileName.indexOf('-v');
-        const ver = fileName.slice(idx + 2);
-        if (semver.valid(ver) && ver !== storedVer) {
-          api.store.dispatch(actions.setModAttribute(GAME_ID, id, 'version', ver));
-          prev = ver;
+        try {
+          const ver = semver.coerce(fileName.slice(idx + 2)).version;
+          if (semver.valid(ver) && ver !== storedVer) {
+            api.store.dispatch(actions.setModAttribute(GAME_ID, id, 'version', ver));
+            prev = ver;
+          }
+        } catch (err) {
+          // We failed to get the version... Oh well.. Set a bogus version since
+          //  we clearly have lslib installed - the update functionality should take
+          //  care of the rest (when the user clicks the check for updates button)
+          api.store.dispatch(actions.setModAttribute(GAME_ID, id, 'version', '1.0.0'));
+          prev = '1.0.0';
         }
       }
     }
