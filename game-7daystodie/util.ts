@@ -75,7 +75,7 @@ export function reversePrefix(input: string): number {
 
   const offset = prefix.reduce((prev, iter, idx) => {
     const pow = 2 - idx;
-    const mult = Math.pow(25, pow);
+    const mult = Math.pow(26, pow);
     const charCode = (iter.charCodeAt(0) % 65);
     prev = prev + (charCode * mult);
     return prev;
@@ -88,8 +88,8 @@ export function makePrefix(input: number) {
   let res = '';
   let rest = input;
   while (rest > 0) {
-    res = String.fromCharCode(65 + (rest % 25)) + res;
-    rest = Math.floor(rest / 25);
+    res = String.fromCharCode(65 + (rest % 26)) + res;
+    rest = Math.floor(rest / 26);
   }
   return util.pad((res as any), 'A', 3);
 }
