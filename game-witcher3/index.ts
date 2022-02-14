@@ -596,8 +596,8 @@ function genEntryActions(context: types.IExtensionContext,
           const itemKey = Object.keys(_INI_STRUCT).find(key => _INI_STRUCT[key].VK === item.id);
           const wantedPriority = result.input['w3PriorityInput'];
           if (wantedPriority <= minPriority) {
-            context.api.showErrorNotification('Cannot change to locked entry Priority',
-              wantedPriority);
+            context.api.showErrorNotification('Chosen priority is already assigned to a locked entry',
+              wantedPriority.toString(), { allowReport: false });
             return resolve();
           }
           if (itemKey !== undefined) {
