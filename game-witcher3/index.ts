@@ -447,9 +447,9 @@ function notifyMissingScriptMerger(api) {
 }
 
 function prepareForModding(context, discovery) {
-  const findScriptMerger = (error) => {
+  const findScriptMerger = async (error) => {
     log('error', 'failed to download/install script merger', error);
-    const scriptMergerPath = getScriptMergerDir(context);
+    const scriptMergerPath = await getScriptMergerDir(context);
     if (scriptMergerPath === undefined) {
       notifyMissingScriptMerger(context.api);
       return Promise.resolve();
