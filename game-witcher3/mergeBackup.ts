@@ -180,6 +180,11 @@ async function moveFiles(src: string, dest: string, props: IBaseProps) {
   }
 }
 
+function backupPath(profile: types.IProfile): string {
+  return path.join(util.getVortexPath('userData'),
+    profile.gameId, 'profiles', profile.id, 'backup');
+}
+
 async function handleMergedScripts(props: IBaseProps, opType: OpType, dest?: string) {
   const { scriptMergerTool, profile, gamePath } = props;
   if (!scriptMergerTool?.path) {
@@ -210,6 +215,7 @@ async function handleMergedScripts(props: IBaseProps, opType: OpType, dest?: str
       await moveFile(profilePath, path.dirname(loarOrderFilepath), path.basename(loarOrderFilepath));
       await moveFiles(path.join(profilePath, mergedModName), mergedScriptsPath, props);
     }
+    return Promise.resolve();
   } catch (err) {
     log('error', 'failed to store/restore merged scripts', err);
     return Promise.reject(err);
@@ -222,6 +228,12 @@ export async function storeToProfile(context: types.IExtensionContext, profileId
     return;
   }
 
+  const bakPath = backupPath(props.profile);
+  try {
+    await handleMergedScripts(props, 'export', bakPath);
+  } catch (err) {
+    return Promise.reject(err);
+  }
   return handleMergedScripts(props, 'export');
 }
 
@@ -231,6 +243,12 @@ export async function restoreFromProfile(context: types.IExtensionContext, profi
     return;
   }
 
+  const bakPath = backupPath(props.profile);
+  try {
+    await handleMergedScripts(props, 'import', bakPath);
+  } catch (err) {
+    return Promise.reject(err);
+  }
   return handleMergedScripts(props, 'import');
 }
 
@@ -265,7 +283,7 @@ export async function queryScriptMerges(context: types.IExtensionContext,
   const isOptional = (modId: string) => (collection.rules ?? []).find(rule => {
     const mod: types.IMod = mods[modId];
     if (mod === undefined) {
-      return false
+      return false;
     }
     const validType = ['recommends'].includes(rule.type);
     if (!validType) {
@@ -300,7 +318,7 @@ export async function exportScriptMerges(context: types.IExtensionContext,
     } catch (err) {
       return Promise.reject(err);
     }
-  }
+  };
 
   try {
     await queryScriptMerges(context, includedModIds, collection);
