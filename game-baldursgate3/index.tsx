@@ -44,7 +44,7 @@ const reducer: types.IReducerSpec = {
 };
 
 function documentsPath() {
-  return path.join(util.getVortexPath('documents'), 'Larian Studios', 'Baldur\'s Gate 3');
+  return path.join(util.getVortexPath('localAppData'), 'Larian Studios', 'Baldur\'s Gate 3');
 }
 
 function modsPath() {
