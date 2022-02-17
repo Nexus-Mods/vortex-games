@@ -535,7 +535,7 @@ async function setINIStruct(context, loadOrder, priorityManager) {
     const filterFunc = (modName: string) => {
       // We're adding this to avoid having the load order page
       //  from not loading if we encounter an invalid mod name.
-      if (!modName) {
+      if (!modName || typeof(modName) !== 'string') {
         log('debug', 'encountered invalid mod instance/name');
         return false;
       }
