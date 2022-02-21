@@ -42,7 +42,18 @@ export function getMergedModNames(context: types.IExtensionContext) {
       const discovery = util.getSafe(state,
         ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
       const modsPath = path.join(discovery.path, 'Mods');
-      const elements = await mergeInventory.MergeInventory.Merge.reduce(async (accumP, iter) => {
+      const mergeEntry = mergeInventory?.MergeInventory?.Merge;
+      if (mergeEntry === undefined) {
+        let inv;
+        try {
+          inv = JSON.stringify(mergeInventory);
+        } catch (err) {
+          return Promise.reject(err);
+        }
+        log('error', 'failed to retrieve merged mod names', inv);
+        return Promise.resolve([]);
+      }
+      const elements = await mergeEntry.reduce(async (accumP, iter) => {
         const accum = await accumP;
         const mergeModName = iter?.MergedModName?.[0];
         if (mergeModName === undefined) {
