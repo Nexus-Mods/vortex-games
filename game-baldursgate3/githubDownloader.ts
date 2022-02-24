@@ -196,6 +196,12 @@ export async function checkForUpdates(api: types.IExtensionApi,
                                       currentVersion: string): Promise<string> {
   return getLatestReleases(currentVersion)
     .then(async currentReleases => {
+      if (currentReleases[0] === undefined) {
+        // We failed to check for updates - that's unfortunate but shouldn't
+        //  be reported to the user as it will just confuse them.
+        log('error', 'Unable to update LSLib', 'Failed to find any releases');
+        return Promise.resolve(currentVersion);
+      }
       const mostRecentVersion = currentReleases[0].tag_name.slice(1);
       const downloadLink = await resolveDownloadLink(currentReleases);
       if (semver.valid(mostRecentVersion) === null) {
