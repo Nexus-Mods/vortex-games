@@ -919,8 +919,13 @@ function getLatestInstalledLSLibVer(api: types.IExtensionApi) {
       const dl: types.IDownload = util.getSafe(state,
         ['persistent', 'downloads', 'files', arcId], undefined);
       const storedVer = util.getSafe(mods[id], ['attributes', 'version'], '0.0.0');
-      if (semver.gt(storedVer, prev)) {
-        prev = storedVer;
+
+      try {
+        if (semver.gt(storedVer, prev)) {
+          prev = storedVer;
+        }
+      } catch (err) {
+        log('warn', 'invalid version stored for lslib mod', { id, version: storedVer });
       }
 
       if (dl !== undefined) {
@@ -1061,7 +1066,7 @@ function main(context: types.IExtensionContext) {
 
   context.registerModType('bg3-lslib-divine-tool', 15, (gameId) => gameId === GAME_ID,
     () => undefined, files => isLSLib(context.api, files),
-    { name: 'BG3 LSLib' } as any);
+    { name: 'BG3 LSLib' });
 
   context.registerLoadOrder({
     gameId: GAME_ID,
