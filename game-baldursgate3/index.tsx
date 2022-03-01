@@ -477,6 +477,13 @@ function getLatestLSLibMod(api: types.IExtensionApi) {
   return lsLib;
 }
 
+class DivineExecMissing extends Error {
+  constructor() {
+    super('Divine executable is missing');
+    this.name = 'DivineExecMissing';
+  }
+}
+
 function divine(api: types.IExtensionApi,
                 action: DivineAction,
                 options: IDivineOptions): Promise<IDivineOutput> {
@@ -514,6 +521,9 @@ function divine(api: types.IExtensionApi,
 
     proc.on('error', (errIn: Error) => {
       if (!returned) {
+        if (errIn['code'] === 'ENOENT') {
+          reject(new DivineExecMissing());
+        }
         returned = true;
         const err = new Error('divine.exe failed: ' + errIn.message);
         err['attachLogOnReport'] = true;
@@ -770,6 +780,15 @@ async function readPAKs(api: types.IExtensionApi)
             info: await extractPakInfoImpl(api, path.join(modsPath(), fileName)),
           };
         } catch (err) {
+          if (err instanceof DivineExecMissing) {
+            const message = 'The installed copy of LSLib/Divine is corrupted - please '
+              + 'delete the existing LSLib mod entry and re-install it. Make sure to '
+              + 'disable or add any necessary exceptions to your security software to '
+              + 'ensure it does not interfere with Vortex/LSLib file operations.';
+            api.showErrorNotification('Divine executable is missing', message,
+              { allowReport: false });
+            return undefined;
+          }
           // could happen if the file got deleted since reading the list of paks.
           // actually, this seems to be fairly common when updating a mod
           if (err.code !== 'ENOENT') {
@@ -1012,6 +1031,25 @@ function main(context: types.IExtensionContext) {
         'info.json',
       ],
     },
+  });
+
+  context.registerAction('mod-icons', 300, 'settings', {}, 'Re-install LSLib/Divine', () => {
+    const state = context.api.getState();
+    const mods: { [modId: string]: types.IMod } =
+      util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
+    const lslibs = Object.keys(mods).filter(mod => mods[mod].type === 'bg3-lslib-divine-tool');
+    context.api.events.emit('remove-mods', GAME_ID, lslibs, (err) => {
+      if (err !== null) {
+        context.api.showErrorNotification('Failed to reinstall lslib',
+          'Please re-install manually', { allowReport: false });
+        return;
+      }
+      gitHubDownloader.downloadDivine(context.api);
+    });
+  }, () => {
+    const state = context.api.store.getState();
+    const gameMode = selectors.activeGameId(state);
+    return gameMode === GAME_ID;
   });
 
   context.registerInstaller('bg3-replacer', 25, testReplacer, installReplacer);
