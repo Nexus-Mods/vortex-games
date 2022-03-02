@@ -226,7 +226,10 @@ async function prepareForModding(context, discovery, metaManager: ComMetadataMan
   //  and create it if we haven't.
   return startSteam().then(() => parseLauncherData()).then(async () => {
     try {
-      await refreshCache(context);
+      await refreshCache(context, metaManager);
+      const state = context.api.store.getState();
+      const lastActive = selectors.lastActiveProfileForGame(state, GAME_ID);
+      await metaManager.updateDependencyMap(lastActive);
     } catch (err) {
       return Promise.reject(err);
     }
@@ -284,7 +287,7 @@ function tSort(sortProps: ISortProps, test: boolean = false) {
   const alphabetical = subModIds.filter(subMod => !lockedSubMods.includes(subMod))
                                 .sort();
   const graph = alphabetical.reduce((accum, entry) => {
-    const depIds = [...CACHE[entry].dependencies].map(dep => dep.depId);
+    const depIds = [...CACHE[entry].dependencies].map(dep => dep.id);
     // Create the node graph.
     accum[entry] = depIds.sort();
     return accum;
@@ -299,7 +302,11 @@ function tSort(sortProps: ISortProps, test: boolean = false) {
   // The nodes which are still processing.
   const processing = [];
 
-  const topSort = (node) => {
+  const topSort = (node, isOptional = false) => {
+    if (isOptional && !Object.keys(graph).includes(node)) {
+      visited[node] = true;
+      return;
+    }
     processing[node] = true;
     const dependencies = (!!allowLocked)
       ? graph[node]
@@ -318,17 +325,21 @@ function tSort(sortProps: ISortProps, test: boolean = false) {
       }
 
       const incompatibleDeps = CACHE[node].invalid.incompatibleDeps;
-      const incDep = incompatibleDeps.find(d => d.depId === dep);
+      const incDep = incompatibleDeps.find(d => d.id === dep);
       if (Object.keys(graph).includes(dep) && (incDep === undefined)) {
         const depVer = CACHE[dep].subModVer;
-        const depInst = CACHE[node].dependencies.find(d => d.depId === dep);
+        const depInst = CACHE[node].dependencies.find(d => d.id === dep);
         try {
-          const match = semver.satisfies(depInst.depVersion, depVer);
-          if (!match && !!depInst?.depVersion && !!depVer) {
+          const match = semver.satisfies(depInst.version, depVer);
+          if (!match && !!depInst?.version && !!depVer) {
             CACHE[node].invalid.incompatibleDeps.push({
-              depId: dep,
-              requiredVersion: depInst.depVersion,
+              id: dep,
+              requiredVersion: depInst.version,
               currentVersion: depVer,
+              incompatible: depInst.incompatible,
+              optional: depInst.optional,
+              order: depInst.order,
+              version: depInst.version,
             });
           }
         } catch (err) {
@@ -338,11 +349,12 @@ function tSort(sortProps: ISortProps, test: boolean = false) {
         }
       }
 
+      const optional = metaManager.isOptional(node, dep);
       if (!visited[dep] && !lockedSubMods.includes(dep)) {
-        if (!Object.keys(graph).includes(dep)) {
+        if (!Object.keys(graph).includes(dep) && !optional) {
           CACHE[node].invalid.missing.push(dep);
         } else {
-          topSort(dep);
+          topSort(dep, optional);
         }
       }
     }
@@ -378,12 +390,7 @@ function tSort(sortProps: ISortProps, test: boolean = false) {
     tamperedResult.splice(pos, 0, [subModId]);
   });
 
-  if (test === true) {
-    const metaSorted = metaManager.sort(tamperedResult);
-    return metaSorted;
-  } else {
-    return tamperedResult;
-  }
+  return tamperedResult;
 }
 
 function isExternal(context, subModId) {
@@ -419,7 +426,7 @@ async function refreshCacheOnEvent(context: types.IExtensionContext,
   await metaManager.updateDependencyMap(profileId);
 
   try {
-    await refreshCache(context);
+    await refreshCache(context, metaManager);
   } catch (err) {
     // ProcessCanceled means that we were unable to scan for deployed
     //  subModules, probably because game discovery is incomplete.
@@ -446,7 +453,7 @@ async function refreshCacheOnEvent(context: types.IExtensionContext,
       loadOrder,
       metaManager,
     };
-    const sorted = tSort(sortProps);
+    const sorted = tSort(sortProps, true);
 
     if (refreshFunc !== undefined) {
       refreshFunc();

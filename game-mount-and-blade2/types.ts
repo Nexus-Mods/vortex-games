@@ -22,6 +22,10 @@ export interface IDependency {
   // Signifies that this "dependency" is incompatible
   //  with the installed mod.
   incompatible: boolean;
+
+  requiredVersion?: string;
+
+  currentVersion?: string;
 }
 
 export interface ISubModule {
@@ -62,14 +66,7 @@ export interface ILoadOrder {
 export interface IInvalidReasons {
   cyclic: string[];
   missing: string[];
-  incompatibleDeps: ICacheDependency[];
-}
-
-export interface ICacheDependency {
-  depId?: string;
-  depVersion?: string;
-  requiredVersion?: string;
-  currentVersion?: string;
+  incompatibleDeps: IDependency[];
 }
 
 export interface ISubModCacheEntry {
@@ -81,7 +78,7 @@ export interface ISubModCacheEntry {
   isOfficial: boolean;
   isLocked: boolean;
   isMultiplayer: boolean;
-  dependencies: ICacheDependency[];
+  dependencies: IDependency[];
   invalid: IInvalidReasons;
 }
 

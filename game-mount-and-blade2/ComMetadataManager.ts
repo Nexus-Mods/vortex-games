@@ -4,7 +4,7 @@ import { fs, log, selectors, types, util } from 'vortex-api';
 
 import { GAME_ID, SUBMOD_FILE } from './common';
 import { IDependency, IProps, ISubModule } from './types';
-import { genProps, getXMLData } from './util';
+import { genProps, getCleanVersion, getXMLData } from './util';
 
 const DEP_XML_LIST = 'DependedModuleMetadatas';
 const DEP_XML_ELEMENT = 'DependedModuleMetadata';
@@ -19,34 +19,33 @@ class ComMetadataManager {
     this.mDependencyMap = undefined;
   }
 
-  public sort(loadOrder: string[]): string[] {
-    const sorted = [ ...loadOrder ].sort((lhs, rhs) => {
-      const testDeps = (deps: IDependency[], subModId: string): number => {
-        if (deps !== undefined) {
-          const match = deps.find(dep => dep.id === subModId);
-          if (match !== undefined) {
-            return (match.order !== undefined)
-              ? match.order === 'LoadAfterThis'
-                ? -1 : 1
-              : 0;
-          } else {
-            return 0;
-          }
-        }
-      };
-      const lhsDeps = this.mDependencyMap[lhs]?.dependencies;
-      const rhsDeps = this.mDependencyMap[rhs]?.dependencies;
-      const lhsRes = testDeps(lhsDeps, rhs);
-      if (lhsRes !== 0) {
-        return lhsRes;
+  public isOptional(subModId: string, depId: string) {
+    const dependency: IDependency =
+      (this.mDependencyMap[subModId]?.dependencies || []).find(dep => dep.id === depId);
+    if (dependency === undefined) {
+      return false;
+    }
+    return dependency.optional;
+  }
+
+  public getDependencies(subModId: string): IDependency[] {
+    return [].concat(
+      (this.mDependencyMap[subModId]?.dependencies || []).filter(dep => dep.order === 'LoadBeforeThis'),
+      Object.keys(this.mDependencyMap).reduce((accum, iter) => {
+      const subModule: ISubModule = this.mDependencyMap[iter];
+      const deps = subModule.dependencies.filter(dep => dep.id === subModId && dep.order === 'LoadAfterThis');
+      if (deps.length > 0) {
+        const newDep: IDependency = {
+          id: subModule.id,
+          incompatible: deps[0].incompatible,
+          optional: deps[0].optional,
+          order: 'LoadAfterThis',
+          version: getCleanVersion(subModule.id, deps[0].version),
+        };
+        accum = [].concat(accum, newDep);
       }
-      const rhsRes = testDeps(rhsDeps, lhs);
-      if (rhsRes !== 0) {
-        return rhsRes;
-      }
-      return 0;
-    });
-    return sorted;
+      return accum;
+    }, []));
   }
 
   public async updateDependencyMap(profileId?: string) {
@@ -76,14 +75,17 @@ class ComMetadataManager {
     try {
       const data = await getXMLData(filePath);
       subModId = data?.Module?.Id?.[0]?.$?.value;
-      const depNodes = data?.Module?.DependedModuleMetadatas?.[0]?.DependedModuleMetadata;
+      const depNodes = data?.Module?.DependedModuleMetadatas?.[0]?.DependedModuleMetadata || [];
       for (const node of depNodes) {
         try {
+          const id = await getAttrValue(node, 'id', false);
+          let version = await getAttrValue(node, 'version');
+          version = getCleanVersion(id, version);
           const dep: IDependency = {
-            id: await getAttrValue(node, 'id', false),
+            id,
             optional: await getAttrValue(node, 'optional') === 'true',
             order: await getAttrValue(node, 'order'),
-            version: await getAttrValue(node, 'version'),
+            version,
             incompatible: await getAttrValue(node, 'incompatible') === 'true',
           };
           dependencies.push(dep);

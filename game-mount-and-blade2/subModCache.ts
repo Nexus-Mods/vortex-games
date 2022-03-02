@@ -1,11 +1,11 @@
 import Bluebird from 'bluebird';
 import path from 'path';
-import semver from 'semver';
 import { log, selectors, types, util } from 'vortex-api';
+import ComMetadataManager from './ComMetadataManager';
 import { GAME_ID, LOCKED_MODULES, MODULES,
   OFFICIAL_MODULES, SUBMOD_FILE } from './common';
-import { ISubModCache } from './types';
-import { getElementValue, getXMLData, walkAsync } from './util';
+import { IDependency, ISubModCache } from './types';
+import { getCleanVersion, getElementValue, getXMLData, walkAsync } from './util';
 
 const XML_EL_MULTIPLAYER = 'MultiplayerModule';
 const LAUNCHER_DATA_PATH = path.join(util.getVortexPath('documents'), 'Mount and Blade II Bannerlord', 'Configs', 'LauncherData.xml');
@@ -23,11 +23,12 @@ export function getCache() {
   return CACHE;
 }
 
-export async function refreshCache(context: types.IExtensionContext) {
+export async function refreshCache(context: types.IExtensionContext,
+                                   metaManager: ComMetadataManager) {
   try {
     CACHE = {};
     const subModuleFilePaths: string[] = await getDeployedSubModPaths(context);
-    CACHE = await getDeployedModData(context, subModuleFilePaths);
+    CACHE = await getDeployedModData(context, subModuleFilePaths, metaManager);
   } catch (err) {
     return Promise.reject(err);
   }
@@ -60,23 +61,16 @@ async function getDeployedSubModPaths(context: types.IExtensionContext) {
   return Promise.resolve(subModules);
 }
 
-async function getDeployedModData(context: types.IExtensionContext, subModuleFilePaths: string[]) {
+async function getDeployedModData(context: types.IExtensionContext,
+                                  subModuleFilePaths: string[],
+                                  metaManager: ComMetadataManager) {
+  const state = context.api.getState();
+  const profileId = selectors.activeProfile(state)?.id;
+  if (profileId === undefined) {
+    return undefined;
+  }
+  await metaManager.updateDependencyMap(profileId);
   const managedIds = await getManagedIds(context);
-  const getCleanVersion = (subModId, unsanitized) => {
-    if (!unsanitized) {
-      log('debug', 'failed to sanitize/coerce version', { subModId, unsanitized });
-      return undefined;
-    }
-    try {
-      const sanitized = unsanitized.replace(/[a-z]|[A-Z]/g, '');
-      const coerced = semver.coerce(sanitized);
-      return coerced.version;
-    } catch (err) {
-      log('debug', 'failed to sanitize/coerce version',
-        { subModId, unsanitized, error: err.message });
-      return undefined;
-    }
-  };
 
   return Bluebird.reduce(subModuleFilePaths, async (accum, subModFile: string) => {
     try {
@@ -84,27 +78,41 @@ async function getDeployedModData(context: types.IExtensionContext, subModuleFil
       const subModData = await getXMLData(subModFile);
       const module = subModData?.Module;
       const subModId = getAttrValue(module, 'Id');
+      const comDependencies = metaManager.getDependencies(subModId);
       const subModVerData = getAttrValue(module, 'Version');
       const subModVer = getCleanVersion(subModId, subModVerData);
       const managedEntry = managedIds.find(entry => entry.subModId === subModId);
       const isMultiplayer = getAttrValue(module, XML_EL_MULTIPLAYER) !== undefined;
-      const depNodes = module?.DependedModules?.[0]?.DependedModule;
-      let dependencies = [];
-      try {
-        dependencies = depNodes.map(depNode => {
-          let depVersion;
-          const depId = depNode?.$?.Id;
-          try {
-            const unsanitized = depNode?.$?.DependentVersion;
-            depVersion = getCleanVersion(subModId, unsanitized);
-          } catch (err) {
-            // DependentVersion is an optional attribute, it's not a big deal if
-            //  it's missing.
-            log('debug', 'failed to resolve dependency version', { subModId, error: err.message });
-          }
+      const officialDepNodes = module?.DependedModules?.[0]?.DependedModule || [];
+      let dependencies: IDependency[] = [];
+      const getOfficialDepNodes = () => officialDepNodes
+        .filter(depNode => comDependencies.find(dep => dep.id === depNode?.$?.Id) === undefined)
+        .map(depNode => {
+        let depVersion;
+        const depId = depNode?.$?.Id;
+        try {
+          const unsanitized = depNode?.$?.DependentVersion;
+          depVersion = getCleanVersion(subModId, unsanitized);
+        } catch (err) {
+          // DependentVersion is an optional attribute, it's not a big deal if
+          //  it's missing.
+          log('debug', 'failed to resolve dependency version', { subModId, error: err.message });
+        }
 
-          return { depId, depVersion };
-        });
+        const dependency: IDependency = {
+          id: depId,
+          incompatible: false,
+          optional: false,
+          order: 'LoadAfterThis',
+          version: depVersion,
+        };
+
+        return dependency;
+      });
+      try {
+        dependencies = (comDependencies.length > 0)
+          ? [].concat(getOfficialDepNodes(), comDependencies)
+          : getOfficialDepNodes();
       } catch (err) {
         log('debug', 'submodule has no dependencies or is invalid', err);
       }
@@ -157,8 +165,8 @@ export async function parseLauncherData() {
 
   const launcherData = await getXMLData(LAUNCHER_DATA_PATH);
   try {
-    const singlePlayerMods = launcherData?.UserData?.SingleplayerData?.[0]?.ModDatas?.[0]?.UserModData;
-    const multiPlayerMods = launcherData?.UserData?.MultiplayerData?.[0]?.ModDatas?.[0]?.UserModData;
+    const singlePlayerMods = launcherData?.UserData?.SingleplayerData?.[0]?.ModDatas?.[0]?.UserModData || [];
+    const multiPlayerMods = launcherData?.UserData?.MultiplayerData?.[0]?.ModDatas?.[0]?.UserModData || [];
     LAUNCHER_DATA.singlePlayerSubMods = singlePlayerMods.reduce((accum, spm) => {
       const dataElement = createDataElement(spm);
       if (!!dataElement) {

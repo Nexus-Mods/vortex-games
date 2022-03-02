@@ -189,6 +189,9 @@ class CustomItemRenderer extends React.Component {
   }
 
   getItemIncompatibilities(item) {
+    if (item.official === true) {
+      return [];
+    }
     const infoObj = getValidationInfo(item.id);
     return infoObj?.incompatible || [];
   }
@@ -211,7 +214,7 @@ class CustomItemRenderer extends React.Component {
 
   renderIncompatibleIcon(item) {
     const incomp = this.getItemIncompatibilities(item)
-      .map(inst => `Requires ${inst.depId} (${inst.requiredVersion}) - but - (${inst.currentVersion}) is installed`);
+      .map(inst => `Requires ${inst.id} (${inst.requiredVersion}) - but - (${inst.currentVersion}) is installed`);
 
     return (incomp.length > 0)
       ? React.createElement(tooltip.Icon, {

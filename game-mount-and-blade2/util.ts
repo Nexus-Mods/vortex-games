@@ -1,5 +1,6 @@
 import Bluebird from 'bluebird';
 import path from 'path';
+import semver from 'semver';
 import { actions, fs, log, selectors, types, util } from 'vortex-api';
 import { parseStringPromise } from 'xml2js';
 
@@ -112,6 +113,22 @@ export async function refreshGameParams(context: types.IExtensionContext, loadOr
   }));
 
   return Promise.resolve();
+}
+
+export function getCleanVersion(subModId: string, unsanitized: string): string {
+  if (!unsanitized) {
+    log('debug', 'failed to sanitize/coerce version', { subModId, unsanitized });
+    return undefined;
+  }
+  try {
+    const sanitized = unsanitized.replace(/[a-z]|[A-Z]/g, '');
+    const coerced = semver.coerce(sanitized);
+    return coerced.version;
+  } catch (err) {
+    log('debug', 'failed to sanitize/coerce version',
+      { subModId, unsanitized, error: err.message });
+    return undefined;
+  }
 }
 
 export async function walkAsync(dir, levelsDeep = 2) {
