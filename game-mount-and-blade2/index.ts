@@ -89,28 +89,43 @@ function testRootMod(files, gameId) {
 function installRootMod(files, destinationPath) {
   const moduleFile = files.find(file => file.split(path.sep).indexOf(MODULES) !== -1);
   const idx = moduleFile.split(path.sep).indexOf(MODULES);
-  const filtered = files.filter(file => {
-    const segments = file.split(path.sep).map(seg => seg.toLowerCase());
-    const lastElementIdx = segments.length - 1;
+  const subMods = files.filter(file => path.basename(file).toLowerCase() === SUBMOD_FILE);
+  return Bluebird.map(subMods, async (modFile: string) => {
+    const subModId = await getElementValue(path.join(destinationPath, modFile), 'Id');
+    return Bluebird.resolve(subModId);
+  })
+  .then((subModIds: string[]) => {
+    const filtered = files.filter(file => {
+      const segments = file.split(path.sep).map(seg => seg.toLowerCase());
+      const lastElementIdx = segments.length - 1;
 
-    // Ignore directories and ensure that the file contains a known root folder at
-    //  the expected index.
-    return (ROOT_FOLDERS.has(segments[idx])
-      && (path.extname(segments[lastElementIdx]) !== ''));
+      // Ignore directories and ensure that the file contains a known root folder at
+      //  the expected index.
+      return (ROOT_FOLDERS.has(segments[idx])
+        && (path.extname(segments[lastElementIdx]) !== ''));
+      });
+    const attributes = subModIds.length > 0
+      ? [
+          {
+            type: 'attribute',
+            key: 'subModIds',
+            value: subModIds,
+          },
+        ]
+      : [];
+    const instructions = attributes.concat(filtered.map(file => {
+      const destination = file.split(path.sep)
+                              .slice(idx)
+                              .join(path.sep);
+      return {
+        type: 'copy',
+        source: file,
+        destination,
+      };
+    }));
+
+    return Bluebird.resolve({ instructions });
   });
-
-  const instructions = filtered.map(file => {
-    const destination = file.split(path.sep)
-                            .slice(idx)
-                            .join(path.sep);
-    return {
-      type: 'copy',
-      source: file,
-      destination,
-    };
-  });
-
-  return Promise.resolve({ instructions });
 }
 
 function testForSubmodules(files, gameId) {
