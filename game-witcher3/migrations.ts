@@ -16,7 +16,7 @@ export async function migrate148(context: types.IExtensionContext,
   const mods: { [modId: string]: types.IMod } =
     util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
   const modState = util.getSafe(profile, ['modState'], {});
-  const isEnabled = (mod: types.IMod) => modState[mod.id].enabled;
+  const isEnabled = (mod: types.IMod) => modState[mod.id]?.enabled === true;
   const limitPatchMod = Object.values(mods).find(mod =>
     (mod.type === 'w3modlimitpatcher') && isEnabled(mod));
   if (limitPatchMod === undefined) {
