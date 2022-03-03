@@ -285,11 +285,19 @@ function main(context: types.IExtensionContext) {
   context.registerAction('fb-load-order-icons', 150, 'loot-sort', {},
                          'Prefix Offset Assign', () => {
     setPrefixOffsetDialog(context.api);
+  }, () => {
+    const state = context.api.getState();
+    const activeGame = selectors.activeGameId(state);
+    return activeGame === GAME_ID;
   });
 
   context.registerAction('fb-load-order-icons', 150, 'loot-sort', {},
                          'Prefix Offset Reset', () => {
     resetPrefixOffset(context.api);
+  }, () => {
+    const state = context.api.getState();
+    const activeGame = selectors.activeGameId(state);
+    return activeGame === GAME_ID;
   });
 
   const getOverhaulPath = (game: types.IGame) => {
