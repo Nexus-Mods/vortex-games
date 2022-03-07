@@ -18,7 +18,6 @@ type IProps = IBaseProps & IConnectedProps;
 
 function Settings(props: IProps) {
   const { t, autoSortOnDeploy, onSetSortOnDeploy, profileId } = props;
-  
   const onSetSort = React.useCallback((value) => {
     if (profileId !== undefined) {
       onSetSortOnDeploy(profileId, value);
@@ -44,7 +43,7 @@ function Settings(props: IProps) {
 }
 
 function mapStateToProps(state: any): IConnectedProps {
-  const profileId: string = selectors.activeProfile(state).id;
+  const profileId: string = selectors.activeProfile(state)?.id;
   return {
     profileId,
     autoSortOnDeploy: util.getSafe(state,
