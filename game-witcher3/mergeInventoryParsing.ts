@@ -50,7 +50,7 @@ export function getMergedModNames(context: types.IExtensionContext) {
         } catch (err) {
           return Promise.reject(err);
         }
-        log('error', 'failed to retrieve merged mod names', inv);
+        log('debug', 'failed to retrieve merged mod names', inv);
         return Promise.resolve([]);
       }
       const elements = await mergeEntry.reduce(async (accumP, iter) => {
