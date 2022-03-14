@@ -532,18 +532,9 @@ async function setINIStruct(context, loadOrder, priorityManager) {
   return getAllMods(context).then(modMap => {
     _INI_STRUCT = {};
     const mods = [].concat(modMap.merged, modMap.managed, modMap.manual);
-    const filterFunc = (modName: string) => {
-      // We're adding this to avoid having the load order page
-      //  from not loading if we encounter an invalid mod name.
-      if (!modName || typeof(modName) !== 'string') {
-        log('debug', 'encountered invalid mod instance/name');
-        return false;
-      }
-      return modName.startsWith(LOCKED_PREFIX);
-    }
-    const manualLocked = modMap.manual.filter(filterFunc);
+    const manualLocked = modMap.manual.filter(isLockedEntry);
     const managedLocked = modMap.managed
-      .filter(entry => filterFunc(entry.name))
+      .filter(entry => isLockedEntry(entry.name))
       .map(entry => entry.name);
     const totalLocked = [].concat(modMap.merged, manualLocked, managedLocked);
     return Bluebird.each(mods, (mod, idx) => {
@@ -571,6 +562,16 @@ async function setINIStruct(context, loadOrder, priorityManager) {
       };
     });
   });
+}
+
+function isLockedEntry(modName: string) {
+  // We're adding this to avoid having the load order page
+  //  from not loading if we encounter an invalid mod name.
+  if (!modName || typeof(modName) !== 'string') {
+    log('debug', 'encountered invalid mod instance/name');
+    return false;
+  }
+  return modName.startsWith(LOCKED_PREFIX);
 }
 
 let refreshFunc;
@@ -678,9 +679,8 @@ async function preSort(context, items, direction, updateType, priorityManager): 
     });
   }
 
-  const filterFunc = (modName: string) => modName.startsWith(LOCKED_PREFIX);
-  const lockedMods = [].concat(allMods.manual.filter(filterFunc),
-    allMods.managed.filter(entry => filterFunc(entry.name))
+  const lockedMods = [].concat(allMods.manual.filter(isLockedEntry),
+    allMods.managed.filter(entry => isLockedEntry(entry.name))
                    .map(entry => entry.name));
   const readableNames = {
     [UNI_PATCH]: 'Unification/Community Patch',
