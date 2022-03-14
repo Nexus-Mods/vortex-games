@@ -252,7 +252,7 @@ async function prepareForModding(context, discovery, metaManager: ComMetadataMan
     // We're going to do a quick tSort at this point - not going to
     //  change the user's load order, but this will highlight any
     //  cyclic or missing dependencies.
-    const CACHE = getCache();
+    const CACHE = getCache() ?? {};
     const modIds = Object.keys(CACHE);
     const sorted = tSort({ subModIds: modIds, allowLocked: true, metaManager });
   })
@@ -482,7 +482,7 @@ async function preSort(context, items, direction, updateType, metaManager) {
   const state = context.api.store.getState();
   const activeProfile = selectors.activeProfile(state);
   const CACHE = getCache();
-  if (activeProfile?.id === undefined || activeProfile?.gameId !== GAME_ID) {
+  if (activeProfile?.id === undefined || activeProfile?.gameId !== GAME_ID || !CACHE) {
     // Race condition ?
     return items;
   }
@@ -662,6 +662,11 @@ async function resolveGameVersion(discoveryPath: string) {
 let _IS_SORTING = false;
 function sortImpl(context: types.IExtensionContext, metaManager: ComMetadataManager) {
   const CACHE = getCache();
+  if (!CACHE) {
+    log('error', 'Failed to sort mods', { reason: 'Cache is unavailable' });
+    _IS_SORTING = false;
+    return;
+  }
   const modIds = Object.keys(CACHE);
   const lockedIds = modIds.filter(id => CACHE[id].isLocked);
   const subModIds = modIds.filter(id => !CACHE[id].isLocked);
