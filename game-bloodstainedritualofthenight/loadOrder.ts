@@ -55,9 +55,26 @@ export async function deserialize(context: types.IExtensionContext): Promise<Loa
     ['persistent', 'mods', GAME_ID], {});
   const loFilePath = await ensureLOFile(context);
   const fileData = await fs.readFileAsync(loFilePath, { encoding: 'utf8' });
+  let data: ILoadOrderEntry[] = [];
   try {
-    const data: ILoadOrderEntry[] = JSON.parse(fileData);
-
+    try {
+      data = JSON.parse(fileData);
+    } catch (err) {
+      await new Promise<void>((resolve, reject) => {
+        props.api.showDialog('error', 'Corrupt load order file', {
+          bbcode: props.api.translate('The load order file is in a corrupt state. You can try to fix it yourself '
+                                    + 'or Vortex can regenerate the file for you, but that may result in loss of data ' +
+                                      '(Will only affect load order items you added manually, if any).')
+        }, [
+          { label: 'Cancel', action: () => reject(err) },
+          { label: 'Regenerate File', action: () => {
+              data = [];
+              return resolve();
+            }
+          }
+        ])
+      })
+    }
     // User may have disabled/removed a mod - we need to filter out any existing
     //  entries from the data we parsed.
     const filteredData = data.filter(entry => enabledModIds.includes(entry.id));
@@ -78,11 +95,6 @@ export async function deserialize(context: types.IExtensionContext): Promise<Loa
       });
     });
 
-    // At this point you may have noticed that we're not setting the prefix
-    //  for the newly added mod entries - we could certainly do that here,
-    //  but that would simply be code duplication as we need to assign prefixes
-    //  during serialization anyway (otherwise user drag-drop interactions will
-    //  not be saved)
     return filteredData;
   } catch (err) {
     return Promise.reject(err);
