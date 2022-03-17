@@ -719,7 +719,9 @@ async function preSort(context, items, direction, updateType, priorityManager): 
   });
 
   const manualEntries = allMods.manual
-    .filter(key => lockedEntries.find(entry => entry.id === key) === undefined)
+    .filter(key =>
+         (lockedEntries.find(entry => entry.id === key) === undefined)
+      && (allMods.managed.find(entry => entry.id === key) === undefined))
     .map(key => {
       const item = {
         id: key,
@@ -762,6 +764,10 @@ async function preSort(context, items, direction, updateType, priorityManager): 
     }),
     ...unknownManuallyAdded);
 
+  const isExternal = (entry) => {
+    return ((entry.external === true)
+      && (allMods.managed.find(man => man.id === entry.id) === undefined));
+  };
   preSorted = (updateType !== 'drag-n-drop')
     ? preSorted.sort((lhs, rhs) => lhs.prefix - rhs.prefix)
     : preSorted.reduce((accum, entry, idx) => {
@@ -772,12 +778,11 @@ async function preSort(context, items, direction, updateType, priorityManager): 
           if (prevPrefix >= entry.prefix) {
             accum.push({
               ...entry,
-              external: ((entry.external === true) && (allMods.managed.find(man => man.name === entry.name)))
-                ? false : true,
+              external: isExternal(entry),
               prefix: prevPrefix + 1,
             });
           } else {
-            accum.push(entry);
+            accum.push({ ...entry, external: isExternal(entry) });
           }
         }
         return accum;
