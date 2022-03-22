@@ -76,7 +76,7 @@ export async function serialize(context: types.IExtensionContext,
 
   // Write the prefixed LO to file.
   await fs.removeAsync(loFilePath).catch({ code: 'ENOENT' }, () => Promise.resolve());
-  await fs.writeFileAsync(loFilePath, JSON.stringify(prefixedLO), { encoding: 'utf8' });
+  await util.writeFileAtomic(loFilePath, JSON.stringify(prefixedLO));
   return Promise.resolve();
 }
 
