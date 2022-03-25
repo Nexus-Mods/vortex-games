@@ -105,7 +105,7 @@ function main(context) {
     },
     details: {
       steamAppId: 377160,
-      ignoreConflicts: 
+      ignoreConflicts: IGNORED_FILES
     }
   });
 
