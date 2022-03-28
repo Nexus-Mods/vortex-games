@@ -14,7 +14,7 @@ const DFMOD_EXT = '.dfmod';
 
 function findGame() {
   const getTrimmedPath = (gamePath) => {
-    const trimmed = gamePath.substr(CMD_PATTERN.length);
+    const trimmed = gamePath.substr(CMD_PATTERN.length).trim().replace(/\"/g, '');
     return path.dirname(trimmed);
   }
 
