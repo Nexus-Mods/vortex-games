@@ -47,7 +47,7 @@ function queryModPath(api, gamePath) {
       api.showErrorNotification('Game not installed',
         'World of Tanks doesn\'t seem to be installed correctly. '
       + 'Please check the version.xml file in your game directory.'
-      , { allowReport: false });
+      , { allowReport: false, id: 'wot-not-installed' });
       return '.';
     }
   }
