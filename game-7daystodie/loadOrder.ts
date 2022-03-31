@@ -17,9 +17,9 @@ function isLODifferent(prev: LoadOrder, current: LoadOrder) {
 function corruptLODialog(props: IProps, filePath: string, err: Error) {
   return new Promise<ILoadOrderEntry[]>((resolve, reject) => {
     props.api.showDialog('error', 'Corrupt load order file', {
-      bbcode: props.api.translate('The load order file is in a corrupt state. You can try to fix it yourself '
-        + 'or Vortex can regenerate the file for you, but that may result in loss of data '
-        + '(Will only affect load order items you added manually, if any).'),
+      bbcode: props.api.translate('The load order file is in a corrupt state or missing. '
+        + 'You can try to fix it yourself or Vortex can regenerate the file for you, but '
+        + 'that may result in loss of data. Will only affect load order items you added manually, if any).'),
     }, [
       { label: 'Cancel', action: () => reject(err) },
       {
@@ -101,11 +101,12 @@ export async function deserialize(context: types.IExtensionContext): Promise<Loa
     .filter(modId => util.getSafe(currentModsState, [modId, 'enabled'], false));
   const mods: { [modId: string]: types.IMod } = util.getSafe(props.state,
     ['persistent', 'mods', GAME_ID], {});
-  const loFilePath = await ensureLOFile(context);
-  const fileData = await fs.readFileAsync(loFilePath, { encoding: 'utf8' });
   let data: ILoadOrderEntry[] = [];
+  let loFilePath;
   try {
     try {
+      loFilePath = await ensureLOFile(context);
+      const fileData = await fs.readFileAsync(loFilePath, { encoding: 'utf8' });
       data = JSON.parse(fileData);
     } catch (err) {
       data = await corruptLODialog(props, loFilePath, err);
