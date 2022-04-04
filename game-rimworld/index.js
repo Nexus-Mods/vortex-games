@@ -16,6 +16,12 @@ function requiresLauncher(gamePath) {
     .catch(err => Promise.reject(err));
 }
 
+function resolveGameVersion(discoveryPath) {
+  const versionPath = path.join(discoveryPath, 'version.txt');
+  return fs.readFileAsync(versionPath, { encoding: 'utf8' })
+    .then((res) => Promise.resolve(res));
+}
+
 function main(context) {
   context.registerGame({
     id: 'rimworld',
@@ -28,6 +34,7 @@ function main(context) {
     requiredFiles: [
       'RimWorldWin64.exe'
     ],
+    getGameVersion: resolveGameVersion,
     requiresLauncher,
     environment: {
       SteamAPPId: '294100',
