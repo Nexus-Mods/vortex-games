@@ -1,6 +1,6 @@
 const { app, remote } = require('electron');
 const path = require('path');
-const { fs } = require('vortex-api');
+const { fs, util } = require('vortex-api');
 
 const appUni = app || remote.app;
 const LOCAL_LOW = path.resolve(appUni.getPath('appData'),
@@ -9,8 +9,18 @@ const ENV_LOG = path.join(LOCAL_LOW, 'DFTFU_Environment.log');
 const GAME_ID = 'daggerfallunity';
 const GAME_EXEC = 'DaggerfallUnity.exe';
 const CMD_PATTERN = 'CommandLine | ';
+const VERSION_PATTERN = 'Version | ';
 const DFMOD_EXT = '.dfmod';
 
+function resolveGameVersion() {
+  return fs.readFileAsync(ENV_LOG, { encoding: 'utf8' })
+    .then(data => {
+      const match = data.match(/^Version \| [0-9].[0-9].*/gm);
+      return (match)
+        ? Promise.resolve(match[0].substr(VERSION_PATTERN.length).trim())
+        : Promise.reject(new util.DataInvalid('Unable to resolve game version'));
+  })
+}
 
 function findGame() {
   const getTrimmedPath = (gamePath) => {
@@ -94,6 +104,7 @@ function main(context) {
     supportedTools: [],
     queryModPath: () => path.join('DaggerfallUnity_Data', 'StreamingAssets'),
     logo: 'gameart.jpg',
+    getGameVersion: resolveGameVersion,
     executable: () => GAME_EXEC,
     requiredFiles: [
       GAME_EXEC,
