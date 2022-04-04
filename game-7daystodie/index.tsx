@@ -3,6 +3,8 @@ import { useSelector } from 'react-redux';
 import { createAction } from 'redux-act';
 import { actions, fs, log, selectors, types, util } from 'vortex-api';
 
+import Bluebird from 'bluebird';
+
 import * as React from 'react';
 
 import { GAME_ID, gameExecutable, MOD_INFO, modsRelPath } from './common';
@@ -13,6 +15,8 @@ import { genProps, getModName, makePrefix, reversePrefix, toBlue } from './util'
 
 const STEAM_ID = '251570';
 const STEAM_DLL = 'steamclient64.dll';
+
+const WORLD_GEN_REL_PATH = path.join('Data', 'Worlds', 'PREGEN10k', 'main.ttw');
 
 const ROOT_MOD_CANDIDATES = ['bepinex'];
 
@@ -239,6 +243,30 @@ function InfoPanelWrap(props: { api: types.IExtensionApi, profileId: string }) {
   );
 }
 
+function streamVersion(filePath: string): Bluebird<any> {
+  const stream = fs.createReadStream(filePath, {start: 0, end: 31});
+
+  return new Bluebird((resolve, reject) => {
+    stream.on('data', chunk => {
+      const ver = chunk.toString()
+        .replace('ttw', '')
+        .match((/([a-zA-Z0-9 \(\)]*)/g));
+      return (ver)
+        ? resolve(ver.join('').trim())
+        : reject(new util.DataInvalid('Failed to find version'));
+    });
+
+    stream.on('error', () => reject(new util.DataInvalid('Failed to find version')));
+  })
+  // Destroy the file stream.
+  .finally(() => stream.destroy());
+}
+
+function resolveGameVersion(discoveryPath): Bluebird<string> {
+  const queryPath = path.join(discoveryPath, WORLD_GEN_REL_PATH);
+  return streamVersion(queryPath);
+}
+
 function main(context: types.IExtensionContext) {
   context.registerReducer(['settings', '7daystodie'], reducer);
   context.registerGame({
@@ -249,6 +277,7 @@ function main(context: types.IExtensionContext) {
     requiresCleanup: true,
     supportedTools: [],
     queryModPath: () => modsRelPath(),
+    getGameVersion: resolveGameVersion,
     logo: 'gameart.jpg',
     executable: gameExecutable,
     requiredFiles: [
