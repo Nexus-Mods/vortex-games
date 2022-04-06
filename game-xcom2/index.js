@@ -199,7 +199,6 @@ function validate(prev, cur) {
 }
 
 async function deserializeLoadOrder(api, gameId) {
-  return Promise.reject(new util.ProcessCanceled('The game could not be discovered.'))
   // Get the path to the game.
   const state = api.store.getState();
   const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', gameId], undefined);
@@ -304,7 +303,6 @@ async function deserializeLoadOrder(api, gameId) {
 }
 
 async function serializeLoadOrder(api, loadOrder, gameId) {
-  return Promise.reject(new util.ProcessCanceled('The game could not be discovered.'))
   // Get the game install folder.
   const state = api.store.getState();
   const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', gameId], undefined);
