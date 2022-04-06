@@ -338,6 +338,9 @@ function main(context) {
     context.api.events.on('mod-enabled', (profileId, modId) => {
       const state = context.api.store.getState();
       const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
+      if (discovery?.path === undefined) {
+        return;
+      }
 
       const profile = util.getSafe(state, ['persistent', 'profiles', profileId], undefined);
       if (!!profile && (profile.gameId === GAME_ID) && (_MODS_STATE.display.indexOf(modId) === -1)) {
