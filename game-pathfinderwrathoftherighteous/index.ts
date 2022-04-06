@@ -15,6 +15,19 @@ function setup(discovery) {
   return fs.ensureDirWritableAsync(path.join(discovery.path, 'Mods'));
 }
 
+async function resolveGameVersion(discoveryPath: string) {
+  const versionFilepath = path.join(discoveryPath, 'Wrath_Data', 'StreamingAssets', 'Version.info');
+  try {
+    const data = await fs.readFileAsync(versionFilepath, { encoding: 'utf8' });
+    const segments = data.split(' ');
+    return (segments[3]) 
+      ? Promise.resolve(segments[3])
+      : Promise.reject(new util.DataInvalid('Failed to resolve version'));
+  } catch (err) {
+    return Promise.reject(err);
+  }
+}
+
 function main(context) {
   context.requireExtension('modtype-umm');
   context.registerGame(
@@ -26,6 +39,7 @@ function main(context) {
       queryPath: findGame,
       queryModPath: () => 'Mods',
       executable: () => 'Wrath.exe',
+      getGameVersion: resolveGameVersion,
       requiredFiles: ['Wrath.exe'],
       environment: {
         SteamAPPId: STEAM_ID,
