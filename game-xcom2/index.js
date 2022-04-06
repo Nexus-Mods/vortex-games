@@ -199,10 +199,11 @@ function validate(prev, cur) {
 }
 
 async function deserializeLoadOrder(api, gameId) {
+  return Promise.reject(new util.ProcessCanceled('The game could not be discovered.'))
   // Get the path to the game.
   const state = api.store.getState();
-  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', gameId]);
-  if (!discovery || !discovery.path) return Promise.reject('The game could not be discovered.');
+  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', gameId], undefined);
+  if (!discovery?.path) return Promise.reject(new util.ProcessCanceled('The game could not be discovered.'));
 
   // Scan the mods folder for directories
   let folders = [];
@@ -303,10 +304,11 @@ async function deserializeLoadOrder(api, gameId) {
 }
 
 async function serializeLoadOrder(api, loadOrder, gameId) {
+  return Promise.reject(new util.ProcessCanceled('The game could not be discovered.'))
   // Get the game install folder.
   const state = api.store.getState();
-  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', gameId]);
-  if (!discovery || !discovery.path) return Promise.reject('The game could not be discovered.');
+  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', gameId], undefined);
+  if (!discovery?.path) return Promise.reject(new util.ProcessCanceled('The game could not be discovered.'));
   const optionsIni = path.join(discovery.path, optionsPath(gameId), MOD_OPTIONS);
 
   try {
