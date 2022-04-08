@@ -1,3 +1,4 @@
+import Bluebird from 'bluebird';
 import path from 'path';
 import { fs, log, selectors, types, util } from 'vortex-api';
 
@@ -147,6 +148,12 @@ const localAppData = (() => {
 })();
 
 const EXECUTABLE = path.join('CodeVein', 'Binaries', 'Win64', 'CodeVein-Win64-Shipping.exe');
+
+function getGameVersion(gamePath: string) {
+  const exeVersion = require('exe-version');
+  return Bluebird.resolve(exeVersion.getProductVersionLocalized(path.join(gamePath, EXECUTABLE)));
+}
+
 function main(context: types.IExtensionContext) {
   context.registerGame({
     id: GAME_ID,
@@ -158,6 +165,7 @@ function main(context: types.IExtensionContext) {
     queryModPath: () => modsRelPath(),
     logo: 'gameart.jpg',
     executable: () => EXECUTABLE,
+    getGameVersion,
     requiredFiles: [
       EXECUTABLE,
     ],
