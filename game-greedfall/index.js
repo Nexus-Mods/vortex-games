@@ -60,6 +60,11 @@ function installMod(files, destinationPath) {
   return Promise.resolve({ instructions });
 }
 
+function getGameVersion(gamePath) {
+  const exeVersion = require('exe-version');
+  return Promise.resolve(exeVersion.getProductVersionLocalized(path.join(gamePath, 'GreedFall.exe')));
+}
+
 
 
 const gameParameters = {
@@ -68,6 +73,7 @@ const gameParameters = {
   logo: 'gameart.jpg',
   mergeMods: true,
   queryPath: findGame,
+  getGameVersion,
   queryModPath: () => 'datalocal',
   executable: () => 'GreedFall.exe',
   requiredFiles: ['GreedFall.exe'],
