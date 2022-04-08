@@ -45,6 +45,16 @@ function modPath() {
 
 let tools = [];
 
+async function getGameVersion(gamePath) {
+  const skuInfo = await fs.readFileAsync(path.join(gamePath, 'game', 'bin', 'skuversion.txt'), { encoding: 'utf8' });
+  const gvLine = skuInfo.split('\n').find(line => line.startsWith('GameVersion'));
+  if (gvLine !== undefined) {
+    return gvLine.split('=')[1].trim();
+  } else {
+    throw new Error('failed to parse skuversion.txt');
+  }
+}
+
 function main(context) {
   context.registerGame({
     id: 'thesims3',
@@ -54,6 +64,7 @@ function main(context) {
     queryModPath: modPath,
     logo: 'gameart.jpg',
     executable: () => 'game/bin/TS3.exe',
+    getGameVersion,
     requiredFiles: [
       'game/bin/TS3.exe',
     ],
