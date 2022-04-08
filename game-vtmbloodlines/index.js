@@ -3,6 +3,8 @@ const path = require('path');
 const winapi = require('winapi-bindings');
 const { fs, util } = require('vortex-api');
 
+const { default: IniParser, WinapiFormat } = require('vortex-parse-ini');
+
 const GAME_ID = 'vampirebloodlines';
 const STEAM_ID = 2600;
 const GOG_ID = 1207659240;
@@ -55,6 +57,17 @@ function isUPModType(instructions) {
     .catch(() => Promise.resolve(false));
 }
 
+function getGameVersion(discoveryPath) {
+  const parser = new IniParser(new WinapiFormat());
+  return parser.read(path.join(discoveryPath, 'version.inf'))
+    .then((data) => {
+      const version = data?.data?.['Version Info']?.ExtVersion;
+      return (version)
+        ? Promise.resolve(version)
+        : Promise.reject(new util.DataInvalid('Invalid version file'))
+    });
+}
+
 function main(context) {
   _API = context.api;
   context.registerGame({
@@ -64,6 +77,7 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     requiresLauncher,
+    getGameVersion,
     queryModPath: () => 'Vampire',
     executable: () => 'Vampire.exe',
     requiredFiles: [
