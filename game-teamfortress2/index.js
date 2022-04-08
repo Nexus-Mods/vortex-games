@@ -6,6 +6,8 @@ const MOD_FILE_EXT = ".vpk";
 const STEAM_ID = 440;
 const GAME_ID = 'teamfortress2';
 
+const INFO_FILE = path.join('tf', 'steam.inf');
+
 function findGame() {
   return util.steam.findByAppId(STEAM_ID.toString())
     .then(game => game.gamePath);
@@ -58,6 +60,17 @@ function testSupportedContent(files, gameId) {
     requiredFiles: [],
   });
 }
+
+function getGameVersion(discoveryPath) {
+  return fs.readFileAsync(path.join(discoveryPath, INFO_FILE), { encoding: 'utf8' })
+    .then((data) => {
+      const match = data.match(/^ClientVersion=[0-9]*$/gm);
+      return (match?.[0] !== undefined)
+        ? Promise.resolve(match[0].replace('ClientVersion=', ''))
+        : Promise.reject(new util.DataInvalid('Failed to retrieve version'));
+    })
+}
+
 function main(context) {
   context.registerGame({
     id: GAME_ID,
@@ -67,6 +80,7 @@ function main(context) {
     queryPath: findGame,
     supportedTools: tools,
     queryModPath: () => path.join('tf', 'custom'),
+    getGameVersion,
     logo: 'gameart.jpg',
     executable: () => 'hl2.exe',
     requiredFiles: [
