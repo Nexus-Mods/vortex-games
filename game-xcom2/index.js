@@ -114,7 +114,8 @@ function main(context) {
     details: {
       steamAppId: STEAMAPP_ID,
       gogAppId: GOGAPP_ID,
-      nexusPageId: 'xcom2'
+      nexusPageId: 'xcom2',
+      compatibleDownloads: ['xcom2']
     },
   });
 
