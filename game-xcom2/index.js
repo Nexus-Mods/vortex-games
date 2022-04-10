@@ -272,10 +272,10 @@ async function deserializeLoadOrder(api, gameId) {
   try {
     const file = await fs.readFileAsync(optionsIni, 'utf8');
     const arr = file.split('\n');
-    const active = arr.filter(line => line.startsWith('ActiveMods='));
-    const names = active.map(mod => mod.replace('ActiveMods=', '').replace(/"/g,''));
+    const active = arr.filter(line => line.startsWith('ActiveMods=')).map(m => m.replace('ActiveMods=', ''));
+    const names = active.map(mod => mod.replace(/"/g,''));
     // Only shown enabled mods that actually have a folder.
-    enabledMods = names.filter(name => folders.includes(name));
+    enabledMods = names.filter(name => folders.includes(name) || workshopMods.includes(name));
   }
   catch(err) {
     if (err.code === 'ENOENT') log('info', `${MOD_OPTIONS} does not exist for ${gameId}`);
