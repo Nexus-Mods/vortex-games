@@ -4,21 +4,19 @@ const { default: IniParser, WinapiFormat } = require('vortex-parse-ini');
 
 const { MORROWIND_ID } = require('./constants');
 
-const deserializeDebouncer = new util.Debouncer(() => {
-  return Promise.resolve();
-}, 1000);
-
 async function validate(before, after) {
   return Promise.resolve();
 }
 
-async function deserializeLoadOrder(api) {
+async function deserializeLoadOrder(api, mods = undefined) {
   const state = api.getState();
   const discovery = selectors.discoveryByGame(state, MORROWIND_ID);
   if (discovery?.path === undefined) {
     return Promise.resolve([]);
   }
-  const mods = util.getSafe(state, ['persistent', 'mods', MORROWIND_ID], {});
+  if (mods === undefined) {
+    mods = util.getSafe(state, ['persistent', 'mods', MORROWIND_ID], {});
+  }
   const fileMap = Object.keys(mods).reduce((accum, iter) => {
     const plugins = mods[iter]?.attributes?.plugins;
     if (mods[iter]?.attributes?.plugins !== undefined) {
@@ -36,7 +34,7 @@ async function deserializeLoadOrder(api) {
     .map((file) => ({
       id: file.name,
       enabled: enabled.includes(file.name),
-      name: util.renderModName(fileMap[file.name]),
+      name: file.name,
       modId: fileMap[file.name],
     }));
 }
@@ -55,8 +53,18 @@ async function refreshPlugins(api) {
     if (!['.esp', '.esm'].includes(path.extname(fileName.toLocaleLowerCase()))) {
       continue;
     }
-    const stats = await fs.statAsync(path.join(dataDirectory, fileName));
-    pluginEntries.push({ name: fileName, mtime: stats.mtime });
+    let stats;
+    try {
+      stats = await fs.statAsync(path.join(dataDirectory, fileName));
+      pluginEntries.push({ name: fileName, mtime: stats.mtime });
+    } catch (err) {
+      if (err.code === 'ENOENT') {
+        // Probably a deployment event.
+        continue;
+      } else {
+        return Promise.reject(err);
+      }
+    }
   }
 
   return Promise.resolve(pluginEntries);
@@ -92,7 +100,7 @@ async function updatePluginTimestamps(dataPath, plugins) {
       .catch(err => err.code === 'ENOENT'
         ? Promise.resolve()
         : Promise.reject(err));
-  }).then(() => undefined);
+  });
 }
 
 async function serializeLoadOrder(api, order) {
@@ -105,8 +113,13 @@ async function serializeLoadOrder(api, order) {
   const iniFilePath = path.join(discovery.path, 'Morrowind.ini');
   const dataDirectory = path.join(discovery.path, 'Data Files');
   const enabled = order.filter(loEntry => loEntry.enabled === true).map(loEntry => loEntry.id);
-  await updatePluginOrder(iniFilePath, enabled);
-  await updatePluginTimestamps(dataDirectory, enabled);
+  try {
+    await updatePluginOrder(iniFilePath, enabled);
+    await updatePluginTimestamps(dataDirectory, order.map(loEntry => loEntry.id));
+  } catch (err) {
+    api.showErrorNotification('Failed to save', err);
+    return Promise.reject(err);
+  }
   return Promise.resolve();
 }
 
