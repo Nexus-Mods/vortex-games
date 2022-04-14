@@ -108,7 +108,8 @@ function main(context) {
       const now = new Date();
       return Promise.map(deployment[''], file =>
         fs.utimesAsync(path.join(modDeployPath, file.relPath), now, now))
-          .catch(err => context.api.showErrorNotification('Failed to change file access/modified time', err));
+          .catch(err => context.api.showErrorNotification(
+            'Failed to change file access/modified time', err, { allowReport: false }));
     });
   });
 
