@@ -153,7 +153,9 @@ async function installSubModules(files, destinationPath) {
     const modName = (segments.length > 1)
       ? segments[segments.length - 2]
       : subModId;
-
+    if (modName === undefined) {
+      return Promise.reject(new util.DataInvalid('Invalid Submodule.xml file - inform the mod author'));
+    }
     subModIds.push(subModId);
     const idx = modFile.toLowerCase().indexOf(SUBMOD_FILE);
     // Filter the mod files for this specific submodule.
