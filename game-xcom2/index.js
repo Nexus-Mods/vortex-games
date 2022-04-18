@@ -13,6 +13,7 @@ const MOD_OPTIONS = 'DefaultModOptions.ini';
 
 const STEAMAPP_ID = '268500'; //WOTC is 593380 but it's the same folder so we don't need it.
 const GOGAPP_ID = '1482002159'; //WOTC is 1414942413 but it's the same folder so we don't need it.
+const EPICAPP_ID = '3be3c4d681bc46b3b8b26c5df3ae0a18';
 
 const optionsPath = (gameId) => {
   switch(gameId) {
@@ -43,7 +44,7 @@ https://www.gog.com/forum/xcom_2/actually_where_do_mods_go_in_this_version/page1
 */
 
 function findGame() {
-  return util.GameStoreHelper.findByAppId([STEAMAPP_ID, GOGAPP_ID])
+  return util.GameStoreHelper.findByAppId([STEAMAPP_ID, GOGAPP_ID, EPICAPP_ID])
       .then(game => game.gamePath);
 }
 
