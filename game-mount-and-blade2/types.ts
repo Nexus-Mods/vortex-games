@@ -1,40 +1,7 @@
 import { types } from 'vortex-api';
 
-import ComMetadataManager from './ComMetadataManager';
-
-// Surely "LoadBeforeThis" would mean we need a regular DependedModule entry
-//  and "LoadAfterThis" means we add nothing at all ?
-export type OrderType = 'LoadAfterThis' | 'LoadBeforeThis';
-
-export interface IDependency {
-  // The id of the module the mod depends on.
-  id: string;
-
-  // How we order it.
-  order: OrderType;
-
-  // Heard of the DependentVersion attribute ?
-  version: string;
-
-  // We need to load our mod Before/After this module (but not really)
-  optional: boolean;
-
-  // Signifies that this "dependency" is incompatible
-  //  with the installed mod.
-  incompatible: boolean;
-
-  requiredVersion?: string;
-
-  currentVersion?: string;
-}
-
-export interface ISubModule {
-  // The id of this module
-  id: string;
-
-  // The dependency array
-  dependencies: IDependency[];
-}
+import { BannerlordModuleManager } from './bmm/index';
+import * as bmmTypes from './bmm/lib/types';
 
 export interface IProps {
   state: types.IState;
@@ -44,9 +11,7 @@ export interface IProps {
 }
 
 export interface ISortProps {
-  subModIds: string[];
-  allowLocked: boolean;
-  metaManager: ComMetadataManager;
+  bmm: BannerlordModuleManager;
   loadOrder?: any;
 }
 
@@ -63,25 +28,9 @@ export interface ILoadOrder {
   [modId: string]: ILoadOrderEntry;
 }
 
-export interface IInvalidReasons {
-  cyclic: string[];
-  missing: string[];
-  incompatibleDeps: IDependency[];
+export interface IModuleInfoExtendedExt extends bmmTypes.ModuleInfoExtended {
+  vortexId?: string;
 }
-
-export interface ISubModCacheEntry {
-  subModId: string;
-  subModName: string;
-  subModVer: string;
-  subModFile: string;
-  vortexId: string;
-  isOfficial: boolean;
-  isLocked: boolean;
-  isMultiplayer: boolean;
-  dependencies: IDependency[];
-  invalid: IInvalidReasons;
-}
-
-export interface ISubModCache {
-  [subModId: string]: ISubModCacheEntry;
+export interface IModuleCache {
+  [subModId: string]: IModuleInfoExtendedExt;
 }

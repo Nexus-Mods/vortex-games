@@ -2,7 +2,7 @@ const React = require('react');
 const BS = require('react-bootstrap');
 const { connect } = require('react-redux');
 const path = require('path');
-const { actions, ContextMenu, FlexLayout, tooltip, selectors, util } = require('vortex-api');
+const { actions, FlexLayout, tooltip, selectors, util } = require('vortex-api');
 
 const { getValidationInfo } = require('./subModCache');
 
@@ -12,7 +12,6 @@ class CustomItemRenderer extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      contextMenuVisible: false,
       offset: { x: 0, y: 0 },
     }
     this.mMounted = false;
@@ -20,7 +19,6 @@ class CustomItemRenderer extends React.Component {
     this.renderAddendum = this.renderAddendum.bind(this);
     this.renderInvalidEntry = this.renderInvalidEntry.bind(this);
     this.renderEntry = this.renderEntry.bind(this);
-    this.renderContextMenu = this.renderContextMenu.bind(this);
     this.renderOpenDirButton = this.renderOpenDirButton.bind(this);
     this.renderIncompatibleIcon = this.renderIncompatibleIcon.bind(this);
   }
@@ -37,11 +35,6 @@ class CustomItemRenderer extends React.Component {
     // Extra stuff we want to add to the LO entry.
     //  Currently renders the open directory button for
     const { item, order } = this.props;
-    const isLocked = !!order[item.id]?.locked;
-
-    const renderLock = () => (isLocked)
-      ? React.createElement(tooltip.Icon, { name: 'locked', tooltip: 'Entry is locked in position' })
-      : null;
 
     const renderExternalIcon = () => this.isExternal(item.id)
       ? React.createElement(tooltip.Icon, { name: 'dialog-info', tooltip: 'Not managed by Vortex' })
@@ -49,7 +42,6 @@ class CustomItemRenderer extends React.Component {
 
     const renderInfo = () => {
       return React.createElement(React.Fragment, {},
-        renderLock(),
         renderExternalIcon(),
         this.renderIncompatibleIcon(item),
       );
@@ -77,10 +69,9 @@ class CustomItemRenderer extends React.Component {
 
   renderEntry(item) {
     const { order } = this.props;
-    const isEnabled = !!order[item.id]?.locked || order[item.id].enabled;
     return React.createElement(BS.Checkbox, {
-      checked: isEnabled,
-      disabled: !!item?.locked,
+      checked: order[item.id].enabled,
+      disabled: false,
       onChange: this.onStatusChange
     }, item.name);
   }
@@ -94,44 +85,6 @@ class CustomItemRenderer extends React.Component {
       checked: false,
       disabled: true }, item.name, ' ', reasonElement());
   }
-
-  onLock = (lock) => {
-    const { profile, order, item, onSetLoadOrderEntry } = this.props;
-    const entry = {
-      pos: order[item.id].pos,
-      enabled: order[item.id].enabled,
-      locked: lock,
-    }
-
-    onSetLoadOrderEntry(profile.id, item.id, entry);
-  }
-
-  renderContextMenu() {
-    const { order, item } = this.props;
-    const { contextMenuVisible, offset } = this.state;
-    return React.createElement(ContextMenu, {
-      key: 'mnb2-context-menu',
-      position: offset,
-      visible: !!contextMenuVisible,
-      onHide: () => {
-        if (this.mMounted) {
-          this.setState({ contextMenuVisible: false });
-        }
-      },
-      instanceId: item.id,
-      actions: [
-        { title: 'Lock', show: (order[item.id]?.locked === false), action: () => this.onLock(true) },
-        { title: 'Unlock', show: !!order[item.id]?.locked, action: () => this.onLock(false) },
-      ],
-    })
-  }
-
-  onRightClick = (evt) => {
-    this.setState({
-      contextMenuVisible: !this.state.contextMenuVisible,
-      offset: { x: evt.clientX, y: evt.clientY },
-    });
-  };
 
   render() {
     const { order, className, item } = this.props;
@@ -150,7 +103,6 @@ class CustomItemRenderer extends React.Component {
       ref: this.setRef,
       key,
       style: { height: '48px' },
-      onContextMenu: this.onRightClick,
     },
     React.createElement(FlexLayout, { type: 'row', height: '20px' },
       React.createElement(FlexLayout.Flex, {
@@ -174,39 +126,35 @@ class CustomItemRenderer extends React.Component {
           display: 'flex',
           justifyContent: 'flex-end',
         }
-      }, this.renderAddendum()), this.renderContextMenu()));
+      }, this.renderAddendum())));
     return result;
   }
 
   isIncompabile(item) {
-    const infoObj = getValidationInfo(item.id);
+    const infoObj = getValidationInfo(this.props.moduleManager, item.id);
     return (infoObj.incompatibleDeps.length > 0);
   }
 
   isItemInvalid(item) {
-    const infoObj = getValidationInfo(item.id);
-    return ((infoObj.missing.length > 0) || (infoObj.cyclic.length > 0));
+    const infoObj = getValidationInfo(this.props.moduleManager, item.id);
+    return (infoObj.missing.length > 0);
   }
 
   getItemIncompatibilities(item) {
     if (item.official === true) {
       return [];
     }
-    const infoObj = getValidationInfo(item.id);
+    const infoObj = getValidationInfo(this.props.moduleManager, item.id);
     return infoObj?.incompatible || [];
   }
 
   itemInvalidReason(item) {
-    const infoObj = getValidationInfo(item.id);
+    const infoObj = getValidationInfo(this.props.moduleManager, item.id);
 
     if (infoObj.missing.length > 0) {
       // This mod is missing a dependency, that's
       //  somewhat more pressing at the moment.
       return `Missing dependencies: ${infoObj.missing.join(';')}`;
-    }
-
-    if (infoObj.cyclic.length > 0) {
-      return `Cyclic dependencies: ${infoObj.cyclic.join(';')}`;
     }
 
     return undefined;
@@ -244,7 +192,7 @@ class CustomItemRenderer extends React.Component {
     const entry = {
       pos: order[item.id].pos,
       enabled: evt.target.checked,
-      locked: order[item.id]?.locked !== undefined ? order[item.id].locked : false,
+      locked: false,
     }
 
     onSetLoadOrderEntry(profile.id, item.id, entry);

@@ -12,6 +12,5 @@ export const BANNERLORD_EXEC = path.join('bin', 'Win64_Shipping_Client', 'Banner
 export const MODULES = 'Modules';
 
 export const OFFICIAL_MODULES = new Set(['Native', 'CustomBattle', 'SandBoxCore', 'Sandbox', 'StoryMode']);
-export const LOCKED_MODULES = new Set([]);
 
 export const I18N_NAMESPACE = 'game-mount-and-blade2';

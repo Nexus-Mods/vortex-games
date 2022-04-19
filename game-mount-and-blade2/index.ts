@@ -3,26 +3,28 @@ import { Promise as Bluebird } from 'bluebird';
 import * as React from 'react';
 import * as BS from 'react-bootstrap';
 
+import { BannerlordModuleManager } from './bmm/index';
+
 import getVersion from 'exe-version';
 
 import path from 'path';
-import semver from 'semver';
+import semver, { sort } from 'semver';
 import { actions, FlexLayout, fs, log, selectors, types, util } from 'vortex-api';
 import { getElementValue, getXMLData, refreshGameParams, walkAsync } from './util';
 
 import {
-  BANNERLORD_EXEC, GAME_ID, I18N_NAMESPACE, LOCKED_MODULES,
-  MODULES, OFFICIAL_MODULES, SUBMOD_FILE
+  BANNERLORD_EXEC, GAME_ID, I18N_NAMESPACE,
+  MODULES, OFFICIAL_MODULES, SUBMOD_FILE,
 } from './common';
 import CustomItemRenderer from './customItemRenderer';
 import { migrate026, migrate045 } from './migrations';
 
-import ComMetadataManager from './ComMetadataManager';
-import { getCache, getLauncherData, isInvalid, parseLauncherData, refreshCache } from './subModCache';
-import { ISortProps, ISubModCache } from './types';
 import { genCollectionsData, parseCollectionsData } from './collections/collections';
-import CollectionsDataView from './views/CollectionsDataView';
 import { ICollectionsData } from './collections/types';
+import { getCache, refreshCache } from './subModCache';
+import { ILoadOrder, IModuleCache, IModuleInfoExtendedExt, ISortProps } from './types';
+import CollectionsDataView from './views/CollectionsDataView';
+
 import { createAction } from 'redux-act';
 
 import Settings from './views/Settings';
@@ -48,7 +50,7 @@ const setSortOnDeploy = createAction('MNB2_SET_SORT_ON_DEPLOY',
 const reducer: types.IReducerSpec = {
   reducers: {
     [setSortOnDeploy as any]: (state, payload) =>
-      util.setSafe(state, ['sortOnDeploy', payload.profileId], payload.sort)
+      util.setSafe(state, ['sortOnDeploy', payload.profileId], payload.sort),
   },
   defaults: {
     sortOnDeploy: {},
@@ -217,7 +219,10 @@ function setModdingTool(context: types.IExtensionContext,
   context.api.store.dispatch(actions.addDiscoveredTool(GAME_ID, toolId, tool, false));
 }
 
-async function prepareForModding(context, discovery, metaManager: ComMetadataManager) {
+async function prepareForModding(context, discovery, bmm: BannerlordModuleManager) {
+  if (bmm === undefined) {
+    bmm = await BannerlordModuleManager.createAsync();
+  }
   // Quickly ensure that the official Launcher is added.
   ensureOfficialLauncher(context, discovery);
   try {
@@ -241,35 +246,12 @@ async function prepareForModding(context, discovery, metaManager: ComMetadataMan
 
   // Check if we've already set the load order object for this profile
   //  and create it if we haven't.
-  return startSteam().then(() => parseLauncherData()).then(async () => {
+  return startSteam().then(async () => {
     try {
-      await refreshCache(context, metaManager);
-      const state = context.api.store.getState();
-      const lastActive = selectors.lastActiveProfileForGame(state, GAME_ID);
-      await metaManager.updateDependencyMap(lastActive);
+      await refreshCache(context, bmm);
     } catch (err) {
       return Promise.reject(err);
     }
-
-    // We're going to do a quick tSort at this point - not going to
-    //  change the user's load order, but this will highlight any
-    //  cyclic or missing dependencies.
-    const CACHE = getCache() ?? {};
-    const modIds = Object.keys(CACHE);
-    const sorted = tSort({ subModIds: modIds, allowLocked: true, metaManager });
-  })
-  .catch(err => {
-    if (err instanceof util.NotFound) {
-      context.api.showErrorNotification('Failed to find game launcher data',
-        'Please run the game at least once through the official game launcher and '
-      + 'try again', { allowReport: false });
-      return Promise.resolve();
-    } else if (err instanceof util.ProcessCanceled) {
-      context.api.showErrorNotification('Failed to find game launcher data',
-        err, { allowReport: false });
-    }
-
-    return Promise.reject(err);
   })
   .finally(() => {
     const state = context.api.store.getState();
@@ -284,130 +266,11 @@ async function prepareForModding(context, discovery, metaManager: ComMetadataMan
   });
 }
 
-function tSort(sortProps: ISortProps, test: boolean = false) {
-  const { subModIds, allowLocked, loadOrder, metaManager } = sortProps;
-  const CACHE = getCache();
-  // Topological sort - we need to:
-  //  - Identify cyclic dependencies.
-  //  - Identify missing dependencies.
-  //  - We will try to identify incompatible dependencies (version-wise)
-
-  // These are manually locked mod entries.
-  const lockedSubMods = (!!loadOrder)
-    ? subModIds.filter(subModId => {
-      const entry = CACHE[subModId];
-      return (!!entry)
-        ? !!loadOrder[entry.vortexId]?.locked
-        : false;
-    })
-    : [];
-  const alphabetical = subModIds.filter(subMod => !lockedSubMods.includes(subMod))
-                                .sort();
-  const graph = alphabetical.reduce((accum, entry) => {
-    const depIds = [...CACHE[entry].dependencies].map(dep => dep.id);
-    // Create the node graph.
-    accum[entry] = depIds.sort();
-    return accum;
-  }, {});
-
-  // Will store the final LO result
-  const result = [];
-
-  // The nodes we have visited/processed.
-  const visited = [];
-
-  // The nodes which are still processing.
-  const processing = [];
-
-  const topSort = (node, isOptional = false) => {
-    if (isOptional && !Object.keys(graph).includes(node)) {
-      visited[node] = true;
-      return;
-    }
-    processing[node] = true;
-    const dependencies = (!!allowLocked)
-      ? graph[node]
-      : graph[node].filter(element => !LOCKED_MODULES.has(element));
-
-    for (const dep of dependencies) {
-      if (processing[dep]) {
-        // Cyclic dependency detected - highlight both mods as invalid
-        //  within the cache itself - we also need to highlight which mods.
-        CACHE[node].invalid.cyclic.push(dep);
-        CACHE[dep].invalid.cyclic.push(node);
-
-        visited[node] = true;
-        processing[node] = false;
-        continue;
-      }
-
-      const incompatibleDeps = CACHE[node].invalid.incompatibleDeps;
-      const incDep = incompatibleDeps.find(d => d.id === dep);
-      if (Object.keys(graph).includes(dep) && (incDep === undefined)) {
-        const depVer = CACHE[dep].subModVer;
-        const depInst = CACHE[node].dependencies.find(d => d.id === dep);
-        try {
-          const match = semver.satisfies(depInst.version, depVer);
-          if (!match && !!depInst?.version && !!depVer) {
-            CACHE[node].invalid.incompatibleDeps.push({
-              id: dep,
-              requiredVersion: depInst.version,
-              currentVersion: depVer,
-              incompatible: depInst.incompatible,
-              optional: depInst.optional,
-              order: depInst.order,
-              version: depInst.version,
-            });
-          }
-        } catch (err) {
-          // Ok so we didn't manage to compare the versions, we log this and
-          //  continue.
-          log('debug', 'failed to compare versions', err);
-        }
-      }
-
-      const optional = metaManager.isOptional(node, dep);
-      if (!visited[dep] && !lockedSubMods.includes(dep)) {
-        if (!Object.keys(graph).includes(dep) && !optional) {
-          CACHE[node].invalid.missing.push(dep);
-        } else {
-          topSort(dep, optional);
-        }
-      }
-    }
-
-    processing[node] = false;
-    visited[node] = true;
-
-    if (!isInvalid(node)) {
-      result.push(node);
-    }
-  };
-
-  for (const node in graph) {
-    if (!visited[node] && !processing[node]) {
-      topSort(node);
-    }
-  }
-
-  if (allowLocked) {
-    return result;
-  }
-
-  // Proper topological sort dictates we simply return the
-  //  result at this point. But, mod authors want modules
-  //  with no dependencies to bubble up to the top of the LO.
-  //  (This will only apply to non locked entries)
-  const subModsWithNoDeps = result.filter(dep => (graph[dep].length === 0)
-    || (graph[dep].find(d => !LOCKED_MODULES.has(d)) === undefined)).sort() || [];
-  const tamperedResult = [].concat(subModsWithNoDeps,
-    result.filter(entry => !subModsWithNoDeps.includes(entry)));
-  lockedSubMods.forEach(subModId => {
-    const pos = loadOrder[CACHE[subModId].vortexId].pos;
-    tamperedResult.splice(pos, 0, [subModId]);
-  });
-
-  return tamperedResult;
+function tSort(sortProps: ISortProps) {
+  const { bmm } = sortProps;
+  const CACHE: IModuleCache = getCache();
+  const sorted = bmm.sort(Object.values(CACHE));
+  return sorted;
 }
 
 function isExternal(context, subModId) {
@@ -426,7 +289,7 @@ function isExternal(context, subModId) {
 let refreshFunc;
 async function refreshCacheOnEvent(context: types.IExtensionContext,
                                    profileId: string,
-                                   metaManager: ComMetadataManager) {
+                                   bmm: BannerlordModuleManager) {
   if (profileId === undefined) {
     return Promise.resolve();
   }
@@ -439,11 +302,8 @@ async function refreshCacheOnEvent(context: types.IExtensionContext,
     //  than the currently active one. Not going to continue.
     return Promise.resolve();
   }
-
-  await metaManager.updateDependencyMap(profileId);
-
   try {
-    await refreshCache(context, metaManager);
+    await refreshCache(context, bmm);
   } catch (err) {
     // ProcessCanceled means that we were unable to scan for deployed
     //  subModules, probably because game discovery is incomplete.
@@ -457,152 +317,45 @@ async function refreshCacheOnEvent(context: types.IExtensionContext,
   const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profileId], {});
 
   if (util.getSafe(state, ['settings', 'mountandblade2', 'sortOnDeploy', activeProfile.id], true)) {
-    return sortImpl(context, metaManager);
+    return sortImpl(context, bmm);
   } else {
-    // We're going to do a quick tSort at this point - not going to
-    //  change the user's load order, but this will highlight any
-    //  cyclic or missing dependencies.
-    const CACHE = getCache();
-    const modIds = Object.keys(CACHE);
-    const sortProps: ISortProps = {
-      subModIds: modIds,
-      allowLocked: true,
-      loadOrder,
-      metaManager,
-    };
-    const sorted = tSort(sortProps, true);
-
     if (refreshFunc !== undefined) {
       refreshFunc();
     }
-
     return refreshGameParams(context, loadOrder);
   }
 }
 
-async function preSort(context, items, direction, updateType, metaManager) {
+async function preSort(context, items, direction, updateType, bmm) {
   const state = context.api.store.getState();
   const activeProfile = selectors.activeProfile(state);
-  const CACHE = getCache();
-  if (activeProfile?.id === undefined || activeProfile?.gameId !== GAME_ID || !CACHE) {
+  if (activeProfile?.id === undefined || activeProfile?.gameId !== GAME_ID) {
     // Race condition ?
-    return items;
+    return Promise.resolve(items);
   }
-
-  let modIds = Object.keys(CACHE);
-  if (items.length > 0 && modIds.length === 0) {
-    // Cache hasn't been populated yet.
-    try {
-      // Refresh the cache.
-      await refreshCacheOnEvent(context, activeProfile.id, metaManager);
-      modIds = Object.keys(CACHE);
-    } catch (err) {
-      return Promise.reject(err);
-    }
-  }
-
-  // Locked ids are always at the top of the list as all
-  //  other modules depend on these.
-  let lockedIds = modIds.filter(id => CACHE[id].isLocked);
-
-  try {
-    // Sort the locked ids amongst themselves to ensure
-    //  that the game receives these in the right order.
-    const sortProps: ISortProps = {
-      subModIds: lockedIds,
-      allowLocked: true,
-      metaManager,
-    };
-    lockedIds = tSort(sortProps);
-  } catch (err) {
-    return Promise.reject(err);
-  }
-
-  // Create the locked entries.
-  const lockedItems = lockedIds.map(id => ({
-    id: CACHE[id].vortexId,
-    name: CACHE[id].subModName,
-    imgUrl: `${__dirname}/gameart.jpg`,
-    locked: true,
-    official: OFFICIAL_MODULES.has(id),
-  }));
-
-  const LAUNCHER_DATA = getLauncherData();
-
-  // External ids will include official modules as well but not locked entries.
-  const externalIds = modIds.filter(id => (!CACHE[id].isLocked) && (CACHE[id].vortexId === id));
-  const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
-  const LOkeys = ((Object.keys(loadOrder).length > 0)
-    ? Object.keys(loadOrder)
-    : LAUNCHER_DATA.singlePlayerSubMods.map(mod => mod.subModId));
-
-  // External modules that are already in the load order.
-  const knownExt = externalIds.filter(id => LOkeys.includes(id)) || [];
-
-  // External modules which are new and have yet to be added to the LO.
-  const unknownExt = externalIds.filter(id => !LOkeys.includes(id)) || [];
-
-  items = items.filter(item => {
-    // Remove any lockedIds, but also ensure that the
-    //  entry can be found in the cache. If it's not in the
-    //  cache, this may mean that the submod xml file failed
-    //  parse-ing and therefore should not be displayed.
-    const isLocked = lockedIds.includes(item.id);
-    const hasCacheEntry = Object.keys(CACHE).find(key =>
-      CACHE[key].vortexId === item.id) !== undefined;
-    return !isLocked && hasCacheEntry;
-  });
-
-  const posMap = {};
-  let nextAvailable = LOkeys.length;
-  const getNextPos = (loId) => {
-    if (LOCKED_MODULES.has(loId)) {
-      return Array.from(LOCKED_MODULES).indexOf(loId);
-    }
-
-    if (posMap[loId] === undefined) {
-      posMap[loId] = nextAvailable;
-      return nextAvailable++;
-    } else {
-      return posMap[loId];
-    }
-  };
-
-  knownExt.map(key => ({
-    id: CACHE[key].vortexId,
-    name: CACHE[key].subModName,
-    imgUrl: `${__dirname}/gameart.jpg`,
-    external: isExternal(context, CACHE[key].vortexId),
-    official: OFFICIAL_MODULES.has(key),
-  }))
-    // tslint:disable-next-line: max-line-length
-    .sort((a, b) => (loadOrder[a.id]?.pos || getNextPos(a.id)) - (loadOrder[b.id]?.pos || getNextPos(b.id)))
-    .forEach(known => {
-      // If this a known external module and is NOT in the item list already
-      //  we need to re-insert in the correct index as all known external modules
-      //  at this point are actually deployed inside the mods folder and should
-      //  be in the items list!
-      const diff = (LOkeys.length) - (LOkeys.length - Array.from(LOCKED_MODULES).length);
-      if (items.find(item => item.id === known.id) === undefined) {
-        const pos = loadOrder[known.id]?.pos;
-        const idx = (pos !== undefined) ? (pos - diff) : (getNextPos(known.id) - diff);
-        items.splice(idx, 0, known);
-      }
-    });
-
-  const unknownItems = [].concat(unknownExt)
-    .map(key => ({
-      id: CACHE[key].vortexId,
-      name: CACHE[key].subModName,
+  const CACHE = getCache();
+  if (Object.keys(CACHE).length !== items.length) {
+    const displayItems = Object.values(CACHE).map(iter => ({
+      id: iter.id,
+      name: iter.name,
       imgUrl: `${__dirname}/gameart.jpg`,
-      external: isExternal(context, CACHE[key].vortexId),
-      official: OFFICIAL_MODULES.has(key),
+      external: isExternal(context, iter.id),
+      official: iter.isOfficial,
     }));
-
-  const preSorted = [].concat(lockedItems, items, unknownItems);
-  return (direction === 'descending')
-    ? Promise.resolve(preSorted.reverse())
-    : Promise.resolve(preSorted);
+    return Promise.resolve(displayItems);
+  } else {
+    let ordered = [];
+    if (updateType !== 'drag-n-drop') {
+      const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
+      ordered = items.filter(item => loadOrder[item.id] !== undefined)
+                          .sort((lhs, rhs) => loadOrder[lhs.id].pos - loadOrder[rhs.id].pos);
+      const unOrdered = items.filter(item => loadOrder[item.id] === undefined);
+      ordered = [].concat(ordered, unOrdered);
+    } else {
+      ordered = items;
+    }
+    return Promise.resolve(ordered);
+  }
 }
 
 function infoComponent(context, props) {
@@ -638,9 +391,7 @@ function infoComponent(context, props) {
                                       + 'Most - but not all mods - come with or need a SubModule.xml file.', { ns: I18N_NAMESPACE })),
         React.createElement('li', {}, t('Hit the deploy button whenever you install and enable a new mod.', { ns: I18N_NAMESPACE })),
         React.createElement('li', {}, t('The game will not launch unless the game store (Steam, Epic, etc) is started beforehand. If you\'re getting the '
-                                      + '"Unable to Initialize Steam API" error, restart Steam.', { ns: I18N_NAMESPACE })),
-        React.createElement('li', {}, t('Right clicking an entry will open the context menu which can be used to lock LO entries into position; entry will '
-                                      + 'be ignored by auto-sort maintaining its locked position.', { ns: I18N_NAMESPACE })))));
+                                      + '"Unable to Initialize Steam API" error, restart Steam.', { ns: I18N_NAMESPACE })))));
 }
 
 async function resolveGameVersion(discoveryPath: string) {
@@ -662,20 +413,7 @@ async function resolveGameVersion(discoveryPath: string) {
 }
 
 let _IS_SORTING = false;
-function sortImpl(context: types.IExtensionContext, metaManager: ComMetadataManager) {
-  const CACHE = getCache();
-  if (!CACHE) {
-    log('error', 'Failed to sort mods', { reason: 'Cache is unavailable' });
-    _IS_SORTING = false;
-    return;
-  }
-  const modIds = Object.keys(CACHE);
-  const lockedIds = modIds.filter(id => CACHE[id].isLocked);
-  const subModIds = modIds.filter(id => !CACHE[id].isLocked);
-
-  let sortedLocked = [];
-  let sortedSubMods = [];
-
+async function sortImpl(context: types.IExtensionContext, bmm: BannerlordModuleManager) {
   const state = context.api.store.getState();
   const activeProfile = selectors.activeProfile(state);
   if (activeProfile?.id === undefined) {
@@ -688,31 +426,31 @@ function sortImpl(context: types.IExtensionContext, metaManager: ComMetadataMana
 
   const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
 
+  let sorted: IModuleInfoExtendedExt[];
   try {
-    sortedLocked = tSort({ subModIds: lockedIds, allowLocked: true, metaManager });
-    sortedSubMods = tSort({ subModIds, allowLocked: false, loadOrder, metaManager }, true);
+    await refreshCache(context, bmm);
+    sorted = tSort({ loadOrder, bmm });
   } catch (err) {
     context.api.showErrorNotification('Failed to sort mods', err);
     return;
   }
 
-  const newOrder = [].concat(sortedLocked, sortedSubMods).reduce((accum, id, idx) => {
-    const vortexId = CACHE[id].vortexId;
-    const newEntry = {
+  const newOrder: ILoadOrder = sorted.reduce((accum: ILoadOrder,
+                                              mod: IModuleInfoExtendedExt,
+                                              idx: number) => {
+    if (mod === undefined) {
+      return accum;
+    }
+    accum[mod.vortexId || mod.id] = {
       pos: idx,
-      enabled: CACHE[id].isOfficial
-        ? true
-        : (!!loadOrder[vortexId])
-          ? loadOrder[vortexId].enabled
-          : true,
-      locked: (loadOrder[vortexId]?.locked === true),
+      enabled: loadOrder[mod.vortexId || mod.id]?.enabled || true,
+      external: isExternal(context, mod.id),
+      data: mod,
     };
-
-    accum[vortexId] = newEntry;
     return accum;
   }, {});
 
-  context.api.store.dispatch(actions.setLoadOrder(activeProfile.id, newOrder));
+  context.api.store.dispatch(actions.setLoadOrder(activeProfile.id, newOrder as any));
   return refreshGameParams(context, newOrder)
     .then(() => context.api.sendNotification({
       id: 'mnb2-sort-finished',
@@ -724,6 +462,7 @@ function sortImpl(context: types.IExtensionContext, metaManager: ComMetadataMana
 
 function main(context) {
   context.registerReducer(['settings', 'mountandblade2'], reducer);
+  let bmm: BannerlordModuleManager;
   (context.registerSettings as any)('Interface', Settings, () => ({
     t: context.api.translate,
     onSetSortOnDeploy: (profileId: string, sort: boolean) =>
@@ -734,7 +473,6 @@ function main(context) {
     return profile !== undefined && profile?.gameId === GAME_ID;
   }, 51);
 
-  const metaManager = new ComMetadataManager(context.api);
   context.registerGame({
     id: GAME_ID,
     name: 'Mount & Blade II:\tBannerlord',
@@ -744,7 +482,7 @@ function main(context) {
     getGameVersion: resolveGameVersion,
     logo: 'gameart.jpg',
     executable: () => BANNERLORD_EXEC,
-    setup: (discovery) => prepareForModding(context, discovery, metaManager),
+    setup: (discovery) => prepareForModding(context, discovery, bmm),
     requiredFiles: [
       BANNERLORD_EXEC,
     ],
@@ -782,9 +520,12 @@ function main(context) {
     noCollectionGeneration: true,
     gameArtURL: `${__dirname}/gameart.jpg`,
     preSort: (items, direction, updateType) =>
-      preSort(context, items, direction, updateType, metaManager),
+      preSort(context, items, direction, updateType, bmm),
     callback: (loadOrder) => refreshGameParams(context, loadOrder),
-    itemRenderer: CustomItemRenderer.default,
+    itemRenderer: (props) => React.createElement(CustomItemRenderer.default, {
+      ...props,
+      moduleManager: bmm,
+    }),
   });
 
   context.registerInstaller('bannerlordrootmod', 20, testRootMod, installRootMod);
@@ -801,24 +542,25 @@ function main(context) {
 
   context.registerAction('generic-load-order-icons', 200,
     _IS_SORTING ? 'spinner' : 'loot-sort', {}, 'Auto Sort', () => {
-      sortImpl(context, metaManager);
+      sortImpl(context, bmm);
   }, () => {
     const state = context.api.store.getState();
     const gameId = selectors.activeGameId(state);
     return (gameId === GAME_ID);
   });
 
-  context.once(() => {
+  context.once(async () => {
+    bmm = await BannerlordModuleManager.createAsync();
     context.api.onAsync('did-deploy', async (profileId, deployment) =>
-      refreshCacheOnEvent(context, profileId, metaManager));
+      refreshCacheOnEvent(context, profileId, bmm));
 
     context.api.onAsync('did-purge', async (profileId) =>
-      refreshCacheOnEvent(context, profileId, metaManager));
+      refreshCacheOnEvent(context, profileId, bmm));
 
     context.api.events.on('gamemode-activated', (gameMode) => {
       const state = context.api.getState();
       const prof = selectors.activeProfile(state);
-      refreshCacheOnEvent(context, prof?.id, metaManager);
+      refreshCacheOnEvent(context, prof?.id, bmm);
     });
 
     context.api.onAsync('added-files', async (profileId, files) => {
