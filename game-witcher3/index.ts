@@ -30,7 +30,7 @@ import { ModLimitPatcher } from './modLimitPatch';
 import { registerActions } from './iconbarActions';
 import { PriorityManager } from './priorityManager';
 
-import { installMixed, testSupportedMixed } from './installers';
+import { installMixed, testSupportedMixed, installDLCMod, testDLCMod } from './installers';
 import { restoreFromProfile, storeToProfile } from './mergeBackup';
 
 import { getMergedModNames } from './mergeInventoryParsing';
@@ -1134,6 +1134,7 @@ function main(context: types.IExtensionContext) {
     toBlue(testSupportedContent), toBlue(installContent));
   context.registerInstaller('witcher3menumodroot', 20,
     toBlue(testMenuModRoot as any), toBlue(installMenuMod));
+  context.registerInstaller('witcher3dlcmod', 60, testDLCMod as any, installDLCMod as any)
   context.registerInstaller('scriptmergerdummy', 15,
     toBlue(scriptMergerTest), toBlue((files) => scriptMergerDummyInstaller(context, files)));
 

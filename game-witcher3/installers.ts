@@ -4,6 +4,55 @@ import { CONFIG_MATRIX_REL_PATH, GAME_ID } from './common';
 
 export type PrefixType = 'dlc' | 'mod';
 
+export function testDLCMod(files: string[], gameId: string): Promise<types.ISupportedResult> {
+  if (gameId !== GAME_ID) {
+    return Promise.resolve({ supported: false, requiredFiles: [] });
+  }
+
+  const nonDlcFile = files.find(file => !file.startsWith('dlc'));
+  return (nonDlcFile !== undefined)
+    ? Promise.resolve({ supported: false, requiredFiles: [] })
+    : Promise.resolve({ supported: true, requiredFiles: [] });
+}
+
+export function installDLCMod(files: string[]) {
+  const modNames = [];
+  const setModTypeInstr: types.IInstruction = {
+    type: 'setmodtype',
+    value: 'witcher3dlc',
+  };
+  const instructions: types.IInstruction[] = files.reduce((accum, iter) => {
+    if (path.extname(iter) === '') {
+      return accum;
+    }
+    const segments = iter.split(path.sep);
+    const properlyFormatted = segments.length > 2
+      ? (segments[0].toLowerCase() === 'dlc') && ((segments[2] || '').toLowerCase() === 'content')
+      : false;
+    const modName = properlyFormatted
+      ? segments[1]
+      : segments[0];
+    modNames.push(modName);
+    const destination = properlyFormatted
+      ? segments.slice(1).join(path.sep)
+      : segments.join(path.sep);
+    accum.push({
+      type: 'copy',
+      source: iter,
+      destination,
+    })
+    return accum;
+  },[ setModTypeInstr ]);
+
+  const modNamesAttr: types.IInstruction = {
+    type: 'attribute',
+    key: 'modComponents',
+    value: modNames,
+  };
+  instructions.push(modNamesAttr);
+  return Promise.resolve({ instructions });
+}
+
 export function testSupportedMixed(files: string[],
                                    gameId: string): Promise<types.ISupportedResult> {
   if (gameId !== GAME_ID) {
