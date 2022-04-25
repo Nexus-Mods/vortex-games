@@ -462,8 +462,12 @@ function getLatestLSLibMod(api: types.IExtensionApi) {
     if (mods[id].type === 'bg3-lslib-divine-tool') {
       const latestVer = util.getSafe(prev, ['attributes', 'version'], '0.0.0');
       const currentVer = util.getSafe(mods[id], ['attributes', 'version'], '0.0.0');
-      if (semver.gt(currentVer, latestVer)) {
-        prev = mods[id];
+      try {
+        if (semver.gt(currentVer, latestVer)) {
+          prev = mods[id];
+        }
+      } catch (err) {
+        log('warn', 'invalid mod version', { modId: id, version: currentVer });
       }
     }
     return prev;
