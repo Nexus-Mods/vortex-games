@@ -1,22 +1,34 @@
 import Bluebird from 'bluebird';
 import path from 'path';
-import { fs, log, selectors, types, util } from 'vortex-api';
-import { BannerlordModuleManager } from './bmm/index';
-import * as bmmTypes from './bmm/lib/types';
-import { GAME_ID, MODULES, OFFICIAL_MODULES, SUBMOD_FILE } from './common';
-import { IModuleCache, IModuleInfoExtendedExt } from './types';
+import { log, selectors, types, util } from 'vortex-api';
+import ComMetadataManager from './ComMetadataManager';
+import { GAME_ID, LOCKED_MODULES, MODULES,
+  OFFICIAL_MODULES, SUBMOD_FILE } from './common';
+import { IDependency, ISubModCache } from './types';
 import { getCleanVersion, getElementValue, getXMLData, walkAsync } from './util';
 
-let CACHE: IModuleCache = {};
+const XML_EL_MULTIPLAYER = 'MultiplayerModule';
+const LAUNCHER_DATA_PATH = path.join(util.getVortexPath('documents'), 'Mount and Blade II Bannerlord', 'Configs', 'LauncherData.xml');
+const LAUNCHER_DATA = {
+  singlePlayerSubMods: [],
+  multiplayerSubMods: [],
+};
+
+export function getLauncherData() {
+  return LAUNCHER_DATA;
+}
+
+let CACHE: ISubModCache = {};
 export function getCache() {
   return CACHE;
 }
 
 export async function refreshCache(context: types.IExtensionContext,
-                                   bmm: BannerlordModuleManager) {
+                                   metaManager: ComMetadataManager) {
   try {
+    CACHE = {};
     const subModuleFilePaths: string[] = await getDeployedSubModPaths(context);
-    CACHE = await getDeployedModData(context.api, subModuleFilePaths, bmm);
+    CACHE = await getDeployedModData(context, subModuleFilePaths, metaManager);
   } catch (err) {
     return Promise.reject(err);
   }
@@ -49,91 +61,242 @@ async function getDeployedSubModPaths(context: types.IExtensionContext) {
   return Promise.resolve(subModules);
 }
 
-async function getDeployedModData(api: types.IExtensionApi,
+async function getDeployedModData(context: types.IExtensionContext,
                                   subModuleFilePaths: string[],
-                                  bmm: BannerlordModuleManager) {
-  const state = api.getState();
-  const mods: { [modId: string]: types.IMod } = util.getSafe(state,
-    ['persistent', 'mods', GAME_ID], {});
-  const getVortexId = (subModId: string) => {
-    for (const mod of Object.values(mods)) {
-      const subModIds = util.getSafe(mod, ['attributes', 'subModIds'], []);
-      if (subModIds.includes(subModId)) {
-        return mod.id;
-      }
-    }
+                                  metaManager: ComMetadataManager) {
+  const state = context.api.getState();
+  const profileId = selectors.activeProfile(state)?.id;
+  if (profileId === undefined) {
     return undefined;
+  }
+  await metaManager.updateDependencyMap(profileId);
+  const managedIds = await getManagedIds(context);
+
+  return Bluebird.reduce(subModuleFilePaths, async (accum, subModFile: string) => {
+    try {
+      const getAttrValue = (node, attr) => node?.[attr]?.[0]?.$?.value;
+      const subModData = await getXMLData(subModFile);
+      const module = subModData?.Module;
+      const subModId = getAttrValue(module, 'Id');
+      const comDependencies = metaManager.getDependencies(subModId);
+      const subModVerData = getAttrValue(module, 'Version');
+      const subModVer = getCleanVersion(subModId, subModVerData);
+      const managedEntry = managedIds.find(entry => entry.subModId === subModId);
+      const isMultiplayer = getAttrValue(module, XML_EL_MULTIPLAYER) !== undefined;
+      const officialDepNodes = module?.DependedModules?.[0]?.DependedModule || [];
+      let dependencies: IDependency[] = [];
+      const getOfficialDepNodes = () => officialDepNodes
+        .filter(depNode => comDependencies.find(dep => dep.id === depNode?.$?.Id) === undefined)
+        .map(depNode => {
+        let depVersion;
+        const depId = depNode?.$?.Id;
+        try {
+          const unsanitized = depNode?.$?.DependentVersion;
+          depVersion = getCleanVersion(subModId, unsanitized);
+        } catch (err) {
+          // DependentVersion is an optional attribute, it's not a big deal if
+          //  it's missing.
+          log('debug', 'failed to resolve dependency version', { subModId, error: err.message });
+        }
+
+        const dependency: IDependency = {
+          id: depId,
+          incompatible: false,
+          optional: false,
+          order: 'LoadAfterThis',
+          version: depVersion,
+        };
+
+        return dependency;
+      });
+      try {
+        dependencies = (comDependencies.length > 0)
+          ? [].concat(getOfficialDepNodes(), comDependencies)
+          : getOfficialDepNodes();
+      } catch (err) {
+        log('debug', 'submodule has no dependencies or is invalid', err);
+      }
+      const subModName = getAttrValue(module, 'Name');
+
+      accum[subModId] = {
+        subModId,
+        subModName,
+        subModVer,
+        subModFile,
+        vortexId: !!managedEntry ? managedEntry.vortexId : subModId,
+        isOfficial: OFFICIAL_MODULES.has(subModId),
+        isLocked: LOCKED_MODULES.has(subModId),
+        isMultiplayer,
+        dependencies,
+        invalid: {
+          // Will hold the submod ids of any detected cyclic dependencies.
+          cyclic: [],
+
+          // Will hold the submod ids of any missing dependencies.
+          missing: [],
+
+          // Will hold the submod ids of supposedly incompatible dependencies (version-wise)
+          incompatibleDeps: [],
+        },
+      };
+    } catch (err) {
+      const errorMessage = 'Vortex was unable to parse: ' + subModFile + ';\n\n'
+                         + 'You can either inform the mod author and wait for fix, or '
+                         + 'you can use an online xml validator to find and fix the '
+                         + 'error yourself.';
+      context.api.showErrorNotification('Unable to parse submodule file',
+        errorMessage, { allowReport: false });
+      log('error', 'MNB2: parsing error', err);
+    }
+    return Promise.resolve(accum);
+  }, {});
+}
+
+export async function parseLauncherData() {
+  const createDataElement = (xmlNode) => {
+    if (xmlNode === undefined) {
+      return undefined;
+    }
+    return {
+      subModId: xmlNode?.Id[0],
+      enabled: xmlNode?.IsSelected[0] === 'true',
+    };
   };
 
-  const modules: { [subModId: string]: IModuleInfoExtendedExt } = {};
-  const invalidSubMods = [];
-  for (const subMod of subModuleFilePaths) {
-    const data = await fs.readFileAsync(subMod, { encoding: 'utf8' });
-    const module = bmm.getModuleInfo(data);
-    if (!module) {
-      invalidSubMods.push(subMod);
-      continue;
+  const launcherData = await getXMLData(LAUNCHER_DATA_PATH);
+  try {
+    const singlePlayerMods = launcherData?.UserData?.SingleplayerData?.[0]?.ModDatas?.[0]?.UserModData || [];
+    const multiPlayerMods = launcherData?.UserData?.MultiplayerData?.[0]?.ModDatas?.[0]?.UserModData || [];
+    LAUNCHER_DATA.singlePlayerSubMods = singlePlayerMods.reduce((accum, spm) => {
+      const dataElement = createDataElement(spm);
+      if (!!dataElement) {
+        accum.push(dataElement);
+      }
+      return accum;
+    }, []);
+    LAUNCHER_DATA.multiplayerSubMods = multiPlayerMods.reduce((accum, mpm) => {
+      const dataElement = createDataElement(mpm);
+      if (!!dataElement) {
+        accum.push(dataElement);
+      }
+      return accum;
+    }, []);
+  } catch (err) {
+    // This is potentially due to the game not being installed correctly
+    //  or perhaps the users are using a 3rd party launcher which overwrites
+    //  the default launcher configuration... Lets just default to the data
+    //  we expect and let the user deal with whatever is broken later on
+    //  his environment later.
+    log('error', 'failed to parse launcher data', err);
+    LAUNCHER_DATA.singlePlayerSubMods = [
+      { subModId: 'Native', enabled: true },
+      { subModId: 'SandBoxCore', enabled: true },
+      { subModId: 'CustomBattle', enabled: true },
+      { subModId: 'Sandbox', enabled: true },
+      { subModId: 'StoryMode', enabled: true },
+    ];
+    LAUNCHER_DATA.multiplayerSubMods = [];
+    return Promise.resolve();
+  }
+}
+
+async function getManagedIds(context: types.IExtensionContext) {
+  const state = context.api.store.getState();
+  const activeProfile = selectors.activeProfile(state);
+  if (activeProfile === undefined) {
+    // This is a valid use case if the gamemode
+    //  has failed activation.
+    return Promise.resolve([]);
+  }
+
+  const modState = util.getSafe(state,
+    ['persistent', 'profiles', activeProfile.id, 'modState'], {});
+  const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
+  const enabledMods = Object.keys(modState)
+    .filter(key => !!mods[key] && modState[key].enabled)
+    .map(key => mods[key]);
+
+  const invalidMods = [];
+  const installationDir = selectors.installPathForGame(state, GAME_ID);
+  if (installationDir === undefined) {
+    log('error', 'failed to get managed ids', 'undefined staging folder');
+    return Promise.resolve([]);
+  }
+  return Bluebird.reduce(enabledMods, async (accum, entry) => {
+    if (entry?.installationPath === undefined) {
+      // Invalid mod entry - skip it.
+      return Promise.resolve(accum);
     }
-    const vortexId = getVortexId(module.id);
-    modules[module.id] = {
-      ...module,
-      vortexId,
-    };
-  }
-
-  if (invalidSubMods.length > 0) {
-    api.showErrorNotification('Invalid submodule files - inform the mod authors',
-      Array.from(new Set(invalidSubMods)).join('\n'), { allowReport: false, id: 'invalidSubMods' });
-  }
-
-  return modules;
-}
-
-export function missingDependencies(bmm: BannerlordModuleManager, subMod: IModuleInfoExtendedExt) {
-  const depsFulfilled = bmm.areAllDependenciesOfModulePresent(Object.values(CACHE), subMod);
-  if (depsFulfilled) {
-    return false;
-  }
-
-  const subModIds = Object.keys(CACHE);
-  const missing = subMod.dependentModules.filter(dep => !subModIds.includes(dep.id))
-    .map(dep => dep.id);
-  return missing;
-}
-
-function versionToDisplay(ver: bmmTypes.ApplicationVersion) {
-  return `${ver.major}.${ver.minor}.${ver.revision}`;
-}
-
-export function getIncompatibilities(bmm: BannerlordModuleManager, subMod: IModuleInfoExtendedExt) {
-  const dependencies = subMod.dependentModules;
-  const incorrectVersions = [];
-  for (const dep of dependencies) {
-    const depMod = CACHE[dep.id];
-    if (!depMod) {
-      // dependency is missing entirely
-      continue;
+    const modInstallationPath = path.join(installationDir, entry.installationPath);
+    let files;
+    try {
+      files = await walkAsync(modInstallationPath, 3);
+    } catch (err) {
+      // The mod must've been removed manually by the user from
+      //  the staging folder - good job buddy!
+      //  Going to log this, but otherwise allow it to proceed.
+      invalidMods.push(entry.id);
+      log('error', 'failed to read mod staging folder', { modId: entry.id, error: err.message });
+      return Promise.resolve(accum);
     }
-    const comparisonRes = bmm.compareVersions(depMod.version, dep.version);
-    if (comparisonRes !== 1) {
-      incorrectVersions.push(
-        {
-          currentVersion: versionToDisplay(depMod.version),
-          requiredVersion: versionToDisplay(dep.version),
-        });
+
+    const subModFile = files.find(file => path.basename(file).toLowerCase() === SUBMOD_FILE);
+    if (subModFile === undefined) {
+      // No submod file - no LO
+      return Promise.resolve(accum);
     }
-  }
-  return incorrectVersions;
+
+    let subModId;
+    try {
+      subModId = await getElementValue(subModFile, 'Id');
+    } catch (err) {
+      // The submodule would've never managed to install correctly
+      //  if the xml file had been invalid - this suggests that the user
+      //  or a 3rd party application has tampered with the file...
+      //  We simply log this here as the parse-ing failure will be highlighted
+      //  by the CACHE logic.
+      log('error', '[MnB2] Unable to parse submodule file', err);
+      return Promise.resolve(accum);
+    }
+    accum.push({
+      subModId,
+      subModFile,
+      vortexId: entry.id,
+    });
+
+    return Promise.resolve(accum);
+  }, [])
+  .tap((res) => {
+    if (invalidMods.length > 0) {
+      const errMessage = 'The following mods are inaccessible or are missing '
+        + 'in the staging folder:\n\n' + invalidMods.join('\n') + '\n\nPlease ensure '
+        + 'these mods and their content are not open in any other application '
+        + '(including the game itself). If the mod is missing entirely, please re-install it '
+        + 'or remove it from your mods page. Please check your vortex log file for details.';
+      context.api.showErrorNotification('Invalid Mods in Staging',
+                                        new Error(errMessage), { allowReport: false });
+    }
+    return Promise.resolve(res);
+  });
 }
 
-export function getValidationInfo(bmm: BannerlordModuleManager, id: string) {
-  const subModule = Object.values(CACHE)
-    .find(entry => (entry.vortexId === id) || (entry.id === id));
-  if (!subModule) {
-    // Probably not deployed yet
-    return { missing: [], incompatible: [] };
-  }
-  const missing = missingDependencies(bmm, subModule);
-  const incompatible = getIncompatibilities(bmm, subModule);
-  return { missing, incompatible };
+export function isInvalid(subModId: string) {
+  const cyclicErrors = util.getSafe(CACHE[subModId], ['invalid', 'cyclic'], []);
+  const missingDeps = util.getSafe(CACHE[subModId], ['invalid', 'missing'], []);
+  return ((cyclicErrors.length > 0) || (missingDeps.length > 0));
+}
+
+export function getValidationInfo(vortexId: string) {
+  // We expect the method caller to provide the vortexId of the subMod, as
+  //  this is how we store this information in the load order object.
+  //  Reason why we need to search the cache by vortexId rather than subModId.
+  const subModId = Object.keys(CACHE).find(key => CACHE[key].vortexId === vortexId);
+  const cyclic = util.getSafe(CACHE[subModId], ['invalid', 'cyclic'], []);
+  const missing = util.getSafe(CACHE[subModId], ['invalid', 'missing'], []);
+  const incompatible = util.getSafe(CACHE[subModId], ['invalid', 'incompatibleDeps'], []);
+  return {
+    cyclic,
+    missing,
+    incompatible,
+  };
 }

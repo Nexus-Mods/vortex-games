@@ -5,7 +5,7 @@ import { actions, fs, log, selectors, types, util } from 'vortex-api';
 import { parseStringPromise } from 'xml2js';
 
 import { BANNERLORD_EXEC, GAME_ID } from './common';
-import { getCache } from './subModCache';
+import { getCache, getLauncherData } from './subModCache';
 import { ILoadOrder, IProps } from './types';
 
 // Used for the "custom launcher" tools.
@@ -78,6 +78,7 @@ export async function getElementValue(subModuleFilePath: string, elementName: st
 }
 
 export async function refreshGameParams(context: types.IExtensionContext, loadOrder: ILoadOrder) {
+  const LAUNCHER_DATA = getLauncherData();
   // Go through the enabled entries so we can form our game parameters.
   const enabled = (!!loadOrder && Object.keys(loadOrder).length > 0)
     ? Object.keys(loadOrder)
@@ -86,13 +87,15 @@ export async function refreshGameParams(context: types.IExtensionContext, loadOr
         .reduce((accum, key) => {
           const CACHE = getCache();
           const cacheKeys = Object.keys(CACHE);
-          const entry = cacheKeys.find(cacheElement => CACHE[cacheElement].id === key);
+          const entry = cacheKeys.find(cacheElement => CACHE[cacheElement].vortexId === key);
           if (!!entry) {
             accum.push(entry);
           }
           return accum;
         }, [])
-    : [];
+    : LAUNCHER_DATA.singlePlayerSubMods
+        .filter(subMod => subMod.enabled)
+        .map(subMod => subMod.subModId);
 
   // Currently Singleplayer only! (more research into MP needs to be done)
   const parameters = [
