@@ -69,7 +69,7 @@ async function getDeployedModData(api: types.IExtensionApi,
   const invalidSubMods = [];
   for (const subMod of subModuleFilePaths) {
     const data = await fs.readFileAsync(subMod, { encoding: 'utf8' });
-    const module = bmm.getModuleInfo(data.trim());
+    const module = bmm.getModuleInfo(data);
     if (!module) {
       invalidSubMods.push(subMod);
       continue;
