@@ -696,10 +696,19 @@ function sortImpl(context: types.IExtensionContext, metaManager: ComMetadataMana
     return;
   }
 
+  const getNextAvailable = (accum, idx) => {
+    const entries = Object.values(accum);
+    while (entries.find(entry => (entry as any).pos === idx) !== undefined) {
+      idx++;
+    }
+    return idx;
+  }
   const newOrder = [].concat(sortedLocked, sortedSubMods).reduce((accum, id, idx) => {
     const vortexId = CACHE[id].vortexId;
     const newEntry = {
-      pos: idx,
+      pos: loadOrder[vortexId]?.locked === true
+        ? loadOrder[vortexId].pos
+        : getNextAvailable(accum, idx),
       enabled: CACHE[id].isOfficial
         ? true
         : (!!loadOrder[vortexId])
