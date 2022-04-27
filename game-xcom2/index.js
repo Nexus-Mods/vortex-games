@@ -177,7 +177,7 @@ async function installMod(files) {
     // Instructions for Vortex from the file list.
     const modInstructions = modFiles.map(file => {
       // Trim off the folder name, in case it doesn't match the modName.
-      const shortPath = file.substr(file.indexOf(modFolder) + modFolder.length);
+      const shortPath = modFolder != '.' ? file.substr(file.indexOf(modFolder) + modFolder.length) : file;
       return {
       type: 'copy',
       source: file,
