@@ -379,9 +379,9 @@ function tSort(sortProps: ISortProps, test: boolean = false) {
     processing[node] = false;
     visited[node] = true;
 
-    if (!isInvalid(node)) {
-      result.push(node);
-    }
+    // if (!isInvalid(node)) {
+    //   result.push(node);
+    // }
   };
 
   for (const node in graph) {
@@ -833,8 +833,8 @@ function main(context) {
     context.api.onAsync('added-files', async (profileId, files) => {
       const state = context.api.store.getState();
       const profile = selectors.profileById(state, profileId);
-      if (profile.gameId !== GAME_ID) {
-        // don't care about any other games
+      if (profile?.gameId !== GAME_ID) {
+        // don't care about any other games - or if the profile is no longer valid.
         return;
       }
       const game = util.getGame(GAME_ID);
