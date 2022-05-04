@@ -1,8 +1,9 @@
 const { getFileVersion, getFileVersionLocalized } = require('exe-version');
 const path = require('path');
-const { util } = require('vortex-api');
+const { fs, selectors, util } = require('vortex-api');
 const winapi = require('winapi-bindings');
 
+const GAME_ID = 'skyrimse';
 const MS_ID = 'BethesdaSoftworks.SkyrimSE-PC';
 function findGame() {
   try {
@@ -90,17 +91,36 @@ function requiresLauncher(gamePath) {
     .catch(err => Promise.resolve(undefined));
 }
 
-function getGameVersion(gamePath, exePath) {
-  const fullPath = path.join(gamePath, exePath);
-  const fileVersion = getFileVersion(fullPath);
-  return Promise.resolve((fileVersion !== '1.0.0.0')
-    ? fileVersion
-    : getFileVersionLocalized(fullPath));
+async function getGameVersion(api, gamePath, exePath) {
+  const appManifest = path.join(gamePath, 'appxmanifest.xml');
+  try {
+    await fs.statAsync(appManifest);
+    if (api.ext?.['getHashVersion']) {
+      const state = api.getState();
+      const game = selectors.gameById(state, GAME_ID);
+      const discovery = selectors.discoveryByGame(state, GAME_ID);
+      return new Promise((resolve, reject) => {
+        api.ext?.['getHashVersion'](game, discovery, (err, ver) => {
+          return err !== null
+            ? reject(err)
+            : resolve(ver);
+        });
+      }); 
+    } else {
+      throw new util.NotSupportedError();
+    }
+  } catch (err) {
+    const fullPath = path.join(gamePath, exePath);
+    const fileVersion = getFileVersion(fullPath);
+    return (fileVersion !== '1.0.0.0')
+      ? fileVersion
+      : getFileVersionLocalized(fullPath);
+  }
 }
 
 function main(context) {
   context.registerGame({
-    id: 'skyrimse',
+    id: GAME_ID,
     name: 'Skyrim Special Edition',
     shortName: 'SSE',
     mergeMods: true,
@@ -113,13 +133,18 @@ function main(context) {
       'SkyrimSE.exe',
     ],
     requiresLauncher,
-    getGameVersion,
+    getGameVersion: (gamePath, exePath) => getGameVersion(context.api, gamePath, exePath),
     environment: {
       SteamAPPId: '489830',
     },
     details: {
       steamAppId: 489830,
       nexusPageId: 'skyrimspecialedition',
+      hashFiles: [
+        'appxmanifest.xml',
+        path.join('Data', 'Skyrim.esm'),
+        path.join('Data', 'Update.esm'),
+      ],
     }
   });
 
