@@ -289,11 +289,12 @@ async function deserializeLoadOrder(api, gameId) {
 
   // Map our data into a load order.
   const loadOrder = [...loadOrderUniques].map(xmod => {
+    const steamMod = workshopMods.includes(xmod);
     const enabled = enabledMods.includes(xmod);
     const xmodPath = path.join(xmod, `${xmod}${MOD_EXT}`);
     const deployed = deployedFiles.find(file => file.relPath.toLowerCase() === xmodPath.toLowerCase());
     return {
-      id: xmod.toLowerCase(),
+      id: (steamMod === true) ? `steam-${xmod}.toLowerCase()`: xmod.toLowerCase(),
       name: xmod,
       enabled,
       modId: deployed ? deployed.source : undefined
