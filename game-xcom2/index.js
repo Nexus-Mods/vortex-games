@@ -15,6 +15,10 @@ const STEAMAPP_ID = '268500'; //WOTC is 593380 but it's the same folder so we do
 const GOGAPP_ID = '1482002159'; //WOTC is 1414942413 but it's the same folder so we don't need it.
 const EPICAPP_ID = '3be3c4d681bc46b3b8b26c5df3ae0a18';
 
+// Dev tools
+const X2DEVTOOLSSTEAMAPP_ID = '299990';
+const WOTCDEVTOOLSSTEAMAPP_ID = '602410';
+
 const optionsPath = (gameId) => {
   switch(gameId) {
     case(XCOM2_ID): return XCOM2_CONFIG;
@@ -40,11 +44,16 @@ const instructions = (gameId) => {
 2.0 update based on the following information sources 
 https://support.feralinteractive.com/docs/en/xcom2warofthechosen/1.3/steam/faqs/?access=FOJzacYvnB
 https://www.gog.com/forum/xcom_2/actually_where_do_mods_go_in_this_version/page1
-
 */
 
 function findGame() {
   return util.GameStoreHelper.findByAppId([STEAMAPP_ID, GOGAPP_ID, EPICAPP_ID])
+      .then(game => game.gamePath);
+}
+
+function findDevTools(game) {
+  const steamId = game === XCOM2_ID ? X2DEVTOOLSSTEAMAPP_ID : WOTCDEVTOOLSSTEAMAPP_ID;
+  return util.GameStoreHelper.findByAppId([steamId])
       .then(game => game.gamePath);
 }
 
@@ -64,6 +73,16 @@ function supportedTools(game) {
         path.join('Launcher', 'launcher.exe'),
       ],
       relative: true,
+    },
+    {
+      id: `${game}-devtools`,
+      name: 'ModBuddy',
+      logo: path.join('icons', 'modbuddy.png'),
+      queryPath: () => findDevTools(game),
+      executable: () =>  path.join('Binaries', 'Win32', 'ModBuddy', 'XCOM ModBuddy.exe'),
+      requiredFiles: [
+        path.join('Binaries', 'Win32', 'ModBuddy', 'XCOM ModBuddy.exe')
+      ]
     }
   ]
 }
