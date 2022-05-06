@@ -1104,6 +1104,7 @@ function main(context: types.IExtensionContext) {
       steamAppId: 292030,
       ignoreConflicts: DO_NOT_DEPLOY,
       ignoreDeploy: DO_NOT_DEPLOY,
+      hashFiles: ['bin/x64/witcher3.exe'],
     },
   });
 
