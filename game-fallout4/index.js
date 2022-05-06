@@ -105,7 +105,11 @@ function main(context) {
     },
     details: {
       steamAppId: 377160,
-      ignoreConflicts: IGNORED_FILES
+      ignoreConflicts: IGNORED_FILES,
+      hashFiles: [
+        'appxmanifest.xml',
+        'Data/Fallout4.esm',
+      ]
     }
   });
 
