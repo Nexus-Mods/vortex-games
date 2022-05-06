@@ -261,6 +261,7 @@ function main(context: types.IExtensionContext) {
     },
     details: {
       steamAppId: +STEAM_ID,
+      hashFiles: ['7DaysToDie_Data/Managed/Assembly-CSharp.dll'],
     },
   });
 
