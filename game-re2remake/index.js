@@ -243,6 +243,9 @@ function main(context) {
     environment: {
       SteamAPPId: STEAM_ID.toString(),
     },
+    details: {
+      hashFiles: ['re2.exe'],
+    },
     setup: (discovery) => prepareForModding(discovery, context.api),
   });
 

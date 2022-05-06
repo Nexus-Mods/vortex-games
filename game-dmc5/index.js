@@ -193,6 +193,7 @@ function main(context) {
     },
     details: {
       steamAppId: STEAM_ID,
+      hashFiles: ['DevilMayCry5.exe'],
     },
     setup: (discovery) => prepareForModding(discovery, context.api),
   });
