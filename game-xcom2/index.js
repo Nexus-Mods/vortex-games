@@ -41,7 +41,7 @@ const instructions = (gameId) => {
 }
 
 /*
-2.0 update based on the following information sources 
+1.1 update based on the following information sources 
 https://support.feralinteractive.com/docs/en/xcom2warofthechosen/1.3/steam/faqs/?access=FOJzacYvnB
 https://www.gog.com/forum/xcom_2/actually_where_do_mods_go_in_this_version/page1
 */
@@ -95,12 +95,12 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: () => XCOM2_MODS,
-    executable: () => 'Binaries/Win64/XCom2.exe',
+    executable: () => path.join('Binaries', 'Win64', 'XCom2.exe'),
     setup: (discovery) => prepareForModding(discovery, XCOM2_MODS),
     requiredFiles: [
       'XComGame',
-      'XComGame/CookedPCConsole/3DUIBP.upk',
-      'XComGame/CharacterPool/Importable/Demos&Replays.bin'
+      path.join('XComGame', 'CookedPCConsole', '3DUIBP.upk'),
+      path.join('XComGame', 'CharacterPool', 'Importable', 'Demos&Replays.bin')
     ],
     supportedTools: supportedTools(XCOM2_ID),
     parameters: ['-fromLauncher', '-review', '-noRedScreens', '-noStartupMovies', '-CrashDumpWatcher'],
@@ -120,11 +120,11 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: () => WOTC_MODS,
-    executable: () => 'XCom2-WarOfTheChosen/Binaries/Win64/XCom2.exe',
+    executable: () => path.join('XCom2-WarOfTheChosen', 'Binaries', 'Win64', 'XCom2.exe'),
     setup: (discovery) => prepareForModding(discovery, WOTC_MODS),
     requiredFiles: [
       'XCom2-WarOfTheChosen',
-      'XCom2-WarOfTheChosen/XComGame/CookedPCConsole/3DUIBP.upk',
+      path.join('XCom2-WarOfTheChosen', 'XComGame', 'CookedPCConsole', '3DUIBP.upk')
     ],
     parameters: ['-fromLauncher', '-review', '-noRedScreens', '-noStartupMovies', '-CrashDumpWatcher'],
     environment: {
