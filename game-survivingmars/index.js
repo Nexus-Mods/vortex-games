@@ -131,6 +131,7 @@ function main(context) {
     },
     details: {
       steamAppId: 464920,
+      hashDirPath: '.',
     },
   });
 
