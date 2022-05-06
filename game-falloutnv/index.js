@@ -74,6 +74,10 @@ function main(context) {
     details: {
       steamAppId: 22380,
       nexusPageId: 'newvegas',
+      hashFiles: [
+        'Data/Update.bsa',
+        'Data/FalloutNV.esm',
+      ],
     }
   });
   return true;
