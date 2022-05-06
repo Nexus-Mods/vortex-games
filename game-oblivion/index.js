@@ -91,6 +91,9 @@ function main(context) {
     },
     details: {
       steamAppId: 22330,
+      hashFiles: [
+        'Data/Oblivion.esm'
+      ],
     },
   });
   return true;
