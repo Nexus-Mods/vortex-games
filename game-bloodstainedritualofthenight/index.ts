@@ -156,6 +156,10 @@ function main(context: types.IExtensionContext) {
     },
     details: {
       steamAppId: +STEAM_ID,
+      hashFiles: [
+        'BloodstainedRotN.exe',
+        'BloodstainedROTN/Binaries/Win64/BloodstainedRotN-Win64-Shipping.exe'
+      ],
     },
   });
 
