@@ -29,6 +29,7 @@ function main(context) {
     },
     details: {
       steamAppId: 220200,
+      hashFiles: ['KSP_x64_Data/Managed/Assembly-CSharp.dll'],
     },
   });
 
