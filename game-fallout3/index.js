@@ -83,6 +83,7 @@ function main(context) {
     },
     details: {
       steamAppId: 22300,
+      hashFiles: ['Data/Fallout3.esm'],
     }
   });
 
