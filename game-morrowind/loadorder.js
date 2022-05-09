@@ -75,7 +75,7 @@ async function readGameFiles(iniFilePath) {
   return parser.read(iniFilePath)
     .then(ini => {
       const files = ini.data['Game Files'];
-      return Object.keys(files).map(key => files[key]);
+      return Object.keys(files ?? {}).map(key => files[key]);
     });
 }
 
