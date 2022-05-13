@@ -204,6 +204,11 @@ function main(context) {
     },
     details: {
       steamAppId: 367500,
+      // in dragons dogma the data archives are commonly replaced or modified during modding
+      // so using any of those for determining the game version might be problematic
+      hashFiles: [
+        'DDDA.exe',
+      ],
     },
   });
 
