@@ -62,7 +62,7 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     supportedTools: tools,
-    queryModPath: () => 'data',
+    queryModPath: () => 'Data',
     logo: 'gameart.jpg',
     executable: () => 'Fallout4VR.exe',
     getGameVersion,

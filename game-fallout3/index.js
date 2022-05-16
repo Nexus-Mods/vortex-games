@@ -46,7 +46,7 @@ let tools = [
     executable: () => 'fose_loader.exe',
     requiredFiles: [
       'fose_loader.exe',
-      'data/fallout3.esm',
+      'Data/fallout3.esm',
     ],
     relative: true,
     exclusive: true,
@@ -61,7 +61,7 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     supportedTools: tools,
-    queryModPath: () => 'data',
+    queryModPath: () => 'Data',
     logo: 'gameart.jpg',
     executable: (discoveryPath) => {
       if (discoveryPath === undefined) {
@@ -76,7 +76,7 @@ function main(context) {
       }
     },
     requiredFiles: [
-      'data/fallout3.esm'
+      'Data/fallout3.esm'
     ],
     environment: {
       SteamAPPId: '22300',
