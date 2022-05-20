@@ -6,7 +6,7 @@ const semver = require('semver');
 const { app, remote } = require('electron');
 const uniApp = app || remote.app;
 
-const { GAME_ID, I18N_NAMESPACE, MOD_MANIFEST, GameNotDiscoveredException } = require('./common');
+const { BAS_EXEC, GAME_ID, I18N_NAMESPACE, MOD_MANIFEST, GameNotDiscoveredException } = require('./common');
 const { testModInstaller, installMulleMod, installOfficialMod } = require('./installers');
 
 const { migrate010, migrate020 } = require('./migrations');
@@ -30,9 +30,9 @@ const supportedTools = [
     id: 'SteamVR',
     name: 'Blade and Sorcery (SteamVR)',
     logo: 'steam.png',
-    executable: () => 'BladeAndSorcery.exe',
+    executable: () => BAS_EXEC,
     requiredFiles: [
-      'BladeAndSorcery.exe'
+      BAS_EXEC
     ],
     parameters: ['-vrmode', 'openvr'],
     relative: true,
@@ -41,9 +41,9 @@ const supportedTools = [
     id: 'OculusVR',
     name: 'Blade and Sorcery (OculusVR)',
     logo: 'oculus.png',
-    executable: () => 'BladeAndSorcery.exe',
+    executable: () => BAS_EXEC,
     requiredFiles: [
-      'BladeAndSorcery.exe'
+      BAS_EXEC
     ],
     parameters: ['-vrmode', 'oculus'],
     relative: true,
@@ -108,7 +108,7 @@ async function getOfficialModType(api, discovery = undefined) {
   }
   let gameVersion;
   try {
-    gameVersion = await getGameVersion(discoveryPath);
+    gameVersion = await getGameVersion(discoveryPath, BAS_EXEC);
   } catch (err) {
     // Failed to ascertain the game's version
     return Promise.reject(err);
@@ -355,7 +355,7 @@ function resolveGameVersion(discoveryPath) {
   if (semver.satisfies(uniApp.getVersion(), '<1.4.0')) {
     return Promise.reject(new util.ProcessCanceled('not supported in older Vortex versions'));
   }
-  return getMinModVersion(discoveryPath)
+  return getMinModVersion(discoveryPath, BAS_EXEC)
     .then(minVer => {
       const coerced = semver.coerce(minVer.version);
       return Promise.resolve(coerced.version);
@@ -390,8 +390,8 @@ function main(context) {
     queryModPath: () => path.join(streamingAssetsPath(), 'Mods'),
     getGameVersion: resolveGameVersion,
     logo: 'gameart.jpg',
-    executable: () => 'BladeAndSorcery.exe',
-    requiredFiles: ['BladeAndSorcery.exe'],
+    executable: () => BAS_EXEC,
+    requiredFiles: [BAS_EXEC],
     requiresCleanup: true,
     setup: (discovery) => prepareForModding(discovery, context.api),
     supportedTools,
