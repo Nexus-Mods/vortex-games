@@ -117,7 +117,8 @@ async function serializeLoadOrder(api, order) {
     await updatePluginOrder(iniFilePath, enabled);
     await updatePluginTimestamps(dataDirectory, order.map(loEntry => loEntry.id));
   } catch (err) {
-    api.showErrorNotification('Failed to save', err);
+    const allowReport = !(err instanceof util.UserCanceled);
+    api.showErrorNotification('Failed to save', err, { allowReport });
     return Promise.reject(err);
   }
   return Promise.resolve();
