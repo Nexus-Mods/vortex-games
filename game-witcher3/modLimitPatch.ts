@@ -59,7 +59,8 @@ export class ModLimitPatcher {
         displayMS: 5000,
       });
     } catch (err) {
-      this.mApi.showErrorNotification('Failed to generate mod limit patch', err);
+      const allowReport = !(err instanceof util.UserCanceled)
+      this.mApi.showErrorNotification('Failed to generate mod limit patch', err, { allowReport });
       this.mApi.events.emit('remove-mod', GAME_ID, modName);
       return Promise.resolve(undefined);
     }
