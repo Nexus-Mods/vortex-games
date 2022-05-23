@@ -379,9 +379,7 @@ function tSort(sortProps: ISortProps, test: boolean = false) {
     processing[node] = false;
     visited[node] = true;
 
-    // if (!isInvalid(node)) {
-    //   result.push(node);
-    // }
+    result.push(node);
   };
 
   for (const node in graph) {
