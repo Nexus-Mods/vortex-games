@@ -19,6 +19,9 @@ async function migrate103(api, oldVersion) {
 
   const batched = [];
   for (const mod of Object.values(mods)) {
+    if (mod?.installationPath === undefined) {
+      continue;
+    }
     const modPath = path.join(installPath, mod.installationPath);
     const plugins = [];
     await walk(modPath, entries => {
