@@ -60,6 +60,11 @@ function installMod(files, destinationPath) {
   return Promise.resolve({ instructions });
 }
 
+function getGameVersion(gamePath) {
+  const exeVersion = require('exe-version');
+  return Promise.resolve(exeVersion.getProductVersionLocalized(path.join(gamePath, 'GreedFall.exe')));
+}
+
 
 
 const gameParameters = {
@@ -68,6 +73,7 @@ const gameParameters = {
   logo: 'gameart.jpg',
   mergeMods: true,
   queryPath: findGame,
+  getGameVersion,
   queryModPath: () => 'datalocal',
   executable: () => 'GreedFall.exe',
   requiredFiles: ['GreedFall.exe'],
@@ -102,7 +108,8 @@ function main(context) {
       const now = new Date();
       return Promise.map(deployment[''], file =>
         fs.utimesAsync(path.join(modDeployPath, file.relPath), now, now))
-          .catch(err => context.api.showErrorNotification('Failed to change file access/modified time', err));
+          .catch(err => context.api.showErrorNotification(
+            'Failed to change file access/modified time', err, { allowReport: false }));
     });
   });
 

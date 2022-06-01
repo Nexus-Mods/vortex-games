@@ -4,6 +4,10 @@ const { actions, fs, log, selectors, util } = require('vortex-api');
 const IniParser = require('vortex-parse-ini');
 const generate = require('shortid').generate;
 
+const { prepareFileData, restoreFileData } = require('./collections/util');
+
+const { getDeployment } = require('./util');
+
 const { GAME_ID, INPUT_XML_FILENAME, PART_SUFFIX } = require('./common');
 
 // most of these are invalid on windows only but it's not worth the effort allowing them elsewhere
@@ -126,6 +130,27 @@ function populateCache(api, activeProfile, modIds, initialCacheValue) {
 
     return fs.writeFileAsync(path.join(stagingFolder, mod.installationPath, CACHE_FILENAME), JSON.stringify(newCache));
   });
+}
+
+function convertFilePath(filePath, installPath) { 
+  // Pre-collections we would use absolute paths pointing
+  //  to the menu mod input modifications; this will obviously
+  //  work just fine on the curator's end, but relpaths should be used
+  //  on the user's end. This functor will convert the abs path from
+  //  the curator's path to the user's path.
+  const segments = filePath.split(path.sep);
+  const idx = segments.findIndex((seg, idx) => {
+    if (seg === 'mods' && segments[idx - 1] === GAME_ID) {
+      return true;
+    } else {
+      return false;
+    }
+  });
+  if (idx === -1) {
+    log('error', 'unexpected menu mod filepath', filePath);
+    return filePath;
+  }
+  return path.join(installPath, segments.slice(idx + 1).join(path.sep));
 }
 
 async function onWillDeploy(api, deployment, activeProfile) {
@@ -331,10 +356,15 @@ async function cacheToFileMap(state, profile) {
     return undefined;
   }
 
+  const stagingFolder = selectors.installPathForGame(state, GAME_ID);
   const fileMap = currentCache.reduce((accum, entry) => {
     accum[toFileMapKey(entry.filepath)] =
       [].concat(accum[toFileMapKey(entry.filepath)] || [],
-      [{ id: entry.id, data: entry.data, filepath: entry.filepath }]);
+      [{
+        id: entry.id,
+        data: entry.data,
+        filepath: convertFilePath(entry.filepath, stagingFolder),
+      }]);
 
     return accum;
   }, {});
@@ -461,10 +491,49 @@ async function ensureMenuMod(api, profile) {
   return Promise.resolve(modName);
 }
 
+async function exportMenuMod(api, profile, includedMods) {
+  try {
+    const deployment = await getDeployment(api, includedMods);
+    if (deployment === undefined) {
+      throw new Error('Failed to get deployment');
+    }
+    const modName = await onDidDeploy(api, deployment, profile);
+    if (modName === undefined) {
+      // The installed mods do not require a menu mod.
+      return undefined;
+    }
+    const mods = util.getSafe(api.getState(), ['persistent', 'mods', GAME_ID], {});
+    const modId = Object.keys(mods).find(id => id === modName);
+    if (modId === undefined) {
+      throw new Error('Menu mod is missing');
+    }
+    const installPath = selectors.installPathForGame(api.getState(), GAME_ID);
+    const modPath = path.join(installPath, mods[modId].installationPath);
+    const data = await prepareFileData(modPath);
+    return data;
+  } catch (err) {
+    return Promise.reject(err);
+  }
+}
+
+async function importMenuMod(api, profile, fileData) {
+  try {
+    const modName = await ensureMenuMod(api, profile);
+    const mod = util.getSafe(api.getState(), ['persistent', 'mods', profile.gameId, modName], undefined);
+    const installPath = selectors.installPathForGame(api.getState(), GAME_ID);
+    const destPath = path.join(installPath, mod.installationPath);
+    await restoreFileData(fileData, destPath);
+  } catch (err) {
+    return Promise.reject(err);
+  }
+}
+
 module.exports = {
   default: ensureMenuMod,
   removeMod: removeMenuMod,
   getModId: menuMod,
   onDidDeploy: onDidDeploy,
   onWillDeploy: onWillDeploy,
+  exportMenuMod: exportMenuMod,
+  importMenuMod: importMenuMod,
 };

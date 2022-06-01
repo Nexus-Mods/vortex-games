@@ -45,6 +45,7 @@ const MAB_GAMES = {
     logo: 'gameart.jpg',
     exec: 'mount&blade.exe',
     nativeModuleName: 'native',
+    versionRgx: /^works_with_version_max.*[0-9]$/gm,
   },
   mbwarband: {
     id: 'mbwarband',
@@ -54,6 +55,7 @@ const MAB_GAMES = {
     logo: 'gameartwarband.png',
     exec: 'mb_warband.exe',
     nativeModuleName: 'native',
+    versionRgx: /^compatible_multiplayer_version_no.*[0-9]$/gm,
   },
   mbwithfireandsword: {
     id: 'mbwithfireandsword',
@@ -63,6 +65,7 @@ const MAB_GAMES = {
     logo: 'gameartfire.png',
     exec: 'mb_wfas.exe',
     nativeModuleName: 'Ogniem i Mieczem',
+    versionRgx: /^module_version.*[0-9]$/gm,
   },
   // Not sure if Viking Conquest is a Warband mod or
   //  a standalone game ? Will keep this commented out
@@ -96,6 +99,25 @@ function findGame(mabGame) {
   }
 }
 
+async function resolveGameVersion(discoveryPath, mnbGame) {
+  const nativeModuleName = MAB_GAMES[mnbGame].nativeModuleName;
+  const rgx = MAB_GAMES[mnbGame].versionRgx;
+  const nativeIniPath = path.join(discoveryPath, 'Modules', nativeModuleName, 'module.ini');
+  try {
+    const iniData = await fs.readFileAsync(nativeIniPath, { encoding: 'utf8' });
+    const match = iniData.match(rgx);
+    const version = (match !== null)
+      ? match[0].replace(/[^0-9.]/gm, '')
+      : undefined;
+
+    return version !== undefined
+      ? Promise.resolve(version)
+      : Promise.reject(new util.DataInvalid('Cannot resolve game version'));
+  } catch (err) {
+    return Promise.reject(err);
+  }
+}
+
 function prepareForModding(discovery) {
     return fs.ensureDirAsync(path.join(discovery.path, 'modules'));
 }
@@ -111,6 +133,7 @@ function main(context) {
       queryModPath: () => 'modules',
       logo: mabGame.logo,
       executable: () => mabGame.exec,
+      getGameVersion: (discoveryPath) => resolveGameVersion(discoveryPath, key),
       requiredFiles: [
         mabGame.exec,
       ],

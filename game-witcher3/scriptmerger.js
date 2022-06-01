@@ -330,7 +330,7 @@ async function downloadScriptMerger(context) {
         .then(() => download());
     })
     .then((archivePath) => onDownloadComplete(context, archivePath, mostRecentVersion))
-    .catch(err => {
+    .catch(async err => {
       const raiseManualInstallNotif = () => {
         log('error', 'Failed to automatically install Script Merger', err.errorMessage);
         context.api.sendNotification({

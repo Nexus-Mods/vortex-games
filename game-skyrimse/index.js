@@ -1,3 +1,4 @@
+const { getFileVersion, getFileVersionLocalized } = require('exe-version');
 const path = require('path');
 const { util } = require('vortex-api');
 const winapi = require('winapi-bindings');
@@ -89,6 +90,14 @@ function requiresLauncher(gamePath) {
     .catch(err => Promise.resolve(undefined));
 }
 
+function getGameVersion(gamePath, exePath) {
+  const fullPath = path.join(gamePath, exePath);
+  const fileVersion = getFileVersion(fullPath);
+  return Promise.resolve((fileVersion !== '1.0.0.0')
+    ? fileVersion
+    : getFileVersionLocalized(fullPath));
+}
+
 function main(context) {
   context.registerGame({
     id: 'skyrimse',
@@ -104,6 +113,7 @@ function main(context) {
       'SkyrimSE.exe',
     ],
     requiresLauncher,
+    getGameVersion,
     environment: {
       SteamAPPId: '489830',
     },

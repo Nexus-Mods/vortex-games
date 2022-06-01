@@ -41,6 +41,16 @@ function findGame() {
   }
 }
 
+async function getGameVersion(discoveryPath) {
+  try {
+    const fileData = await fs.readFileAsync(path.join(discoveryPath, 'Launcher', 'launcher-settings.json'), { encoding: 'utf8' });
+    const data = JSON.parse(fileData);
+    return Promise.resolve(data.version);
+  } catch (err) {
+    return Promise.reject(new util.DataInvalid('Failed to parse game version'));
+  }
+}
+
 function setup(discovery) {
   return fs.ensureDirWritableAsync(MODS_LOCAL, () => Promise.resolve());
 }
@@ -56,6 +66,7 @@ function main(context) {
       queryModPath: () => MODS_LOCAL,
       //requiresLauncher,
       executable: () => executable,
+      getGameVersion,
       requiredFiles: [executable],
       environment: {
         SteamAPPId: STEAM_ID.toString(),

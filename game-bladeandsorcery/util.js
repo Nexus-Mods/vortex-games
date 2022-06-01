@@ -3,7 +3,9 @@ const semver = require('semver');
 const rjson = require('relaxed-json');
 const { fs, log, util } = require('vortex-api');
 
-const { GAME_ID } = require('./common');
+const { getFileVersion, getProductVersion } = require('exe-version');
+
+const { GAME_ID, BAS_DB } = require('./common');
 
 // The global file holds current gameversion information
 //  we're going to use this to compare against a mod's expected
@@ -91,28 +93,64 @@ async function findGameConfig(discoveryPath) {
         : Promise.reject(new util.NotFound('Missing game.json config file.'));
     });
   const basePath = path.join(discoveryPath, streamingAssetsPath(), 'Default');
-  return findConfig(path.join(basePath, 'Bas'))
-    .catch(err => findConfig(basePath));
-}
-
-async function getGameVersion(discoveryPath) {
-  const configFile = await findGameConfig(discoveryPath);
-  let gameVersion = await getJSONElement(configFile, 'gameVersion');
-  return gameVersion.toString().replace(',', '.');
-}
-
-async function getMinModVersion(discoveryPath) {
-  const configFile = await findGameConfig(discoveryPath);
   try {
-    const version = await getJSONElement(configFile, 'minModVersion');
-    return { version, majorOnly: false };
+    const configPath = await extractBaSDB(discoveryPath);
+    return findConfig(configPath);
   } catch (err) {
-    if (err.message.indexOf('JSON element is missing') !== -1) {
-      const version = await getJSONElement(configFile, 'gameVersion');
-      return { version, majorOnly: true };
-    } else {
-      throw err;
+    // Backwards compatibility for pre U10
+    return findConfig(path.join(basePath, 'Bas'))
+      .catch(err => findConfig(basePath));
+  }
+}
+
+// Returns the path to the game.json file
+async function extractBaSDB(discoveryPath) {
+  const basePath = path.join(discoveryPath, streamingAssetsPath(), 'Default');
+  const basArc = path.join(basePath, BAS_DB);
+  try {
+    await fs.statAsync(path.join(basePath, GAME_FILE));
+    // game.json file is already there.
+    return basePath;
+  } catch (err) {
+    // game.json isn't there - extract it.
+    try {
+      const seven = new util.SevenZip();
+      await seven.extract(basArc, basePath, { raw: ['Game.json'] });
+      return basePath;
+    } catch (err) {
+      return Promise.reject(err);
     }
+  }
+}
+
+async function getGameVersion(discoveryPath, execFile) {
+  const gameVer = getFileVersion(path.join(discoveryPath, execFile));
+  if (gameVer.match(/^20[0-9][0-9]/)) {
+    const configFile = await findGameConfig(discoveryPath);
+    let gameVersion = await getJSONElement(configFile, 'gameVersion');
+    return gameVersion.toString().replace(',', '.');
+  } else {
+    return gameVer;
+  }
+}
+
+async function getMinModVersion(discoveryPath, execFile) {
+  const prodVer = getProductVersion(path.join(discoveryPath, execFile));
+  if (prodVer.match(/^20[0-9][0-9]/)) {
+    const configFile = await findGameConfig(discoveryPath);
+    try {
+      const version = await getJSONElement(configFile, 'minModVersion');
+      return { version, majorOnly: false };
+    } catch (err) {
+      if (err.message.indexOf('JSON element is missing') !== -1) {
+        const version = await getJSONElement(configFile, 'gameVersion');
+        return { version, majorOnly: true };
+      } else {
+        throw err;
+      }
+    }
+  } else {
+    return { version: prodVer, majorOnly: false };
   }
 }
 
@@ -145,7 +183,7 @@ function getDiscoveryPath(api) {
   const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
   if ((discovery === undefined) || (discovery.path === undefined)) {
     // should never happen and if it does it will cause errors elsewhere as well
-    log('error', 'bladeandsorcery was not discovered');
+    log('debug', 'bladeandsorcery was not discovered');
     return undefined;
   }
 

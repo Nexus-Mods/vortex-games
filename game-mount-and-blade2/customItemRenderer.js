@@ -2,8 +2,9 @@ const React = require('react');
 const BS = require('react-bootstrap');
 const { connect } = require('react-redux');
 const path = require('path');
-const mnb2extension = require('./index');
 const { actions, ContextMenu, FlexLayout, tooltip, selectors, util } = require('vortex-api');
+
+const { getValidationInfo } = require('./subModCache');
 
 const TWLOGO = path.join(__dirname, 'TWLogo.png');
 
@@ -178,30 +179,25 @@ class CustomItemRenderer extends React.Component {
   }
 
   isIncompabile(item) {
-    const indexPath = path.join(__dirname, 'index.js');
-    const validFunc = mnb2extension.dynreq(indexPath).getValidationInfo;
-    const infoObj = validFunc(item.id);
+    const infoObj = getValidationInfo(item.id);
     return (infoObj.incompatibleDeps.length > 0);
   }
 
   isItemInvalid(item) {
-    const indexPath = path.join(__dirname, 'index.js');
-    const validFunc = mnb2extension.dynreq(indexPath).getValidationInfo;
-    const infoObj = validFunc(item.id);
+    const infoObj = getValidationInfo(item.id);
     return ((infoObj.missing.length > 0) || (infoObj.cyclic.length > 0));
   }
 
   getItemIncompatibilities(item) {
-    const indexPath = path.join(__dirname, 'index.js');
-    const validFunc = mnb2extension.dynreq(indexPath).getValidationInfo;
-    const infoObj = validFunc(item.id);
+    if (item.official === true) {
+      return [];
+    }
+    const infoObj = getValidationInfo(item.id);
     return infoObj?.incompatible || [];
   }
 
   itemInvalidReason(item) {
-    const indexPath = path.join(__dirname, 'index.js');
-    const validFunc = mnb2extension.dynreq(indexPath).getValidationInfo;
-    const infoObj = validFunc(item.id);
+    const infoObj = getValidationInfo(item.id);
 
     if (infoObj.missing.length > 0) {
       // This mod is missing a dependency, that's
@@ -218,7 +214,7 @@ class CustomItemRenderer extends React.Component {
 
   renderIncompatibleIcon(item) {
     const incomp = this.getItemIncompatibilities(item)
-      .map(inst => `Requires ${inst.depId} (${inst.requiredVersion}) - but - (${inst.currentVersion}) is installed`);
+      .map(inst => `Requires ${inst.id} (${inst.requiredVersion}) - but - (${inst.currentVersion}) is installed`);
 
     return (incomp.length > 0)
       ? React.createElement(tooltip.Icon, {

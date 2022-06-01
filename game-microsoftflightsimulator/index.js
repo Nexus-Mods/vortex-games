@@ -418,7 +418,7 @@ async function setup() {
   }
 
   if (officialItems === undefined) {
-    throw new util.SetupError(officialDataMissingTest(...candidates));
+    return Promise.reject(new util.SetupError(officialDataMissingTest(...candidates)));
   }
 
   for (let item of officialItems) {

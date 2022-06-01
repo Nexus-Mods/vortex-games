@@ -6,7 +6,42 @@ const walk = require('turbowalk').default;
 
 const { actions, fs, selectors, util } = require('vortex-api');
 
-const { GAME_ID, SUBMOD_FILE } = require('./common');
+const { GAME_ID, SUBMOD_FILE, I18N_NAMESPACE } = require('./common');
+
+function migrate045(api, oldVersion) {
+  if (semver.gte(oldVersion, '0.4.5')) {
+    return Promise.resolve();
+  }
+
+  return api.awaitUI()
+    .then(() => {
+      api.sendNotification({
+        id: 'mnb2-045-migration',
+        type: 'info',
+        message: api.translate('Bannerlord - Important Information', { ns: I18N_NAMESPACE }),
+        noDismiss: true,
+        actions: [
+          {
+            title: 'More',
+            action: (dismiss) => {
+              dismiss();
+              api.showDialog('info', 'Mount and Blade II: Bannerlord', {
+                  bbcode: api.translate('We\'ve added the option to auto sort your modules whenever '
+                        + 'a deployment event occurrs - this functionality is configured to '
+                        + 'function on a per profile basis and should ensure that the modules '
+                        + 'are always sorted correctly when you launch the game.[br][/br][br][/br]'
+                        + 'Please note: this new feature is enabled by default; if for any reason '
+                        + 'you wish to disable it, you can do so from the Interface tab in the Settings page'),
+              }, [
+                  { label: 'Close' },
+              ]);
+            },
+          },
+        ],
+      });
+      return Promise.resolve();
+    })
+}
 
 function migrate026(api, oldVersion) {
   if (semver.gte(oldVersion, '0.2.6')) {
@@ -66,4 +101,5 @@ async function getXMLData(xmlFilePath) {
 
 module.exports = {
   migrate026,
+  migrate045,
 }

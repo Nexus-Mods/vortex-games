@@ -8,6 +8,8 @@ const KENSHI_ID = 'kenshi';
 const STEAM_EXE = 'kenshi_x64.exe';
 const GOG_EXE = 'kenshi_GOG_x64.exe';
 
+const VERSION_FILE = 'currentVersion.txt';
+
 // The mod file is expected to be at the root of the mod
 const MOD_FILE_EXT = '.mod';
 
@@ -105,6 +107,11 @@ function getExecutable(discoveryPath) {
   return execFile;
 }
 
+function getGameVersion(discoveryPath) {
+  return fs.readFileAsync(path.join(discoveryPath, VERSION_FILE), { encoding: 'utf8' })
+    .then(res => Promise.resolve(res.split(' ')[1]));
+}
+
 function main(context) {
 context.registerGame({
     id: KENSHI_ID,
@@ -114,6 +121,7 @@ context.registerGame({
     queryModPath: () => 'mods',
     logo: 'gameart.jpg',
     executable: (discoveryPath) => getExecutable(discoveryPath),
+    getGameVersion,
     supportedToos: tools, // Assign the tools in the registerGame API call
     requiredFiles: [
       'OgreMain_x64.dll',

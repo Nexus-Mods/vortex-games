@@ -13,6 +13,7 @@ const MOD_OPTIONS = 'DefaultModOptions.ini';
 
 const STEAMAPP_ID = '268500'; //WOTC is 593380 but it's the same folder so we don't need it.
 const GOGAPP_ID = '1482002159'; //WOTC is 1414942413 but it's the same folder so we don't need it.
+const EPICAPP_ID = '3be3c4d681bc46b3b8b26c5df3ae0a18';
 
 const optionsPath = (gameId) => {
   switch(gameId) {
@@ -43,7 +44,7 @@ https://www.gog.com/forum/xcom_2/actually_where_do_mods_go_in_this_version/page1
 */
 
 function findGame() {
-  return util.GameStoreHelper.findByAppId([STEAMAPP_ID, GOGAPP_ID])
+  return util.GameStoreHelper.findByAppId([STEAMAPP_ID, GOGAPP_ID, EPICAPP_ID])
       .then(game => game.gamePath);
 }
 
@@ -114,7 +115,8 @@ function main(context) {
     details: {
       steamAppId: STEAMAPP_ID,
       gogAppId: GOGAPP_ID,
-      nexusPageId: 'xcom2'
+      nexusPageId: 'xcom2',
+      compatibleDownloads: ['xcom2']
     },
   });
 
@@ -201,8 +203,8 @@ function validate(prev, cur) {
 async function deserializeLoadOrder(api, gameId) {
   // Get the path to the game.
   const state = api.store.getState();
-  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', gameId]);
-  if (!discovery || !discovery.path) return Promise.reject('The game could not be discovered.');
+  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', gameId], undefined);
+  if (!discovery?.path) return Promise.reject(new util.ProcessCanceled('The game could not be discovered.'));
 
   // Scan the mods folder for directories
   let folders = [];
@@ -272,10 +274,10 @@ async function deserializeLoadOrder(api, gameId) {
   try {
     const file = await fs.readFileAsync(optionsIni, 'utf8');
     const arr = file.split('\n');
-    const active = arr.filter(line => line.startsWith('ActiveMods='));
-    const names = active.map(mod => mod.replace('ActiveMods=', '').replace(/"/g,''));
+    const active = arr.filter(line => line.startsWith('ActiveMods=')).map(m => m.replace('ActiveMods=', ''));
+    const names = active.map(mod => mod.replace(/"/g,''));
     // Only shown enabled mods that actually have a folder.
-    enabledMods = names.filter(name => folders.includes(name));
+    enabledMods = names.filter(name => folders.includes(name) || workshopMods.includes(name));
   }
   catch(err) {
     if (err.code === 'ENOENT') log('info', `${MOD_OPTIONS} does not exist for ${gameId}`);
@@ -305,8 +307,8 @@ async function deserializeLoadOrder(api, gameId) {
 async function serializeLoadOrder(api, loadOrder, gameId) {
   // Get the game install folder.
   const state = api.store.getState();
-  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', gameId]);
-  if (!discovery || !discovery.path) return Promise.reject('The game could not be discovered.');
+  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', gameId], undefined);
+  if (!discovery?.path) return Promise.reject(new util.ProcessCanceled('The game could not be discovered.'));
   const optionsIni = path.join(discovery.path, optionsPath(gameId), MOD_OPTIONS);
 
   try {

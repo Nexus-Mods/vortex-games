@@ -1,5 +1,5 @@
 const Promise = require('bluebird');
-const { parseXmlString } = require('libxmljs');
+const { parseStringPromise } = require('xml2js');
 const path = require('path');
 const { fs, log, util } = require('vortex-api');
 
@@ -31,10 +31,10 @@ function install(files,
 
   return fs.readFileAsync(path.join(destinationPath, contentPath),
                           { encoding: 'utf8' })
-      .then(data => {
+      .then(async data => {
         let parsed;
         try {
-          parsed = parseXmlString(data);
+          parsed = await parseStringPromise(data);
         } catch (err) { 
           return Promise.reject(new util.DataInvalid('content.xml invalid: ' + err.message));
         }
@@ -42,7 +42,7 @@ function install(files,
 
         const getAttr = key => {
           try {
-            return parsed.get('//content').attr(key).value();
+            return parsed?.content?.$?.[key];
           } catch (err) {
             log('info', 'attribute missing in content.xml',  { key });
           }

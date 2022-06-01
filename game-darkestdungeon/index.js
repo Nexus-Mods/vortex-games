@@ -1,7 +1,7 @@
 const Promise = require('bluebird');
 const path = require('path');
 const winapi = require('winapi-bindings');
-const { parseXmlString } = require('libxmljs');
+const { parseStringPromise } = require('xml2js');
 const { fs, log, util } = require('vortex-api');
 
 let _API;
@@ -127,19 +127,16 @@ function prepareForModding(discovery) {
     })
 }
 
-function setModDataPath(projectFilePath, modPath) {
+async function setModDataPath(projectFilePath, modPath) {
   let projectData;
   return fs.readFileAsync(projectFilePath)
-    .then(xmlData => {
+    .then(async xmlData => {
       try {
-        projectData = parseXmlString(xmlData);
+        projectData = await parseStringPromise(xmlData);
+        return writeProjectFile(projectFilePath, projectData?.project?.Title, modPath);
       } catch (err) {
         return Promise.reject(new util.DataInvalid('Failed to parse project file.'))
       }
-
-      const modDataPath = projectData.get('//ModDataPath');
-      modDataPath.text(modPath);
-      return fs.writeFileAsync(projectFilePath, projectData.toString(), { encoding: 'utf-8' });
     })
 }
 

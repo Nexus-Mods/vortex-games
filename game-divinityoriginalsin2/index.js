@@ -41,6 +41,21 @@ function prepareForModding(discovery, isDefinitiveEdition) {
   return fs.ensureDirWritableAsync(modsPath,() => Promise.resolve());
 }
 
+function versionOrigEd(gamePath, exePath) {
+  const exeVersion = require('exe-version');
+  try {
+    return exeVersion.default(path.join(gamePath, 'bin', 'EoCApp.exe'));
+  } catch (err) {
+    // classic version as shipped with the definive edition
+    return exeVersion.default(path.join(gamePath, 'Classic', 'EoCApp.exe'));
+  }
+}
+
+function versionDefEd(gamePath, exePath) {
+  const exeVersion = require('exe-version');
+  return exeVersion.default(path.join(gamePath, 'DefEd', 'bin', 'EoCApp.exe'));
+}
+
 function main(context) {
   context.registerGame({
     id: GAME_ID,
@@ -51,6 +66,7 @@ function main(context) {
     queryModPath: modPath,
     logo: 'gameart.jpg',
     executable: () => 'bin/SupportTool.exe',
+    getGameVersion: versionOrigEd,
     setup: (discovery) => prepareForModding(discovery, false),
     requiredFiles: [
       'bin/SupportTool.exe',
@@ -72,6 +88,7 @@ function main(context) {
     queryModPath: modPathDE,
     logo: 'gameartDE.png',
     executable: () => 'DefEd/bin/SupportTool.exe',
+    getGameVersion: versionDefEd,
     setup: (discovery) => prepareForModding(discovery, true),
     requiredFiles: [
       'DefEd/bin/SupportTool.exe',

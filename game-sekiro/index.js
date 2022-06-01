@@ -2,7 +2,6 @@ const Promise = require('bluebird');
 const path = require('path');
 const { actions, fs, util } = require('vortex-api');
 
-let _API;
 const GAME_ID = 'sekiro';
 const STEAM_ID = 814380;
 const DINPUT = 'dinput8.dll';
@@ -13,10 +12,10 @@ function findGame() {
     .then(game => game.gamePath);
 }
 
-function prepareForModding(discovery) {
+function prepareForModding(api, discovery) {
   const modEngineDInput = path.join(discovery.path, DINPUT);
   const showModEngineDialog = () => new Promise((resolve, reject) => {
-    _API.store.dispatch(actions.showDialog('question', 'Action required',
+    api.store.dispatch(actions.showDialog('question', 'Action required',
       {
         message: 'Sekiro requires "Sekiro Mod Engine" for mods to install and function correctly.\n' 
                + 'Vortex is able to install Mod Engine automatically (as a mod) but please ensure it is enabled\n'
@@ -66,9 +65,48 @@ function testLooseMod(files, gameId) {
   });
 }
 
+function installRootMod(files, destinationPath) {
+  const dcxFile = files.find(file => file.endsWith(PARTS_DCX_EXT));
+  const idx = dcxFile.toLowerCase().split(path.sep).indexOf('parts');
+  const instructions = files.reduce((accum, file) => {
+    if (path.extname(file) !== '') {
+      accum.push({
+        type: 'copy',
+        source: file,
+        destination: file.split(path.sep).slice(idx).join(path.sep),
+      });
+    }
+    return accum;
+  }, []);
+  return Promise.resolve({ instructions });
+}
+
+function testRootMod(files, gameId) {
+  const isSekiro = gameId === GAME_ID;
+  const loose = hasLooseParts(files);
+  let hasOtherRootFolders = false;
+  if (loose) {
+    const dcxFile = files.find(file => file.endsWith(PARTS_DCX_EXT));
+    if (dcxFile !== undefined) {
+      const segments = dcxFile.toLowerCase().split(path.sep);
+      const idx = segments.findIndex(seg => seg === 'parts');
+      if (idx !== -1) {
+        hasOtherRootFolders = files.filter(f => {
+          const segs = f.toLowerCase().split(path.sep);
+          return (segs.length > (idx + 1) && segs[idx] !== 'parts');
+        }).length > 0;
+      }
+    }
+  }
+
+  return Promise.resolve({
+    supported: isSekiro && loose && hasOtherRootFolders,
+    requiredFiles: [],
+  })
+}
+
 function main(context) {
   const gameExec = 'sekiro.exe';
-  _API = context.api;
   context.registerGame({
     id: GAME_ID,
     name: 'Sekiro',
@@ -84,10 +122,11 @@ function main(context) {
     details: {
       steamAppId: STEAM_ID,
     },
-    setup: prepareForModding,
+    setup: (discovery) => prepareForModding(context.api, discovery),
   });
 
   context.registerInstaller('sek-loose-files', 25, testLooseMod, installLooseMod);
+  context.registerInstaller('sek-root-mod', 20, testRootMod, installRootMod);
 }
 
 module.exports = {

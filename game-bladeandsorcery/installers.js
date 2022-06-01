@@ -6,7 +6,7 @@ const { util } = require('vortex-api');
 const { app, remote } = require('electron');
 const uniApp = app || remote.app;
 
-const { GAME_ID, MOD_MANIFEST } = require('./common');
+const { BAS_EXEC, GAME_ID, MOD_MANIFEST, GameNotDiscoveredException } = require('./common');
 const { getModName, checkModGameVersion, getGameVersion,
   getMinModVersion, getDiscoveryPath } = require('./util');
 
@@ -30,12 +30,12 @@ async function installOfficialMod(files,
   let gameVersion;
   const discoveryPath = getDiscoveryPath(api);
   if (discoveryPath === undefined) {
-    return Promise.reject(new Error('Game is not discovered'));
+    return Promise.reject(new GameNotDiscoveredException());
   }
   let isEngineInject;
   try {
-    gameVersion = await getGameVersion(discoveryPath);
-    minModVersion = await getMinModVersion(discoveryPath);
+    gameVersion = await getGameVersion(discoveryPath, BAS_EXEC);
+    minModVersion = await getMinModVersion(discoveryPath, BAS_EXEC);
     try {
       const relPath = files.find(f => path.basename(f).toLowerCase() === MOD_MANIFEST);
       isEngineInject = path.dirname(relPath).startsWith('BladeAndSorcery_Data');

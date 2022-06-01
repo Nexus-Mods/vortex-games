@@ -25,6 +25,21 @@ function modPath() {
   return path.join(appUni.getPath('documents'), 'My Games', 'BattleTech', 'mods');
 }
 
+function resolveGameVersion(discoveryPath) {
+  const versionPath = path.join(discoveryPath, 'BattleTech_Data', 'StreamingAssets', 'version.json');
+  return fs.readFileAsync(versionPath, { encoding: 'utf8' })
+    .then((res) => {
+      try {
+        const data = JSON.parse(res);
+        return data?.ProductVersion
+          ? Promise.resolve(data.ProductVersion)
+          : Promise.reject(new util.DataInvalid('Cannot resolve version'));
+      } catch (err) {
+        return Promise.reject(err);
+      }
+    })
+}
+
 function main(context) {
   context.registerGame({
     id: GAME_ID,
@@ -34,6 +49,7 @@ function main(context) {
     queryModPath: modPath,
     logo: 'gameart.jpg',
     executable: gameExecutable,
+    getGameVersion: resolveGameVersion,
     requiredFiles: [
       gameExecutable(),
       'BattleTechLauncher.exe',
