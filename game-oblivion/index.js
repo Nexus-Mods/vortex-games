@@ -3,6 +3,10 @@ const path = require('path');
 const { util } = require('vortex-api');
 const winapi = require('winapi-bindings');
 
+// In case the findByName functionality doesn't work properly.
+//  It didn't seem to when we last checked (01/06/2022) due to
+//  a trailing ' ' in the Steam manifest file.
+const STEAM_IDS = ['22330', '900883'];
 const MS_ID = 'BethesdaSoftworks.TESOblivion-PC';
 function findGame() {
   try {
@@ -16,6 +20,7 @@ function findGame() {
     return Promise.resolve(instPath.value);
   } catch (err) {
     return util.steam.findByName('The Elder Scrolls IV: Oblivion')
+      .catch(err => util.GameStoreHelper.findByAppId(STEAM_IDS, 'steam'))
       .catch(err => util.GameStoreHelper.findByAppId([MS_ID], 'xbox'))
       .then(game => (game.gameStoreId === 'xbox')
         // The xbox pass variant has a different file structure; we're naively
