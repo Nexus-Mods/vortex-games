@@ -165,6 +165,10 @@ async function checkModGameVersion(destination, minModVersion, modFile) {
   try {
     let modVersion = await getJSONElement(path.join(destination, modFile), 'GameVersion');
     modVersion = modVersion.toString().replace(',', '.');
+    const segments = modVersion.split('.');
+    if (segments[0] === '0') {
+      modVersion = segments.slice(1).join('.');
+    }
     const coercedMod = semver.coerce(modVersion.toString());
     if (coercedMod === null) {
       return Promise.reject(new util.DataInvalid('Mod manifest has an invalid GameVersion element'));
