@@ -2,8 +2,8 @@ const Promise = require('bluebird');
 const path = require('path');
 const semver = require('semver');
 
-const { GAME_ID, MOD_MANIFEST } = require('./common');
-const { isOfficialModType, getModName, streamingAssetsPath } = require('./util');
+const { GAME_ID, MOD_MANIFEST, BAS_EXEC } = require('./common');
+const { isOfficialModType, getModName, streamingAssetsPath, getGameVersion, missingGameJsonError } = require('./util');
 
 const { actions, fs, log, selectors, util } = require('vortex-api');
 
@@ -16,6 +16,42 @@ function migrate010(api, oldVersion) {
   // If the user had not updated to 0.1.X yet, then his mods
   //  are already installed correctly.
   _SHOULD_MIGRATE = false;
+}
+
+async function migrate0212(api, oldVersion) {
+  if (semver.gte(oldVersion, '0.2.12')) {
+    return Promise.resolve();
+  }
+
+  const state = api.getState();
+  const discovery = selectors.discoveryByGame(state, GAME_ID);
+  const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
+  const modKeys = Object.keys(mods).filter(id => mods[id].modType === 'bas-legacy-modtype');
+  if (discovery?.path === undefined || modKeys.length === 0) {
+    return Promise.resolve();
+  }
+
+  let gameVer;
+  try {
+    gameVer = await getGameVersion(discovery, BAS_EXEC);
+  } catch (err) {
+    return missingGameJsonError(api, err);
+  }
+  const modType = semver.gte(semver.coerce(gameVer), semver.coerce('8.4'))
+    ? 'bas-official-modtype' : 'bas-legacy-modtype';
+  if (modType !== 'bas-official-modtype') {
+    return Promise.resolve();
+  }
+
+  let batched = [actions.setDeploymentNecessary(GAME_ID, true)];
+  await api.awaitUI();
+  const baseFolder = path.join(gameDiscovery.path, streamingAssetsPath());
+  await api.emitAndAwait('purge-mods-in-path', GAME_ID, 'bas-legacy-modtype', baseFolder);
+  for (const key of modKeys) {
+    batched.push(actions.setModType(GAME_ID, key, 'bas-official-modtype'));
+  }
+  util.batchDispatch(api.store, batched);
+  return Promise.resolve();
 }
 
 function migrate020(api, oldVersion) {
@@ -155,4 +191,5 @@ function migrateMod020(api, mod) {
 module.exports = {
   migrate010,
   migrate020,
+  migrate0212,
 }

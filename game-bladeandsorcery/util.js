@@ -130,7 +130,9 @@ async function getGameVersion(discoveryPath, execFile) {
     let gameVersion = await getJSONElement(configFile, 'gameVersion');
     return gameVersion.toString().replace(',', '.');
   } else {
-    return gameVer;
+    const segments = gameVer.split('.');
+    const ver = segments.slice(1).join('.');
+    return ver;
   }
 }
 
@@ -150,7 +152,8 @@ async function getMinModVersion(discoveryPath, execFile) {
       }
     }
   } else {
-    return { version: prodVer, majorOnly: false };
+    const version = prodVer.split('.').slice(1).join('.');
+    return { version, majorOnly: false };
   }
 }
 
@@ -190,6 +193,26 @@ function getDiscoveryPath(api) {
   return discovery.path;
 }
 
+function missingGameJsonError(api, err) {
+  if (err instanceof util.NotFound) {
+    api.sendNotification({
+      id: 'missing-game-json',
+      type: 'error',
+      message: 'Missing Game.json file',
+      actions: [
+        { title: 'More', action: (dismiss) =>
+          api.showDialog('info', 'Missing Game.json file', {
+            text: api.translate('Your game copy is missing its Game.json file, please try running the game at least once, or re-install the game.')
+          }, [ { label: 'Close', action: () => dismiss() } ])
+        },
+      ],
+    })
+    return Promise.reject(new util.ProcessCanceled('Missing Game.json file'));
+  } else {
+    return Promise.reject(err);
+  }
+}
+
 function streamingAssetsPath() {
   return path.join('BladeAndSorcery_Data', 'StreamingAssets');
 }
@@ -208,4 +231,5 @@ module.exports = {
   checkModGameVersion,
   isOfficialModType,
   streamingAssetsPath,
+  missingGameJsonError,
 }
