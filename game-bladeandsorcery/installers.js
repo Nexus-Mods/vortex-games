@@ -56,13 +56,7 @@ async function installOfficialMod(files,
     minModVersion.version = minModVersion.version.toString().replace(',', '.');
   }
   catch (err) {
-    if (err.message.indexOf('Missing config file.') !== -1) {
-      api.showErrorNotification('Missing config file', 'Please run the game at least once to ensure it '
-        + 'generates all required game files; alternatively re-install the game.', { allowReport: false });
-      throw new util.ProcessCanceled('Missing config file.');
-    }
-
-    throw err;
+    return missingGameJsonError(api, err);
   }
 
   if (minModVersion === undefined) {
