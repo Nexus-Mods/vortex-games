@@ -9,10 +9,10 @@ const uniApp = app || remote.app;
 const { BAS_EXEC, GAME_ID, I18N_NAMESPACE, MOD_MANIFEST, GameNotDiscoveredException } = require('./common');
 const { testModInstaller, installMulleMod, installOfficialMod } = require('./installers');
 
-const { migrate010, migrate020 } = require('./migrations');
+const { migrate010, migrate020, migrate0212 } = require('./migrations');
 
 const { isOfficialModType, streamingAssetsPath, getModName,
-        getGameVersion, getMinModVersion, getDiscoveryPath } = require('./util');
+        getGameVersion, getMinModVersion, getDiscoveryPath, missingGameJsonError } = require('./util');
 
 const React = require('react');
 const BS = require('react-bootstrap');
@@ -110,8 +110,7 @@ async function getOfficialModType(api, discovery = undefined) {
   try {
     gameVersion = await getGameVersion(discoveryPath, BAS_EXEC);
   } catch (err) {
-    // Failed to ascertain the game's version
-    return Promise.reject(err);
+    return missingGameJsonError(api, err);
   }
   const modType = semver.gte(semver.coerce(gameVersion), semver.coerce('8.4'))
     ? 'bas-official-modtype' : 'bas-legacy-modtype';
@@ -351,7 +350,7 @@ function infoComponent(context, props) {
         React.createElement('li', {}, t('The load order file will only be picked up by the game in version 8.4 Beta 5 and above', { ns: I18N_NAMESPACE })))));
 }
 
-function resolveGameVersion(discoveryPath) {
+function resolveGameVersion(api, discoveryPath) {
   if (semver.satisfies(uniApp.getVersion(), '<1.4.0')) {
     return Promise.reject(new util.ProcessCanceled('not supported in older Vortex versions'));
   }
@@ -360,6 +359,7 @@ function resolveGameVersion(discoveryPath) {
       const coerced = semver.coerce(minVer.version);
       return Promise.resolve(coerced.version);
     })
+    .catch(err => missingGameJsonError(api, err))
 }
 
 function requiresLauncher(gamePath) {
@@ -388,7 +388,7 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: () => path.join(streamingAssetsPath(), 'Mods'),
-    getGameVersion: resolveGameVersion,
+    getGameVersion: (discoveryPath) => resolveGameVersion(context.api, discoveryPath),
     logo: 'gameart.jpg',
     executable: () => BAS_EXEC,
     requiredFiles: [BAS_EXEC],
@@ -406,6 +406,7 @@ function main(context) {
 
   context.registerMigration(old => migrate010(context.api, old));
   context.registerMigration(old => migrate020(context.api, old));
+  context.registerMigration(old => migrate0212(context.api, old));
 
   // Only reason why we're still keeping this installer is to block users from
   //  installing outdated mods.
