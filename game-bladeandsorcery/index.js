@@ -351,10 +351,10 @@ function infoComponent(context, props) {
 }
 
 function resolveGameVersion(api, discoveryPath) {
-  if (semver.satisfies(uniApp.getVersion(), '<1.4.0')) {
+  if ((process.env.NODE_ENV !== 'development') && semver.satisfies(uniApp.getVersion(), '<1.4.0')) {
     return Promise.reject(new util.ProcessCanceled('not supported in older Vortex versions'));
   }
-  return getMinModVersion(discoveryPath, BAS_EXEC)
+  return getMinModVersion(discoveryPath, BAS_EXEC, true)
     .then(minVer => {
       const coerced = semver.coerce(minVer.version);
       return Promise.resolve(coerced.version);
