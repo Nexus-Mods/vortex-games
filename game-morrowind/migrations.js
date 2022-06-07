@@ -36,8 +36,12 @@ async function migrate103(api, oldVersion) {
     }
   }
 
-  if (batched.length > 0) {
+  if (batched.length > 0 && util.batchDispatch !== undefined) {
     util.batchDispatch(api.store, batched);
+  } else {
+    for (const action of batched) {
+      api.store.dispatch(action);
+    }
   }
   return Promise.resolve();
 }
