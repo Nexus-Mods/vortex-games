@@ -130,9 +130,7 @@ async function getGameVersion(discoveryPath, execFile) {
     let gameVersion = await getJSONElement(configFile, 'gameVersion');
     return gameVersion.toString().replace(',', '.');
   } else {
-    const segments = gameVer.split('.');
-    const ver = segments.slice(1).join('.');
-    return ver;
+    return gameVer;
   }
 }
 
@@ -152,8 +150,7 @@ async function getMinModVersion(discoveryPath, execFile) {
       }
     }
   } else {
-    const version = prodVer.split('.').slice(1).join('.');
-    return { version, majorOnly: false };
+    return { version: prodVer, majorOnly: false };
   }
 }
 
@@ -165,10 +162,6 @@ async function checkModGameVersion(destination, minModVersion, modFile) {
   try {
     let modVersion = await getJSONElement(path.join(destination, modFile), 'GameVersion');
     modVersion = modVersion.toString().replace(',', '.');
-    const segments = modVersion.split('.');
-    if (segments[0] === '0') {
-      modVersion = segments.slice(1).join('.');
-    }
     const coercedMod = semver.coerce(modVersion.toString());
     if (coercedMod === null) {
       return Promise.reject(new util.DataInvalid('Mod manifest has an invalid GameVersion element'));
