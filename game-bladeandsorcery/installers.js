@@ -106,17 +106,25 @@ async function installOfficialMod(files,
           return Promise.reject(err);
         }
 
-        if (semver.satisfies(uniApp.getVersion(), '>=1.4.0')) {
+        const segments = gameVersion.split('.');
+        const ver = segments[0] === '0' ? segments.slice(1).join('.') : gameVersion;
+        if ((process.env.NODE_ENV === 'development') || semver.satisfies(uniApp.getVersion(), '>=1.4.0')) {
+          // All this bullshit could've been avoided had the game used semantic versioning
+          //  from the get-go.
           instructions.push({
             type: 'attribute',
             key: 'maxGameVersion',
-            value: semver.coerce(modVersion.modVersion).version,
+            value: (segments[0] === '0')
+              ? (modVersion.modVersion.split('.')[0] === '0')
+                ? semver.coerce(modVersion.modVersion).version
+                : semver.coerce(`0.${modVersion.modVersion}`).version
+              : semver.coerce(modVersion.modVersion).version,
           })
         }
 
         const modTypeInstr = {
           type: 'setmodtype',
-          value: isEngineInject ? 'dinput' : semver.gte(semver.coerce(gameVersion), semver.coerce('8.4'))
+          value: isEngineInject ? 'dinput' : semver.gte(semver.coerce(ver), semver.coerce('8.4'))
             ? 'bas-official-modtype'
             : 'bas-legacy-modtype'
         }
