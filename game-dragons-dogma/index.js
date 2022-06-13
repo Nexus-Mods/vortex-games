@@ -220,7 +220,7 @@ function reportInvalidMod(context, files) {
         + 'for this game, and probably will not install correctly. Are you sure you want '
         + 'to proceed?', { ns: I18N_NAMESPACE }),
     }, [
-      { label: 'Cancel', action: () => reject(new util.ProcessCanceled()) },
+      { label: 'Cancel', action: () => reject(new util.UserCanceled()) },
       { label: 'Proceed', action: () => resolve() },
     ]);
   })
@@ -234,7 +234,7 @@ function reportInvalidMod(context, files) {
       }))
 
       return Promise.resolve({ instructions });
-    })
+    });
 }
 
 function testIsInvalidMod(files, gameId) {
