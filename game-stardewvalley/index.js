@@ -569,7 +569,14 @@ module.exports = {
             if (!isModCandidateValid(mod, entry)) {
               return Promise.resolve();
             }
-            const relPath = path.relative(modPaths[mod.type ?? ''], entry.filePath);
+            const from = modPaths[mod.type ?? ''];
+            if (from === undefined) {
+              // How is this even possible? regardless it's not this
+              //  function's job to report this.
+              log('error', 'failed to resolve mod path for mod type', mod.type);
+              return Promise.resolve();
+            }
+            const relPath = path.relative(from, entry.filePath);
             const targetPath = path.join(installPath, mod.id, relPath);
             // copy the new file back into the corresponding mod, then delete it. That way, vortex will
             // create a link to it with the correct deployment method and not ask the user any questions
