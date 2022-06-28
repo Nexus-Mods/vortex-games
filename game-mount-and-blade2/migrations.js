@@ -15,6 +15,11 @@ function migrate045(api, oldVersion) {
 
   return api.awaitUI()
     .then(() => {
+      const state = api.getState();
+      const activeGameId = selectors.activeGameId(state);
+      if (activeGameId !== GAME_ID) {
+        return Promise.resolve();
+      }
       api.sendNotification({
         id: 'mnb2-045-migration',
         type: 'info',
