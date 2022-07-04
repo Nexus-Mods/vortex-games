@@ -7,6 +7,13 @@ const { parseStringPromise } = require('xml2js');
 const GAME_ID = 'rimworld';
 const STEAM_DLL = 'steam_api64.dll'
 const ABOUT_XML_FILE = 'about.xml';
+const GIT_FILES = [
+  '.gitignore', '.gitattributes'
+];
+
+const ROOT_FOLDER_FILES = [
+  'README.MD', 'LICENSE', 'CONTRIBUTING.MD'
+];
 
 function findGame() {
   return util.steam.findByAppId('294100')
@@ -48,13 +55,16 @@ function testSupportedSteamMod(files, gameId) {
 
 async function installSteamMod(files, destinationPath, gameId) {
   const aboutFile = files.find(file => path.basename(file).toLowerCase() === ABOUT_XML_FILE);
-  const segments = aboutFile.split(path.sep);
-  const idx = segments.length - 2;
+  let rootCandidate = files.find(file => ROOT_FOLDER_FILES.includes(path.basename(file)));
+  const rootFile = rootCandidate ?? aboutFile;
+  const segments = rootFile.split(path.sep);
+  const idx = segments.length - segments.findIndex(seg => seg === path.basename(rootFile));
   let modName = await getModName(path.join(destinationPath, aboutFile));
   if (modName === undefined) {
     modName = path.basename(destinationPath, '.installing');
   }
-  const filtered = files.filter(filePath => !filePath.endsWith(path.sep));
+  modName = util.sanitizeFilename(modName).replace(/\./g, '_');
+  const filtered = files.filter(filePath => !filePath.endsWith(path.sep) && path.extname(path.basename(filePath)) !== '' && !GIT_FILES.includes(path.basename(filePath)));
   const instructions = filtered.map(file => {
     const destination = path.join(modName, file.split(path.sep).slice(idx).join(path.sep));
     return {
