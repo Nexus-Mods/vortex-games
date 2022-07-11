@@ -181,7 +181,7 @@ function migrate101(api, oldVersion) {
 // if merged. E.g. texture/mesh replacers affecting the same armor wouldn't.
 // I further found that merging bbsrpg_core.arc somehow breaks the number one mod on the site,
 // haven't figured out why yet.
-const mergeNames = [ 'game_main.arc'/*, 'bbsrpg_core.arc', 'bbs_rpg.arc'*/ ];
+const mergeNames = [ 'game_main.arc', 'title.arc'/*, 'bbsrpg_core.arc', 'bbs_rpg.arc'*/ ];
 
 function main(context) {
   context.requireExtension('mtframework-arc-support');
