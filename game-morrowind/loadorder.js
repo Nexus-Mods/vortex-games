@@ -47,7 +47,13 @@ async function refreshPlugins(api) {
   }
 
   const dataDirectory = path.join(discovery.path, 'Data Files');
-  const fileEntries = await fs.readdirAsync(dataDirectory);
+  let fileEntries = [];
+  try {
+    fileEntries = await fs.readdirAsync(dataDirectory);
+  } catch (err) {
+    // No data directory - no problem!
+    return Promise.resolve([]);
+  }
   const pluginEntries = [];
   for (const fileName of fileEntries) {
     if (!['.esp', '.esm'].includes(path.extname(fileName.toLocaleLowerCase()))) {
