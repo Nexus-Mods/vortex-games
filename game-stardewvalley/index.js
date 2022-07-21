@@ -464,7 +464,7 @@ module.exports = {
     };
 
     const isModCandidateValid = (mod, entry) => {
-      if (mod === undefined || mod.type === 'sdvrootfolder') {
+      if (mod?.id === undefined || mod.type === 'sdvrootfolder') {
         // There is no reliable way to ascertain whether a new file entry
         //  actually belongs to a root modType as some of these mods will act
         //  as replacement mods. This obviously means that if the game has
