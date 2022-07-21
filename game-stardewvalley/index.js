@@ -286,11 +286,12 @@ async function install(files,
   const mods = manifestFiles.map(manifestFile => {
     const rootFolder = path.dirname(manifestFile);
     const manifestIndex = manifestFile.toLowerCase().indexOf(MANIFEST_FILE);
-    const modFiles = files.filter(file =>
-      (file.indexOf(rootFolder) !== -1)
-      && (path.dirname(file) !== '.')
-      && !file.endsWith(path.sep));
-
+    const filterFunc = (file) => (rootFolder !== '.')
+      ? ((file.indexOf(rootFolder) !== -1)
+        && (path.dirname(file) !== '.')
+        && !file.endsWith(path.sep))
+      : !file.endsWith(path.sep);
+    const modFiles = files.filter(filterFunc);
     return {
       manifestFile,
       rootFolder,
