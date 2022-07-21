@@ -353,7 +353,10 @@ async function installSMAPI(getDiscoveryPath, files, destinationPath) {
     const isCorrectPlatform = fileHasCorrectPlatform(file);
     return isCorrectPlatform && SMAPI_DATA.includes(path.basename(file).toLowerCase())
   });
-  
+  if (dataFile === undefined) {
+    return Promise.reject(new util.DataInvalid('Failed to find the SMAPI data files - download appears '
+      + 'to be corrupted; please re-download SMAPI and try again'));
+  }
   let data = '';
   try {
     data = await fs.readFileAsync(path.join(getDiscoveryPath(), 'Stardew Valley.deps.json'), { encoding: 'utf8' });
