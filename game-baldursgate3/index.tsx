@@ -539,7 +539,7 @@ function divine(api: types.IExtensionApi,
         returned = true;
         if (code === 0) {
           return resolve({ stdout, returnCode: 0 });
-        } else if (code === 2) {
+        } else if ([2, 102].includes(code)) {
           return resolve({ stdout: '', returnCode: 2 });
         } else {
           // divine.exe returns the actual error code + 100 if a fatal error occured
@@ -731,11 +731,11 @@ async function readPAKList(api: types.IExtensionApi) {
   let paks: string[];
   try {
     paks = (await fs.readdirAsync(modsPath()))
-    .filter(fileName => path.extname(fileName).toLowerCase() === '.pak');
+      .filter(fileName => path.extname(fileName).toLowerCase() === '.pak');
   } catch (err) {
     if (err.code === 'ENOENT') {
       try {
-      await fs.ensureDirWritableAsync(modsPath(), () => Bluebird.resolve());
+        await fs.ensureDirWritableAsync(modsPath(), () => Bluebird.resolve());
       } catch (err) {
         // nop
       }
@@ -778,10 +778,12 @@ async function readPAKs(api: types.IExtensionApi)
             ? state.persistent.mods[GAME_ID]?.[manifestEntry.source]
             : undefined;
 
+          const pakPath = path.join(modsPath(), fileName);
+
           return {
             fileName,
             mod,
-            info: await extractPakInfoImpl(api, path.join(modsPath(), fileName)),
+            info: await extractPakInfoImpl(api, pakPath),
           };
         } catch (err) {
           if (err instanceof DivineExecMissing) {
