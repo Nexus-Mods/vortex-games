@@ -213,22 +213,29 @@ function main(context) {
   });
 
   context.registerMigration(old => migrate101(context.api, old));
-  context.registerInstaller('dddainvalidmod', 25, testIsInvalidMod, (files) => reportInvalidMod(context, files));
+  context.registerInstaller('dddainvalidmod', 25, testIsInvalidMod, (...args) => reportInvalidMod(context, ...args));
 
   return true;
 }
 
-function reportInvalidMod(context, files) {
+function reportInvalidMod(context, files, destinationPath, gameId, progressDelegate, choices, unattended, archivePath) {
   const invalidModDialog = () => new Promise((resolve, reject) => {
-    context.api.showDialog('question', 'Invalid mod', {
-      text: context.api.translate('This mod does not fit the expected packaging pattern '
+    if (unattended) {
+      return resolve();
+    }
+
+    context.api.showDialog('question', 'Invalid archive', {
+      text: 'The archive "{{archiveName}}" does not fit the expected packaging pattern '
         + 'for this game, and probably will not install correctly. Are you sure you want '
-        + 'to proceed?', { ns: I18N_NAMESPACE }),
+        + 'to proceed?',
+      parameters: {
+        archiveName: archivePath !== undefined ? path.basename(archivePath) : '',
+      }
     }, [
       { label: 'Cancel', action: () => reject(new util.UserCanceled()) },
       { label: 'Proceed', action: () => resolve() },
     ]);
-  })
+  });
 
   return invalidModDialog()
     .then(() => {
