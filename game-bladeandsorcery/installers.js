@@ -8,7 +8,7 @@ const uniApp = app || remote.app;
 
 const { BAS_EXEC, GAME_ID, MOD_MANIFEST, GameNotDiscoveredException } = require('./common');
 const { getModName, checkModGameVersion, getGameVersion,
-  getMinModVersion, getDiscoveryPath } = require('./util');
+  getMinModVersion, getDiscoveryPath, missingGameJsonError } = require('./util');
 
 function testModInstaller(files, gameId, fileName) {
   // Make sure we're able to support this mod.
