@@ -50,10 +50,40 @@ function findGame() {
     .then(game => game.gamePath);
 }
 
+function showBranchWarning(api) {
+  return api.sendNotification({
+    type: 'warning',
+    message: api.translate('Resident Evil 2 RT Update is incompatible', { ns: I18N_NAMESPACE }),
+    allowSuppress: true,
+    actions: [
+      {
+        title: 'More',
+        action: (dismiss) => {
+          api.showDialog('info', 'Resident Evil 2 RT Update', {
+            text: 'The latest RE2 RT update is not compatible with this game extension. '
+                + 'To successfully mod your game using Vortex, you must use the "dx11_non-rt" branch of the game. '
+                + 'Vortex\'s Steam File Downloader is configured to overwrite the game files with the "dx11_non-rt" branch '
+                + 'but it may be wise to change the branch on Steam as well to avoid any issues.'
+                + 'To use the Vortex Steam File Downloader, go to the mods page and click the "Verify Archive Integrity" button.',
+          }, [
+            { label: 'Close', action: () => dismiss() },
+          ]);
+        },
+      },
+      {
+        title: 'Understood',
+        action: dismiss => dismiss()
+      }
+    ],
+  });
+}
+
 function prepareForModding(discovery, api) {
   if (api.ext.addReEngineGame === undefined) {
     return Promise.reject(new Error('re-engine-wrapper dependency is not loaded!'));
   }
+
+  showBranchWarning(api);
   return fs.statAsync(MIGRATION_FILE)
     .then(() => migrateToReWrapper(api))
     .catch(err => new Promise((resolve, reject) => {
@@ -64,6 +94,8 @@ function prepareForModding(discovery, api) {
           revalidation: REVAL_SCRIPT,
           extract: BMS_SCRIPT,
         },
+        depotIds: [883711, 883712],
+        steamBranch: 'dx11_non-rt',
         fileListPath: ORIGINAL_FILE_LIST,
         legacyArcNames,
       }, err => (err === undefined)
@@ -162,6 +194,8 @@ function migrateToReWrapper(api) {
         revalidation: REVAL_SCRIPT,
         extract: BMS_SCRIPT,
       },
+      depotIds: [883711, 883712],
+      steamBranch: 'dx11_non-rt',
       fileListPath: ORIGINAL_FILE_LIST,
       legacyArcNames,
     };
@@ -244,6 +278,7 @@ function main(context) {
       SteamAPPId: STEAM_ID.toString(),
     },
     details: {
+      hideSteamKit: true,
       hashFiles: ['re2.exe'],
     },
     setup: (discovery) => prepareForModding(discovery, context.api),

@@ -80,8 +80,7 @@ function migrateToReWrapper(api) {
     return new Promise((resolve) => {
       return api.sendNotification({
         type: 'warning',
-        message: api.translate('DMC5 mods need to be re-installed',
-          { ns: I18N_NAMESPACE }),
+        message: api.translate('DMC5 mods need to be re-installed'),
         noDismiss: true,
         actions: [
           {
@@ -192,6 +191,7 @@ function main(context) {
       SteamAPPId: STEAM_ID.toString(),
     },
     details: {
+      hideSteamKit: true,
       steamAppId: STEAM_ID,
       hashFiles: ['DevilMayCry5.exe'],
     },

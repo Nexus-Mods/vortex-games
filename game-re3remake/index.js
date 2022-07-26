@@ -111,6 +111,7 @@ function main(context) {
       SteamAPPId: STEAM_ID.toString(),
     },
     details: {
+      hideSteamKit: true,
       hashFiles: ['re3.exe'],
     },
     setup: (discovery) => prepareForModding(discovery, context.api),
