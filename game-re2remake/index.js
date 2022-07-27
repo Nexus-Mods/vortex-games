@@ -51,28 +51,40 @@ function findGame() {
 }
 
 function showBranchWarning(api) {
-  return api.sendNotification({
+  const t = api.translate;
+  api.sendNotification({
+    id: 're2-branch-warning-notification',
     type: 'warning',
-    message: api.translate('Resident Evil 2 RT Update is incompatible', { ns: I18N_NAMESPACE }),
+    message: api.translate('Resident Evil 2 RT(DX12) Update is incompatible', { ns: I18N_NAMESPACE }),
     allowSuppress: true,
     actions: [
       {
         title: 'More',
         action: (dismiss) => {
-          api.showDialog('info', 'Resident Evil 2 RT Update', {
-            text: 'The latest RE2 RT update is not compatible with this game extension. '
-                + 'To successfully mod your game using Vortex, you must use the "dx11_non-rt" branch of the game. '
-                + 'Vortex\'s Steam File Downloader is configured to overwrite the game files with the "dx11_non-rt" branch '
-                + 'but it may be wise to change the branch on Steam as well to avoid any issues.'
-                + 'To use the Vortex Steam File Downloader, go to the mods page and click the "Verify Archive Integrity" button.',
+          api.showDialog('info', 'Resident Evil 2 RT(DX12) Update', {
+            bbcode: t('The latest RE2 RT update is not compatible with this game extension. '
+                  + 'To successfully mod your game using Vortex, you must use the "dx11_non-rt" branch of the game.{{bl}}'
+                  + 'Vortex\'s Steam File Downloader is configured to overwrite the game files with the "dx11_non-rt" branch '
+                  + 'but it may be wise to change the branch on Steam as well to avoid any issues.{{bl}}'
+                  + 'To use the Vortex Steam File Downloader, go to the mods page and click the "Verify Archive Integrity" button.{{bl}}'
+                  + 'Alternatively you can manually switch game branches through Steam itself, and delete the "invalcache.json" file inside '
+                  + 'your game\'s staging folder.',
+                  { replace: { bl: '[br][/br][br][/br]' } }),
           }, [
-            { label: 'Close', action: () => dismiss() },
+            { label: 'Close', action: () => {
+                api.store.dispatch(actions.suppressNotification('re2-branch-warning-notification', true));
+                dismiss() 
+              }
+            },
           ]);
         },
       },
       {
         title: 'Understood',
-        action: dismiss => dismiss()
+        action: dismiss => {
+          api.store.dispatch(actions.suppressNotification('re2-branch-warning-notification', true));
+          dismiss();
+        }
       }
     ],
   });
