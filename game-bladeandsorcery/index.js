@@ -112,7 +112,9 @@ async function getOfficialModType(api, discovery = undefined) {
   } catch (err) {
     return missingGameJsonError(api, err);
   }
-  const modType = semver.gte(semver.coerce(gameVersion), semver.coerce('8.4'))
+  const segments = gameVersion.split('.');
+  const ver = segments[0] === '0' ? segments.slice(1).join('.') : gameVersion;
+  const modType = semver.gte(semver.coerce(ver), semver.coerce('8.4'))
     ? 'bas-official-modtype' : 'bas-legacy-modtype';
   return Promise.resolve(modType);
 }
