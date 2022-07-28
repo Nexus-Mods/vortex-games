@@ -24,12 +24,55 @@ const GAME_PAK_FILE = 're_chunk_000.pak';
 const GAME_ID = 'residentevil32020';
 const STEAM_ID = 952060;
 
+const I18N_NAMESPACE = `game-${GAME_ID}`;
+
 function findGame() {
   return util.steam.findByAppId(STEAM_ID.toString())
     .then(game => game.gamePath);
 }
 
+function showBranchWarning(api) {
+  const t = api.translate;
+  api.sendNotification({
+    id: 're3-branch-warning-notification',
+    type: 'warning',
+    message: api.translate('Resident Evil 3 RT(DX12) Update is incompatible', { ns: I18N_NAMESPACE }),
+    allowSuppress: true,
+    actions: [
+      {
+        title: 'More',
+        action: (dismiss) => {
+          api.showDialog('info', 'Resident Evil 3 RT(DX12) Update', {
+            bbcode: t('The latest RE3 RT update is not compatible with this game extension. '
+                  + 'To successfully mod your game using Vortex, you must use the "dx11_non-rt" branch of the game.{{bl}}'
+                  + 'Vortex\'s Steam File Downloader is configured to overwrite the game files with the "dx11_non-rt" branch '
+                  + 'but it may be wise to change the branch on Steam as well to avoid any issues.{{bl}}'
+                  + 'To use the Vortex Steam File Downloader, go to the mods page and click the "Verify Archive Integrity" button.{{bl}}'
+                  + 'Alternatively you can manually switch game branches through Steam itself, and delete the "invalcache.json" file inside '
+                  + 'your game\'s staging folder.',
+                  { replace: { bl: '[br][/br][br][/br]' } }),
+          }, [
+            { label: 'Close', action: () => {
+                api.store.dispatch(actions.suppressNotification('re3-branch-warning-notification', true));
+                dismiss();
+              }
+            },
+          ]);
+        },
+      },
+      {
+        title: 'Understood',
+        action: dismiss => {
+          api.store.dispatch(actions.suppressNotification('re3-branch-warning-notification', true));
+          dismiss();
+        }
+      }
+    ],
+  });
+}
+
 function prepareForModding(discovery, api) {
+  showBranchWarning(api);
   if (api.ext.addReEngineGame === undefined) {
     return Promise.reject(new Error('re-engine-wrapper dependency is not loaded!'));
   }
@@ -41,6 +84,8 @@ function prepareForModding(discovery, api) {
         revalidation: REVAL_SCRIPT,
         extract: BMS_SCRIPT,
       },
+      depotIds: [952061, 952062],
+      steamBranch: 'dx11_non-rt',
       fileListPath: ORIGINAL_FILE_LIST,
     }, err => (err === undefined)
       ? resolve()
@@ -85,13 +130,6 @@ async function installContent(files,
   });
 
   return Promise.resolve({ instructions });
-
-  // // Create the wildcards quickBMS is going to use to filter/find
-  // //  list matches.
-  // const wildCards = filtered.map(fileEntry =>
-  //   fileEntry.destination.replace(/\\/g, '/'));
-  // return addToFileList(wildCards)
-  //   .then(() => Promise.resolve({ instructions }));
 }
 
 function main(context) {
