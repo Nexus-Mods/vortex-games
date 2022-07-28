@@ -43,13 +43,16 @@ function showBranchWarning(api) {
         title: 'More',
         action: (dismiss) => {
           api.showDialog('info', 'Resident Evil 3 RT(DX12) Update', {
-            bbcode: t('The latest RE3 RT update is not compatible with this game extension. '
-                  + 'To successfully mod your game using Vortex, you must use the "dx11_non-rt" branch of the game.{{bl}}'
-                  + 'Vortex\'s Steam File Downloader is configured to overwrite the game files with the "dx11_non-rt" branch '
-                  + 'but it may be wise to change the branch on Steam as well to avoid any issues.{{bl}}'
-                  + 'To use the Vortex Steam File Downloader, go to the mods page and click the "Verify Archive Integrity" button.{{bl}}'
-                  + 'Alternatively you can manually switch game branches through Steam itself, and delete the "invalcache.json" file inside '
-                  + 'your game\'s staging folder.',
+            bbcode: t('The latest Resident Evil 3 Ray Tracing update is not compatible with '
+                    + 'the Vortex game extension. To successfully mod your game you will need to '
+                    + 'switch to the “dx11_non-rt” branch of the game.{{bl}}'
+                    + 'You can use Vortex’s built-in Steam File Verification to overwrite the '
+                    + 'updated files with the previous moddable versions by clicking ‘Fix’ below.{{bl}}'
+                    + 'Alternatively, you can manually switch the Resident Evil 3 branch in Steam by right '
+                    + 'clicking the game in your Steam library and clicking Properties. Then click Betas and '
+                    + 'select the “dx11_non-rt” option in the drop-down menu. You will also need to delete '
+                    + 'the “invalcache.json” file inside your games staging folder.{{bl}}'
+                    + 'Note: We recommend switching the branch to “dx11_non-rt” in Steam to prevent future updates from breaking compatibility with mods.',
                   { replace: { bl: '[br][/br][br][/br]' } }),
             checkboxes: [
               { id: 'dontaskagain', text: 'Don\'t ask me again', value: false },
