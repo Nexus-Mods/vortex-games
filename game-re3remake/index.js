@@ -51,18 +51,33 @@ function showBranchWarning(api) {
                   + 'Alternatively you can manually switch game branches through Steam itself, and delete the "invalcache.json" file inside '
                   + 'your game\'s staging folder.',
                   { replace: { bl: '[br][/br][br][/br]' } }),
+            checkboxes: [
+              { id: 'dontaskagain', text: 'Don\'t ask me again', value: false },
+            ],
           }, [
             { label: 'Close', action: () => {
-                api.store.dispatch(actions.suppressNotification('re3-branch-warning-notification', true));
                 dismiss();
               }
             },
-          ]);
+            { label: 'Fix', action: () => {
+              api.events.emit('re-engine-wrapper-run-file-verification', GAME_ID);
+              api.store.dispatch(actions.suppressNotification('re3-branch-warning-notification', true));
+              dismiss();
+            }
+          },
+          ])
+          .then((result) => {
+            if (result.input['dontaskagain']) {
+              api.store.dispatch(actions.suppressNotification('re3-branch-warning-notification', true));    
+            }
+            return Promise.resolve();
+          })
         },
       },
       {
-        title: 'Understood',
+        title: 'Fix',
         action: dismiss => {
+          api.events.emit('re-engine-wrapper-run-file-verification', GAME_ID);
           api.store.dispatch(actions.suppressNotification('re3-branch-warning-notification', true));
           dismiss();
         }
@@ -72,7 +87,6 @@ function showBranchWarning(api) {
 }
 
 function prepareForModding(discovery, api) {
-  showBranchWarning(api);
   if (api.ext.addReEngineGame === undefined) {
     return Promise.reject(new Error('re-engine-wrapper dependency is not loaded!'));
   }
@@ -90,7 +104,10 @@ function prepareForModding(discovery, api) {
     }, err => (err === undefined)
       ? resolve()
       : reject(err));
-  }).then(() => fs.ensureDirWritableAsync(path.join(discovery.path, 'natives')));
+  }).then(() => {
+    showBranchWarning(api);
+    fs.ensureDirWritableAsync(path.join(discovery.path, 'natives'))
+  });
 }
 
 function testSupportedContent(files, gameId) {
