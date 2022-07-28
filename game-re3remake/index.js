@@ -106,7 +106,7 @@ function prepareForModding(discovery, api) {
       : reject(err));
   }).then(() => {
     showBranchWarning(api);
-    fs.ensureDirWritableAsync(path.join(discovery.path, 'natives'))
+    return fs.ensureDirWritableAsync(path.join(discovery.path, 'natives'))
   });
 }
 
