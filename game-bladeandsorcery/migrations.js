@@ -45,7 +45,7 @@ async function migrate0212(api, oldVersion) {
 
   let batched = [actions.setDeploymentNecessary(GAME_ID, true)];
   await api.awaitUI();
-  const baseFolder = path.join(gameDiscovery.path, streamingAssetsPath());
+  const baseFolder = path.join(discovery.path, streamingAssetsPath());
   await api.emitAndAwait('purge-mods-in-path', GAME_ID, 'bas-legacy-modtype', baseFolder);
   for (const key of modKeys) {
     batched.push(actions.setModType(GAME_ID, key, 'bas-official-modtype'));
