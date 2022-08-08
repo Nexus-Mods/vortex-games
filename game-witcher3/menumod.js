@@ -97,7 +97,7 @@ function populateCache(api, activeProfile, modIds, initialCacheValue) {
     }).catch(err => {
       if  (['ENOENT', 'ENOTFOUND'].indexOf(err.code) === -1) {
         log('error', 'Failed to lookup menu mod files',
-          { path: path.join(stagingFolder, mod.installationPath), error: err.message });
+          { path: source, error: err.message });
       }
     })
 
