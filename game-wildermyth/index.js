@@ -7,8 +7,6 @@ const STEAMAPP_ID = '763890';
 const GOGAPP_ID = '1853330157';
 const MOD_FILE_EXT = ".json";
 
-//Is the queryModPath right? What is it relative to?
-
 function main(context) {
   context.registerGame({
     id: GAME_ID,
