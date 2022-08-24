@@ -392,7 +392,7 @@ function main(context: types.IExtensionContext) {
         .map(instr => instr.destination));
       return Promise.resolve(candidateFound) as any;
     },
-      { name: 'Root Directory Mod', mergeMods: true });
+      { name: 'Root Directory Mod', mergeMods: true, deploymentEssential: false });
 
   context.registerMigration(toBlue(old => migrate020(context.api, old)));
   context.registerMigration(toBlue(old => migrate100(context, old)));
