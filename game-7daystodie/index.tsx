@@ -5,11 +5,11 @@ import { actions, fs, log, selectors, types, util } from 'vortex-api';
 
 import * as React from 'react';
 
-import { GAME_ID, gameExecutable, MOD_INFO, modsRelPath } from './common';
+import { GAME_ID, gameExecutable, MOD_INFO, launcherSettingsFilePath, DEFAULT_LAUNCHER_SETTINGS } from './common';
 import { deserialize, serialize, validate } from './loadOrder';
-import { migrate020, migrate100 } from './migrations';
+import { migrate020, migrate100, migrate1011 } from './migrations';
 import { ILoadOrderEntry, IProps } from './types';
-import { genProps, getModName, makePrefix, reversePrefix, toBlue } from './util';
+import { ensureLOFile, genProps, getModName, makePrefix, reversePrefix, toBlue } from './util';
 
 const STEAM_ID = '251570';
 const STEAM_DLL = 'steamclient64.dll';
@@ -19,11 +19,18 @@ const ROOT_MOD_CANDIDATES = ['bepinex'];
 const setPrefixOffset = createAction('7DTD_SET_PREFIX_OFFSET',
   (profile: string, offset: number) => ({ profile, offset }));
 
+const setUDF = createAction('7DTD_SET_UDF',
+  (udf: string) => ({ udf }));
+
 const reducer: types.IReducerSpec = {
   reducers: {
     [setPrefixOffset as any]: (state, payload) => {
       const { profile, offset } = payload;
       return util.setSafe(state, ['prefixOffset', profile], offset);
+    },
+    [setUDF as any]: (state, payload) => {
+      const { udf } = payload;
+      return util.setSafe(state, ['udf'], udf);
     },
   },
   defaults: {},
@@ -100,13 +107,73 @@ async function findGame() {
     .then(game => game.gamePath);
 }
 
+function parseAdditionalParameters(parameters: string) {
+  const udfParam = parameters.split('-').find(param => param.startsWith('UserDataFolder='));
+  const udf = udfParam ? udfParam.split('=')?.[1]?.trimEnd() : undefined;
+  return (udf && path.isAbsolute(udf)) ? udf : undefined;
+}
+
 async function prepareForModding(context: types.IExtensionContext,
                                  discovery: types.IDiscoveryResult) {
-  const modsPath = path.join(discovery.path, modsRelPath());
+  const requiresRestart = util.getSafe(context.api.getState(),
+    ['settings', '7daystodie', 'udf'], undefined) === undefined;
+  const launcherSettings = launcherSettingsFilePath();
+  const relaunchExt = () => {
+    return context.api.showDialog('info', 'Restart Required', {
+      text: 'The extension requires a restart to complete the UDF setup. '
+          + 'The extension will now exit - please re-activate it via the games page or dashboard.',
+    }, [ { label: 'Restart Extension' } ])
+    .then(() => {
+      return Promise.reject(new util.ProcessCanceled('Restart required'));
+    });
+  }
+  const selectUDF = async () => {
+    const res = await context.api.showDialog('info', 'Choose User Defined Folder', {
+      text: 'The modding pattern for 7DTD is changing. The Mods path inside the game directory '
+          + 'is being deprecated and mods located in the old path will no longer work in the near '
+          + 'future. Please select your User Defined Folder (UDF) - Vortex will deploy to this new location.',
+    },
+    [
+      { label: 'Cancel' },
+      { label: 'Select UDF' },
+    ]);
+    if (res.action !== 'Select UDF') {
+      return Promise.reject(new util.ProcessCanceled('Cannot proceed without UFD'));
+    }
+    await fs.ensureDirWritableAsync(path.dirname(launcherSettings));
+    await ensureLOFile(context);
+    const directory = await context.api.selectDir({
+      title: 'Select User Data Folder',
+      defaultPath: path.join(path.dirname(launcherSettings)),
+    });
+    if (!directory) {
+      return Promise.reject(new util.ProcessCanceled('Cannot proceed without UFD'));
+    }
+    await fs.ensureDirWritableAsync(path.join(directory, 'Mods'));
+    const launcher = DEFAULT_LAUNCHER_SETTINGS;
+    launcher.DefaultRunConfig.AdditionalParameters = `-UserDataFolder=${directory}`;
+    const launcherData = JSON.stringify(launcher, null, 2);
+    await fs.writeFileAsync(launcherSettings, launcherData, { encoding: 'utf8' });
+    context.api.store.dispatch(setUDF(directory));
+    return (requiresRestart) ? relaunchExt() : Promise.resolve();
+  };
+
   try {
-    await fs.ensureDirWritableAsync(modsPath);
+    const data = await fs.readFileAsync(launcherSettings, { encoding: 'utf8' });
+    const settings = JSON.parse(data);
+    if (settings?.DefaultRunConfig?.AdditionalParameters !== undefined) {
+      const udf = parseAdditionalParameters(settings.DefaultRunConfig.AdditionalParameters);
+      if (!!udf) {
+        await fs.ensureDirWritableAsync(path.join(udf, 'Mods'));
+        await ensureLOFile(context);
+        context.api.store.dispatch(setUDF(udf));
+        return (requiresRestart) ? relaunchExt() : Promise.resolve();
+      } else {
+        return selectUDF();
+      }
+    }
   } catch (err) {
-    return Promise.reject(err);
+    return selectUDF();
   }
 }
 
@@ -241,6 +308,13 @@ function InfoPanelWrap(props: { api: types.IExtensionApi, profileId: string }) {
 
 function main(context: types.IExtensionContext) {
   context.registerReducer(['settings', '7daystodie'], reducer);
+
+  const getModsPath = () => {
+    const state = context.api.getState();
+    const udf = util.getSafe(state, ['settings', '7daystodie', 'udf'], undefined);
+    return udf !== undefined ? path.join(udf, 'Mods') : 'Mods';
+  }
+
   context.registerGame({
     id: GAME_ID,
     name: '7 Days to Die',
@@ -248,7 +322,7 @@ function main(context: types.IExtensionContext) {
     queryPath: toBlue(findGame),
     requiresCleanup: true,
     supportedTools: [],
-    queryModPath: () => modsRelPath(),
+    queryModPath: getModsPath,
     logo: 'gameart.jpg',
     executable: gameExecutable,
     requiredFiles: [
@@ -304,7 +378,7 @@ function main(context: types.IExtensionContext) {
   const getOverhaulPath = (game: types.IGame) => {
     const state = context.api.getState();
     const discovery = selectors.discoveryByGame(state, GAME_ID);
-    return discovery?.path || '.';
+    return discovery?.path;
   };
 
   context.registerInstaller('7dtd-mod', 25,
@@ -322,6 +396,7 @@ function main(context: types.IExtensionContext) {
 
   context.registerMigration(toBlue(old => migrate020(context.api, old)));
   context.registerMigration(toBlue(old => migrate100(context, old)));
+  context.registerMigration(toBlue(old => migrate1011(context, old)));
 
   return true;
 }

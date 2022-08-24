@@ -2,7 +2,7 @@ import path from 'path';
 import semver from 'semver';
 import { actions, fs, selectors, types, util } from 'vortex-api';
 
-import { GAME_ID, I18N_NAMESPACE, modsRelPath } from './common';
+import { GAME_ID, I18N_NAMESPACE, loadOrderFilePath, modsRelPath } from './common';
 import { serialize } from './loadOrder';
 import { LoadOrder } from './types';
 
@@ -97,6 +97,51 @@ export async function migrate100(context, oldVersion): Promise<void> {
 
   for (const profileId of Object.keys(loMap)) {
     await serialize(context, loMap[profileId], profileId);
+  }
+
+  const modsPath = path.join(discoveryPath, modsRelPath());
+  return context.api.awaitUI()
+    .then(() => fs.ensureDirWritableAsync(modsPath))
+    .then(() => context.api.emitAndAwait('purge-mods-in-path', GAME_ID, '', modsPath))
+    .then(() => context.api.store.dispatch(actions.setDeploymentNecessary(GAME_ID, true)));
+}
+
+export async function migrate1011(context, oldVersion): Promise<void> {
+  if (semver.gte(oldVersion, '1.0.11')) {
+    return Promise.resolve();
+  }
+
+  const state = context.api.store.getState();
+  const discoveryPath = util.getSafe(state,
+    ['settings', 'gameMode', 'discovered', GAME_ID, 'path'], undefined);
+  if (!discoveryPath) {
+    return Promise.resolve();
+  }
+
+  const mods: { [modId: string]: types.IMod } = util.getSafe(state,
+    ['persistent', 'mods', GAME_ID], {});
+
+  if (Object.keys(mods).length === 0) {
+    // No mods - no problem.
+    return Promise.resolve();
+  }
+
+  const profiles = util.getSafe(state, ['persistent', 'profiles'], {});
+  const loProfiles = Object.keys(profiles).filter(id => profiles[id]?.gameId === GAME_ID);
+  const loMap: { [profId: string]: LoadOrder } = loProfiles.reduce((accum, iter) => {
+    const lo: LoadOrder = util.getSafe(state, ['persistent', 'loadOrder', iter], []);
+    accum[iter] = lo;
+    return accum;
+  }, {});
+
+  for (const profileId of Object.keys(loMap)) {
+    try {
+      await serialize(context, loMap[profileId], profileId);
+      // Not a bit deal if we fail to remove the loFile from the old location.
+      await fs.removeAsync(path.join(discoveryPath, `${profileId}_loadOrder.json`)).catch(err => null);
+    } catch (err) {
+      return Promise.reject(new Error(`Failed to migrate load order for ${profileId}: ${err}`));
+    }
   }
 
   const modsPath = path.join(discoveryPath, modsRelPath());
