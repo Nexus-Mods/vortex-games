@@ -60,7 +60,7 @@ export async function serialize(context: types.IExtensionContext,
 
   const fileData = await fs.readFileAsync(loFilePath, { encoding: 'utf8' })
     .catch(err => (err.code === 'ENOENT')
-      ? Promise.resolve('')
+      ? Promise.resolve('[]')
       : Promise.reject(err));
 
   let savedLO: ILoadOrderEntry[] = [];
