@@ -12,8 +12,22 @@ export async function downloadSMAPI(api: types.IExtensionApi) {
     noDismiss: true,
     allowSuppress: false,
   });
+  const autoInstall = util.getSafe(api.store.getState(), ['settings', 'automation', 'install'], false);
+  const autoDeploy = util.getSafe(api.store.getState(), ['settings', 'automation', 'deploy'], false);
+  const autoEnable = util.getSafe(api.store.getState(), ['settings', 'automation', 'enable'], false);
   const APIKEY = util.getSafe(api.store.getState(), ['confidential', 'account', 'nexus', 'APIKey'], '');
   try {
+    const automationActions = [];
+    if (autoInstall) {
+      automationActions.push(actions.setAutoInstall(false));
+    }
+    if (autoDeploy) {
+      automationActions.push(actions.setAutoDeployment(false));
+    }
+    if (automationActions.length > 0) {
+      util.batchDispatch(api.store, automationActions);
+    }
+
     if (!APIKEY) {
       throw new Error('No API key found');
     }
@@ -35,31 +49,44 @@ export async function downloadSMAPI(api: types.IExtensionApi) {
       name: 'SMAPI',
     };
     const nxmUrl = `nxm://${GAME_ID}/mods/2400/files/${file.file_id}`;
-    api.events.emit('start-download', [nxmUrl], dlInfo, undefined, (err, id) => {
-      if (err) {
-        throw err;
-      }
-      api.events.emit('start-install-download', id, undefined, (err, mId) => {
+    await new Promise<void>((resolve, reject) => {
+      api.events.emit('start-download', [nxmUrl], dlInfo, undefined, (err, id) => {
         if (err) {
-          throw err;
+          return reject(err);
         }
-        const profileId = selectors.lastActiveProfileForGame(api.getState(), GAME_ID);
-        api.store.dispatch(actions.setModEnabled(profileId, mId, true));
-        api.events.emit('deploy-mods', () => {
-          api.events.emit('start-quick-discovery', () => {
-            api.dismissNotification('smapi-installing');
-            const discovery = selectors.discoveryByGame(api.getState(), GAME_ID);
-            const tool = discovery?.tools?.['smapi'];
-            if (tool) {
-              api.store.dispatch(actions.setPrimaryTool(GAME_ID, tool.id));
-            }
+        api.events.emit('start-install-download', id, undefined, (err, mId) => {
+          if (err) {
+            return reject(err);
+          }
+          const profileId = selectors.lastActiveProfileForGame(api.getState(), GAME_ID);
+          if (!autoEnable) {
+            api.store.dispatch(actions.setModEnabled(profileId, mId, true));
+          }
+          api.events.emit('deploy-mods', () => {
+            api.events.emit('start-quick-discovery', () => {
+              const discovery = selectors.discoveryByGame(api.getState(), GAME_ID);
+              const tool = discovery?.tools?.['smapi'];
+              if (tool) {
+                api.store.dispatch(actions.setPrimaryTool(GAME_ID, tool.id));
+              }
+              return resolve();
+            });
           });
         });
       });
     });
   } catch (err) {
-    api.dismissNotification('smapi-installing');
     api.showErrorNotification('Failed to download/install SMAPI', err);
     util.opn(SMAPI_URL).catch(err => null);
+  } finally {
+    api.dismissNotification('smapi-installing');
+    const automationActions = [];
+    if (autoDeploy) {
+      automationActions.push(actions.setAutoDeployment(true));
+    }
+    if (autoInstall) {
+      automationActions.push(actions.setAutoInstall(true));
+    }
+    util.batchDispatch(api.store, automationActions);
   }
 }
