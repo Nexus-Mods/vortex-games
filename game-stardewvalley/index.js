@@ -5,10 +5,11 @@ const
   rjson = require('relaxed-json'),
   { fs, log, selectors, util, types } = require('vortex-api'),
   { SevenZip } = util,
-  winapi = require('winapi-bindings');
+  winapi = require('winapi-bindings'),
+  { downloadSMAPI } = require('./SMAPI'),
+  { GAME_ID } = require('./common');
 
 const MANIFEST_FILE = 'manifest.json';
-const GAME_ID = 'stardewvalley';
 const PTRN_CONTENT = path.sep + 'Content' + path.sep;
 const SMAPI_EXE = 'StardewModdingAPI.exe';
 const SMAPI_DLL = 'SMAPI.Installer.dll';
@@ -139,8 +140,8 @@ class StardewValley {
       return Promise.reject(err);
     }
     // skip if SMAPI found
-    let smapiPath = path.join(discovery.path, SMAPI_EXE);
-    let smapiFound = await this.getPathExistsAsync(smapiPath);
+    const smapiPath = path.join(discovery.path, SMAPI_EXE);
+    const smapiFound = await this.getPathExistsAsync(smapiPath);
     if (smapiFound) 
       return;
 
@@ -150,12 +151,11 @@ class StardewValley {
       type: "warning",
       title: "SMAPI is not installed",
       message: "SMAPI is required to mod Stardew Valley.",
-      displayMS: 10000,
       actions: [
         {
-          title: "Get SMAPI",
-          action: () => util.opn('https://www.nexusmods.com/stardewvalley/mods/2400').catch(err => undefined)
-        }
+          title: 'Get SMAPI',
+          action: () => downloadSMAPI(this.context.api)
+        },
       ]
     });
     
