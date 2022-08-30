@@ -1,9 +1,11 @@
 import path from 'path';
 import { useSelector } from 'react-redux';
-import { createAction } from 'redux-act';
-import { actions, fs, log, selectors, types, util } from 'vortex-api';
+import { actions, fs, selectors, types, util } from 'vortex-api';
 
 import * as React from 'react';
+
+import { setPrefixOffset, setUDF } from './actions';
+import { reducer } from './reducers';
 
 import { GAME_ID, gameExecutable, MOD_INFO, launcherSettingsFilePath, DEFAULT_LAUNCHER_SETTINGS } from './common';
 import { deserialize, serialize, validate } from './loadOrder';
@@ -15,26 +17,6 @@ const STEAM_ID = '251570';
 const STEAM_DLL = 'steamclient64.dll';
 
 const ROOT_MOD_CANDIDATES = ['bepinex'];
-
-const setPrefixOffset = createAction('7DTD_SET_PREFIX_OFFSET',
-  (profile: string, offset: number) => ({ profile, offset }));
-
-const setUDF = createAction('7DTD_SET_UDF',
-  (udf: string) => ({ udf }));
-
-const reducer: types.IReducerSpec = {
-  reducers: {
-    [setPrefixOffset as any]: (state, payload) => {
-      const { profile, offset } = payload;
-      return util.setSafe(state, ['prefixOffset', profile], offset);
-    },
-    [setUDF as any]: (state, payload) => {
-      const { udf } = payload;
-      return util.setSafe(state, ['udf'], udf);
-    },
-  },
-  defaults: {},
-};
 
 function resetPrefixOffset(api: types.IExtensionApi) {
   const state = api.getState();
@@ -259,7 +241,17 @@ function toLOPrefix(context: types.IExtensionContext, mod: types.IMod): string {
 
   // Find the mod entry in the load order state and insert the prefix in front
   //  of the mod's name/id/whatever
-  const loEntry: ILoadOrderEntry = loadOrder.find(loEntry => loEntry.id === mod.id);
+  let loEntry: ILoadOrderEntry = loadOrder.find(loEntry => loEntry.id === mod.id);
+  if (loEntry === undefined) {
+    // The mod entry wasn't found in the load order state - this is potentially
+    //  due to the mod being removed as part of an update or uninstallation.
+    //  It's important we find the prefix of the mod in this case, as the deployment
+    //  method could potentially fail to remove the mod! We're going to check
+    //  the previous load order saved for this profile and use that if it exists.
+    const prev = util.getSafe(props.state, ['settings', '7daystodie', 'previousLO', props.profile.id], []);
+    loEntry = prev.find(loEntry => loEntry.id === mod.id);
+  }
+
   return (loEntry?.data?.prefix !== undefined)
     ? loEntry.data.prefix + '-' + mod.id
     : 'ZZZZ-' + mod.id;
@@ -320,7 +312,6 @@ function main(context: types.IExtensionContext) {
     name: '7 Days to Die',
     mergeMods: (mod) => toLOPrefix(context, mod),
     queryPath: toBlue(findGame),
-    requiresCleanup: true,
     supportedTools: [],
     queryModPath: getModsPath,
     logo: 'gameart.jpg',
@@ -341,7 +332,7 @@ function main(context: types.IExtensionContext) {
 
   context.registerLoadOrder({
     deserializeLoadOrder: () => deserialize(context),
-    serializeLoadOrder: (loadOrder) => serialize(context, loadOrder),
+    serializeLoadOrder: (loadOrder, prev) => serialize(context, loadOrder, prev),
     validate,
     gameId: GAME_ID,
     toggleableEntries: false,

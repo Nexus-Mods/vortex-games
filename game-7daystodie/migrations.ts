@@ -96,7 +96,7 @@ export async function migrate100(context, oldVersion): Promise<void> {
   }, {});
 
   for (const profileId of Object.keys(loMap)) {
-    await serialize(context, loMap[profileId], profileId);
+    await serialize(context, loMap[profileId], undefined, profileId);
   }
 
   const modsPath = path.join(discoveryPath, modsRelPath());
@@ -136,7 +136,7 @@ export async function migrate1011(context, oldVersion): Promise<void> {
 
   for (const profileId of Object.keys(loMap)) {
     try {
-      await serialize(context, loMap[profileId], profileId);
+      await serialize(context, loMap[profileId], undefined, profileId);
       // Not a bit deal if we fail to remove the loFile from the old location.
       await fs.removeAsync(path.join(discoveryPath, `${profileId}_loadOrder.json`)).catch(err => null);
     } catch (err) {
