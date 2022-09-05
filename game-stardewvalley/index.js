@@ -7,7 +7,10 @@ const
   { SevenZip } = util,
   winapi = require('winapi-bindings'),
   { downloadSMAPI } = require('./SMAPI'),
-  { GAME_ID } = require('./common');
+  { GAME_ID } = require('./common'),
+  DependencyManager = require('./DependencyManager').default,
+  { testMissingDependencies } = require('./tests'),
+  { parseManifest } = require('./util');
 
 const MANIFEST_FILE = 'manifest.json';
 const PTRN_CONTENT = path.sep + 'Content' + path.sep;
@@ -201,25 +204,6 @@ class StardewValley {
   }
 }
 
-async function getModName(destinationPath, manifestFile) {
-  const manifestPath = path.join(destinationPath, manifestFile);
-  const resolveNameEntry = (data) =>
-    ['Name', 'uniqueid', 'name'].find(entry => data.hasOwnProperty(entry));
-  try {
-    const file = await fs.readFileAsync(manifestPath, { encoding: 'utf8' });
-    // it seems to be not uncommon that these files are not valid json,
-    // so we use relaxed-json to improve our chances of parsing successfully
-    const data = rjson.parse(util.deBOM(file));
-    const nameElement = resolveNameEntry(data);
-    return (data[nameElement] !== undefined)
-      ? Promise.resolve(data[nameElement].replace(/[^a-zA-Z0-9]/g, ''))
-      : Promise.reject(new util.DataInvalid('Invalid manifest.json file'));
-  } catch(err) {
-    log('error', 'Unable to parse manifest.json file', manifestPath);
-    return path.basename(destinationPath, '.installing');
-  }
-}
-
 async function testRootFolder(files, gameId) {
   // We assume that any mod containing "/Content/" in its directory
   //  structure is meant to be deployed to the root folder.
@@ -275,15 +259,16 @@ async function testSupported(files, gameId) {
   return { supported };
 }
 
-async function install(files,
-                destinationPath,
-                gameId,
-                progressDelegate) {
+async function install(api,
+                       dependencyManager,
+                       files,
+                       destinationPath) {
   // The archive may contain multiple manifest files which would
   //  imply that we're installing multiple mods.
   const manifestFiles = files.filter(isValidManifest);
 
-  const mods = manifestFiles.map(manifestFile => {
+  await dependencyManager.scanManifests(true);
+  const mods = await Promise.all(manifestFiles.map(async manifestFile => {
     const rootFolder = path.dirname(manifestFile);
     const manifestIndex = manifestFile.toLowerCase().indexOf(MANIFEST_FILE);
     const filterFunc = (file) => (rootFolder !== '.')
@@ -291,20 +276,34 @@ async function install(files,
         && (path.dirname(file) !== '.')
         && !file.endsWith(path.sep))
       : !file.endsWith(path.sep);
+    const manifest = await parseManifest(path.join(destinationPath, manifestFile));
     const modFiles = files.filter(filterFunc);
     return {
-      manifestFile,
+      manifest,
       rootFolder,
       manifestIndex,
       modFiles,
     };
-  });
+  }));
 
-  return Promise.map(mods, mod => getModName(destinationPath, mod.manifestFile)
-    .then(manifestModName => {
+  const isBeingInstalled = (dep) =>
+    mods.find(mod => mod.manifest.UniqueID === dep.UniqueID) !== undefined;
+
+  let missingDeps = [];
+  return Promise.map(mods, mod => {
       const modName = (mod.rootFolder !== '.')
         ? mod.rootFolder
-        : manifestModName;
+        : mod.manifest.Name;
+
+      const dependencies = mod.manifest.Dependencies || [];
+      let missing = [];
+      if (dependencies.length !== 0) {
+        missing = dependencyManager.findMissingDependencies(dependencies)
+          .filter(dep => !isBeingInstalled(dep));
+      }
+      if (missing.length > 0) {
+        missingDeps = missingDeps.concat(missing);
+      }
 
       return mod.modFiles.map(file => {
         const destination = path.join(modName, file.substr(mod.manifestIndex));
@@ -314,9 +313,28 @@ async function install(files,
           destination: destination,
         };
       });
-    }))
+    })
     .then(data => {
-      const instructions = [].concat.apply([], data);
+      const instructions = [].concat(data).reduce((accum, iter) => accum.concat(iter), []);
+      if (missingDeps.length > 0) {
+        const t = api.translate;
+        api.sendNotification({
+          type: 'warning',
+          message: t('Missing dependencies: {{mod}}',
+            { replace: { mod: path.basename(destinationPath, '.installing') } }),
+          actions: [
+            { title: 'Show', action: (dismiss) =>
+              api.showDialog('info', 'Missing dependencies', {
+                bbcode: t('The mod you have installed has some missing dependencies:')
+                  + '[br][/br][br][/br]',
+                message: missingDeps.map(dep => dep.UniqueID).join('\n'),
+              }, [
+                { label: 'Close', action: () => dismiss() },
+              ])
+            }
+          ],
+        });
+      }
       return Promise.resolve({ instructions });
     });
 }
@@ -448,6 +466,7 @@ async function onShowSMAPILog(api) {
 
 module.exports = {
   default: function(context) {
+    let dependencyManager;
     const getDiscoveryPath = () => {
       const state = context.api.store.getState();
       const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
@@ -507,7 +526,8 @@ module.exports = {
     // Register our SMAPI mod type and installer. Note: This currently flags an error in Vortex on installing correctly.
     context.registerInstaller('smapi-installer', 30, testSMAPI, (files, dest) => installSMAPI(getDiscoveryPath, files, dest));
     context.registerModType('SMAPI', 30, gameId => gameId === GAME_ID, getSMAPIPath, isSMAPIModType);
-    context.registerInstaller('stardew-valley-installer', 50, testSupported, install);
+    context.registerInstaller('stardew-valley-installer', 50, testSupported,
+      (files, destinationPath) => install(context.api, dependencyManager, files, destinationPath));
     context.registerInstaller('sdvrootfolder', 50, testRootFolder, installRootFolder);
     context.registerModType('sdvrootfolder', 25, (gameId) => (gameId === GAME_ID),
       () => getDiscoveryPath(), (instructions) => {
@@ -553,7 +573,11 @@ module.exports = {
         return (gameMode === GAME_ID);
       });
 
+    context.registerTest('sdv-missing-dependencies', 'gamemode-activated',
+      () => testMissingDependencies(context.api, dependencyManager));
+
     context.once(() => {
+      dependencyManager = new DependencyManager(context.api);
       context.api.onAsync('added-files', async (profileId, files) => {
         const state = context.api.store.getState();
         const profile = selectors.profileById(state, profileId);
@@ -584,8 +608,8 @@ module.exports = {
             const targetPath = path.join(installPath, mod.id, relPath);
             // copy the new file back into the corresponding mod, then delete it. That way, vortex will
             // create a link to it with the correct deployment method and not ask the user any questions
-            await fs.ensureDirAsync(path.dirname(targetPath));
             try {
+              await fs.ensureDirAsync(path.dirname(targetPath));
               await fs.copyAsync(entry.filePath, targetPath);
               await fs.removeAsync(entry.filePath);
             } catch (err) {
