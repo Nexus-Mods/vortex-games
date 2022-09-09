@@ -97,7 +97,7 @@ export default class DependencyManager {
           : true;
         return idMatch && versionMatch;
       });
-      return found ? true : !dep.IsRequired;
+      return found ? true : dep.IsRequired === false;
     };
 
     const missingDeps = dependencies.filter(dep => !depSatisfied(dep));
