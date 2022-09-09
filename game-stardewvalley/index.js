@@ -3,13 +3,13 @@ const
   Promise = require('bluebird'),
   { clipboard, remote } = require('electron'),
   rjson = require('relaxed-json'),
-  { fs, log, selectors, util, types } = require('vortex-api'),
+  { actions, fs, log, selectors, util, types } = require('vortex-api'),
   { SevenZip } = util,
   winapi = require('winapi-bindings'),
-  { downloadSMAPI } = require('./SMAPI'),
+  { deploySMAPI, downloadSMAPI, findSMAPIMod } = require('./SMAPI'),
   { GAME_ID } = require('./common'),
   DependencyManager = require('./DependencyManager').default,
-  { testMissingDependencies } = require('./tests'),
+  { testMissingDependencies, testSMAPIOutdated } = require('./tests'),
   { parseManifest } = require('./util');
 
 const MANIFEST_FILE = 'manifest.json';
@@ -145,19 +145,25 @@ class StardewValley {
     // skip if SMAPI found
     const smapiPath = path.join(discovery.path, SMAPI_EXE);
     const smapiFound = await this.getPathExistsAsync(smapiPath);
-    if (smapiFound) 
+    if (smapiFound)
       return;
 
-    // show need-SMAPI dialogue
+    const smapiMod = findSMAPIMod(this.context.api);
+    const title = smapiMod ? 'SMAPI is not deployed' : 'SMAPI is not installed';
+    const actionTitle = smapiMod ? 'Deploy' : 'Get SMAPI';
+    const action = () => (smapiMod
+      ? deploySMAPI(this.context.api)
+      : downloadSMAPI(this.context.api))
+    .then(() => this.context.api.dismissNotification('smapi-missing'));
     return this.context.api.sendNotification({
       id: 'smapi-missing',
-      type: "warning",
-      title: "SMAPI is not installed",
-      message: "SMAPI is required to mod Stardew Valley.",
+      type: 'warning',
+      title,
+      message: 'SMAPI is required to mod Stardew Valley.',
       actions: [
         {
-          title: 'Get SMAPI',
-          action: () => downloadSMAPI(this.context.api)
+          title: actionTitle,
+          action,
         },
       ]
     });
@@ -575,6 +581,8 @@ module.exports = {
 
     context.registerTest('sdv-missing-dependencies', 'gamemode-activated',
       () => testMissingDependencies(context.api, dependencyManager));
+    context.registerTest('sdv-incompatible-mods', 'gamemode-activated',
+      () => testSMAPIOutdated(context.api, dependencyManager));
 
     context.once(() => {
       dependencyManager = new DependencyManager(context.api);
@@ -622,6 +630,39 @@ module.exports = {
             }
           }
         });
+      });
+
+
+      context.api.onAsync('did-deploy', async (profileId) => {
+        const state = context.api.getState();
+        const profile = selectors.profileById(state, profileId);
+        if (profile.gameId !== GAME_ID) {
+          return Promise.resolve();
+        }
+
+        const smapiMod = findSMAPIMod(context.api);
+        const primaryTool = util.getSafe(state, ['settings', 'interface', 'primaryTool', GAME_ID], undefined);
+        if (smapiMod && primaryTool === undefined) {
+          context.api.store.dispatch(actions.setPrimaryTool(GAME_ID, 'smapi'));
+        }
+
+        return Promise.resolve();
+      })
+
+      context.api.onAsync('did-purge', async (profileId) => {
+        const state = context.api.getState();
+        const profile = selectors.profileById(state, profileId);
+        if (profile.gameId !== GAME_ID) {
+          return Promise.resolve();
+        }
+
+        const smapiMod = findSMAPIMod(context.api);
+        const primaryTool = util.getSafe(state, ['settings', 'interface', 'primaryTool', GAME_ID], undefined);
+        if (smapiMod && primaryTool === 'smapi') {
+          context.api.store.dispatch(actions.setPrimaryTool(GAME_ID, undefined));
+        }
+
+        return Promise.resolve();
       });
     });
   }

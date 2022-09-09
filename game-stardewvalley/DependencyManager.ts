@@ -11,33 +11,16 @@ import { coerce, gte } from 'semver';
 type ManifestMap = { [modId: string]: ISDVModManifest[] };
 export default class DependencyManager {
   private mApi: types.IExtensionApi;
-  private mSMAPIMod: types.IMod;
   private mManifests: ManifestMap;
   private mLoading: boolean = false;
 
   constructor(api: types.IExtensionApi) {
     this.mApi = api;
-    this.mSMAPIMod = this.findSMAPIMod();
   }
 
-  private findSMAPIMod(): types.IMod {
-    const state = this.mApi.getState();
-    const profile = selectors.lastActiveProfileForGame(state, GAME_ID);
-    const isActive = (modId: string) => util.getSafe(profile, ['modState', modId, 'enabled'], false);
-    const mods: { [modId: string]: types.IMod } = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
-    const SMAPIMods: types.IMod[] = Object.values(mods).filter((mod: types.IMod) =>
-      mod.type === 'SMAPI' && isActive(mod.id));
-
-    return (SMAPIMods.length === 0)
-      ? undefined
-      : SMAPIMods.length > 1
-        ? SMAPIMods.reduce((prev, iter) => {
-          if (prev === undefined) {
-            return iter;
-          }
-          return (gte(iter.attributes.version, prev.attributes.version)) ? iter : prev;
-        }, undefined)
-        : SMAPIMods[0];
+  public async getManifests(): Promise<ManifestMap> {
+    await this.scanManifests();
+    return this.mManifests;
   }
 
   public async refresh(): Promise<void> {
@@ -59,7 +42,7 @@ export default class DependencyManager {
     const profile = selectors.profileById(state, profileId);
     const isActive = (modId: string) => util.getSafe(profile, ['modState', modId, 'enabled'], false);
     const mods: { [modId: string]: types.IMod } = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
-    const something = await Object.values(mods).reduce(async (accumP, iter) => {
+    const manifests = await Object.values(mods).reduce(async (accumP, iter) => {
       const accum = await accumP;      
       if (!isActive(iter.id)) {
         return Promise.resolve(accum);
@@ -83,7 +66,7 @@ export default class DependencyManager {
       }, { skipHidden: false, recurse: true, skipInaccessible: true, skipLinks: true})
       .then(() => Promise.resolve(accum));
     }, {});
-    this.mManifests = something;
+    this.mManifests = manifests;
     return Promise.resolve();
   }
 
