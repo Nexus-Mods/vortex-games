@@ -332,7 +332,7 @@ function main(context: types.IExtensionContext) {
 
   context.registerLoadOrder({
     deserializeLoadOrder: () => deserialize(context),
-    serializeLoadOrder: (loadOrder, prev) => serialize(context, loadOrder, prev),
+    serializeLoadOrder: ((loadOrder, prev) => serialize(context, loadOrder, prev)) as any,
     validate,
     gameId: GAME_ID,
     toggleableEntries: false,
