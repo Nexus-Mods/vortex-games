@@ -4,22 +4,33 @@ const { fs, selectors, util } = require('vortex-api');
 const winapi = require('winapi-bindings');
 
 const GAME_ID = 'skyrimse';
+const GOG_ID = '1711230643';
 const MS_ID = 'BethesdaSoftworks.SkyrimSE-PC';
-function findGame() {
+async function findGame() {
   try {
-    const instPath = winapi.RegGetValue(
-      'HKEY_LOCAL_MACHINE',
-      'Software\\Wow6432Node\\Bethesda Softworks\\Skyrim Special Edition',
-      'Installed Path');
-    if (!instPath) {
-      throw new Error('empty registry key');
-    }
-    return Promise.resolve(instPath.value);
+    return await util.steam.findByName('The Elder Scrolls V: Skyrim Special Edition');
   } catch (err) {
-    return util.steam.findByName('The Elder Scrolls V: Skyrim Special Edition')
-      .catch(() => util.GameStoreHelper.findByAppId([MS_ID], 'xbox'))
-      .then(game => game.gamePath);
+    // nop
   }
+  try {
+    return await util.GameStoreHelper.findByAppId([MS_ID], 'xbox');
+  } catch (err) {
+    // nop
+  }
+  try {
+    return await util.GameStoreHelper.findByAppId([GOG_ID], 'gog');
+  } catch (err) {
+    // nop
+  }
+
+  const instPath = winapi.RegGetValue(
+    'HKEY_LOCAL_MACHINE',
+    'Software\\Wow6432Node\\Bethesda Softworks\\Skyrim Special Edition',
+    'Installed Path');
+  if (!instPath) {
+    throw new Error('empty registry key');
+  }
+  return instPath.value;
 }
 
 const tools = [
