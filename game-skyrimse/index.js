@@ -1,4 +1,5 @@
 const { getFileVersion, getFileVersionLocalized } = require('exe-version');
+const { normalize } = require('path');
 const path = require('path');
 const { fs, selectors, util } = require('vortex-api');
 const winapi = require('winapi-bindings');
@@ -88,18 +89,40 @@ const tools = [
   },
 ];
 
-function requiresLauncher(gamePath) {
+function requiresLauncher(gamePath, store) {
+  const xboxSettings = {
+    launcher: 'xbox',
+    addInfo: {
+      appId: MS_ID,
+      parameters: [
+        { appExecName: 'Game' },
+      ],
+    }
+  };
+
+  if (store !== undefined) {
+    // early out if the app gave us the storeid
+    if (store === 'xbox') {
+      return Promise.resolve(xboxSettings);
+    } else {
+      return Promise.resolve(undefined);
+    }
+  }
+
+  let normalize;
+
   return util.GameStoreHelper.findByAppId([MS_ID], 'xbox')
-    .then(() => Promise.resolve({
-      launcher: 'xbox',
-      addInfo: {
-        appId: MS_ID,
-        parameters: [
-          { appExecName: 'Game' },
-        ],
+    .then(gameEntry => {
+      util.getNormalizeFunc(gamePath)
+        .then(norm => normalize = norm);
+      return gameEntry;
+    })
+    .then(gameEntry => {
+      if (normalize(gameEntry.gamePath) === normalize(gamePath)) {
+        return Promise.resolve(xboxSettings);
       }
-    }))
-    .catch(err => Promise.resolve(undefined));
+    })
+    .catch(() => Promise.resolve(undefined));
 }
 
 async function getGameVersion(api, gamePath, exePath) {
