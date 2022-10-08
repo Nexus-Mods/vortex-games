@@ -7,6 +7,8 @@ const winapi = require('winapi-bindings');
 const GAME_ID = 'skyrimse';
 const GOG_ID = '1711230643';
 const MS_ID = 'BethesdaSoftworks.SkyrimSE-PC';
+const EPIC_ID = 'ac82db5035584c7f8a2c548d98c86b2c';
+
 async function findGame() {
   try {
     return await util.steam.findByName('The Elder Scrolls V: Skyrim Special Edition');
@@ -20,6 +22,11 @@ async function findGame() {
   }
   try {
     return await util.GameStoreHelper.findByAppId([GOG_ID], 'gog');
+  } catch (err) {
+    // nop
+  }
+  try {
+    return await util.GameStoreHelper.findByAppId([EPIC_ID], 'epic');
   } catch (err) {
     // nop
   }
