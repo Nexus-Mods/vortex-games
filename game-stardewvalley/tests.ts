@@ -1,7 +1,7 @@
 import { log, types, selectors } from 'vortex-api';
 
 import { GAME_ID } from './common';
-import DependencyManager from './dependencyManager';
+import DependencyManager from './DependencyManager';
 import { ISDVDependency } from './types';
 
 import { coerce, gte } from 'semver';
