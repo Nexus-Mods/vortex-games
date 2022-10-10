@@ -171,8 +171,9 @@ async function onWillDeploy(api, deployment, activeProfile) {
     return;
   }
 
-  const docFiles = deployment['witcher3menumodroot'].filter(file => (file.relPath.endsWith(PART_SUFFIX))
-    && (file.relPath.indexOf(INPUT_XML_FILENAME) === -1));
+  const docFiles = (deployment['witcher3menumodroot'] ?? [])
+    .filter(file => (file.relPath.endsWith(PART_SUFFIX))
+                 && (file.relPath.indexOf(INPUT_XML_FILENAME) === -1));
 
   if (docFiles.length <= 0) {
     // No doc files, no problem.
