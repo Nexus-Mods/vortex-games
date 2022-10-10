@@ -1,38 +1,10 @@
 const { getFileVersion, getFileVersionLocalized } = require('exe-version');
-const { normalize } = require('path');
 const path = require('path');
 const { fs, selectors, util } = require('vortex-api');
-const winapi = require('winapi-bindings');
 
 const GAME_ID = 'skyrimse';
 const GOG_ID = '1711230643';
 const MS_ID = 'BethesdaSoftworks.SkyrimSE-PC';
-async function findGame() {
-  try {
-    return await util.steam.findByName('The Elder Scrolls V: Skyrim Special Edition');
-  } catch (err) {
-    // nop
-  }
-  try {
-    return await util.GameStoreHelper.findByAppId([MS_ID], 'xbox');
-  } catch (err) {
-    // nop
-  }
-  try {
-    return await util.GameStoreHelper.findByAppId([GOG_ID], 'gog');
-  } catch (err) {
-    // nop
-  }
-
-  const instPath = winapi.RegGetValue(
-    'HKEY_LOCAL_MACHINE',
-    'Software\\Wow6432Node\\Bethesda Softworks\\Skyrim Special Edition',
-    'Installed Path');
-  if (!instPath) {
-    throw new Error('empty registry key');
-  }
-  return instPath.value;
-}
 
 const tools = [
   {
@@ -158,7 +130,13 @@ function main(context) {
     name: 'Skyrim Special Edition',
     shortName: 'SSE',
     mergeMods: true,
-    queryPath: findGame,
+    queryArgs: {
+      // prefer steam because it was released first and users may have pre-1.6.12 installs with store not saved in state
+      steam: [{ name: 'The Elder Scrolls V: Skyrim Special Edition', prefer: 0 }],
+      xbox: [{ id: MS_ID }],
+      gog: [{ id: GOG_ID }],
+      registry: [{ id: 'HKEY_LOCAL_MACHINE:Software\\Wow6432Node\\Bethesda Softworks\\Skyrim Special Edition:Installed Path' }],
+    },
     supportedTools: tools,
     queryModPath: () => 'Data',
     logo: 'gameart.jpg',
