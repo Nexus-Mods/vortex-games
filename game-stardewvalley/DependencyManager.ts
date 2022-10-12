@@ -64,7 +64,14 @@ export default class DependencyManager {
         }
       }
       }, { skipHidden: false, recurse: true, skipInaccessible: true, skipLinks: true})
-      .then(() => Promise.resolve(accum));
+      .then(() => Promise.resolve(accum))
+      .catch(err => {
+        if (err['code'] === 'ENOENT') {
+          return Promise.resolve([]);
+        } else {
+          return Promise.reject(err);
+        }
+      });
     }, {});
     this.mManifests = manifests;
     return Promise.resolve();

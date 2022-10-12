@@ -53,6 +53,11 @@ export async function downloadSMAPI(api: types.IExtensionApi, update?: boolean) 
     noDismiss: true,
     allowSuppress: false,
   });
+
+  if (api.ext?.ensureLoggedIn !== undefined) {
+    await api.ext.ensureLoggedIn();
+  }
+
   const autoInstall = util.getSafe(api.store.getState(), ['settings', 'automation', 'install'], false);
   const autoDeploy = util.getSafe(api.store.getState(), ['settings', 'automation', 'deploy'], false);
   const autoEnable = util.getSafe(api.store.getState(), ['settings', 'automation', 'enable'], false);
