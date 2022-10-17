@@ -1318,7 +1318,7 @@ function main(context: types.IExtensionContext) {
           + 'remove the existing merge and re-apply it.');
       }
       const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
-      const docFiles = deployment['witcher3menumodroot']
+      const docFiles = (deployment['witcher3menumodroot'] ?? [])
         .filter(file => file.relPath.endsWith(PART_SUFFIX)
                         && (file.relPath.indexOf(INPUT_XML_FILENAME) === -1));
       const menuModPromise = () => {
