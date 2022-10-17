@@ -16,3 +16,42 @@ export interface ISDVDependency {
   MinimumVersion?: string;
   IsRequired?: boolean;
 }
+
+export interface ISMAPIIOQuery {
+  id: string;
+  installedVersion?: string;
+}
+
+export const compatibilityOptions = [
+  'broken', 'obsolete', 'abandoned', 'unofficial', 'workaround', 'unknown', 'optional', 'ok',
+] as const;
+
+export type CompatibilityStatus = typeof compatibilityOptions[number];
+
+export interface ISMAPIResult {
+  id: string;
+  suggestedUpdate?: {
+    version: string,
+    url?: string,
+  };
+  metadata: {
+    id: string[],
+    name: string,
+    nexusID?: number,
+    chucklefishID?: number,
+    curseForgeID?: number,
+    curseForkeKey?: string,
+    modDropID?: number,
+    gitHubRepo: string,
+    customSourceUrl: string,
+    customUrl: string,
+    main: {
+      version?: string,
+      url?: string,
+    },
+    compatibilityStatus: CompatibilityStatus,
+    compatibilitySummary: string,
+  };
+  errors: string[];
+}
+ 

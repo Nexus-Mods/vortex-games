@@ -1,14 +1,17 @@
-import { file } from 'babel-types';
 import Bluebird from 'bluebird';
 import { IQuery } from 'modmeta-db';
+import React from 'react';
+import * as semver from 'semver';
 import turbowalk from 'turbowalk';
 import { actions, fs, log, selectors, util, types } from 'vortex-api';
 import * as winapi from 'winapi-bindings';
+import CompatibilityIcon from './CompatibilityIcon';
+import { SMAPI_QUERY_FREQUENCY } from './constants';
 
 import DependencyManager from './DependencyManager';
 import SMAPIProxy from './smapiProxy';
 import { testSMAPIOutdated } from './tests';
-import { ISDVDependency, ISDVModManifest } from './types';
+import { compatibilityOptions, CompatibilityStatus, ISDVDependency, ISDVModManifest, ISMAPIResult } from './types';
 import { parseManifest } from './util';
 
 const path = require('path'),
@@ -111,7 +114,7 @@ class StardewValley implements types.IGame {
       return game.gamePath;
 
     // check default paths
-    for (let defaultPath of this.defaultPaths)
+    for (const defaultPath of this.defaultPaths)
     {
       if (await this.getPathExistsAsync(defaultPath))
         return defaultPath;
@@ -312,8 +315,6 @@ async function install(api,
     };
   }));
 
-  log('info', 'sdv mods', { mods: JSON.stringify(mods, undefined, 2) });
-
   return Bluebird.map(mods, mod => {
     const modName = (mod.rootFolder !== '.')
       ? mod.rootFolder
@@ -339,14 +340,13 @@ async function install(api,
       const rule: types.IModRule = {
         type: (dep.IsRequired ?? true) ? 'requires' : 'recommends',
         reference: {
-          logicalFileName: dep.UniqueID,
+          logicalFileName: dep.UniqueID.toLowerCase(),
           versionMatch,
         },
         extra: {
           dropIfUnfulfilled: true,
         },
       };
-      console.log('info', 'add rule', rule);
       instructions.push({
         type: 'rule',
         rule,
@@ -510,6 +510,68 @@ function getModManifests(modPath?: string): Promise<string[]> {
     .then(() => manifests);
 }
 
+function updateConflictInfo(api: types.IExtensionApi,
+                            smapi: SMAPIProxy,
+                            gameId: string,
+                            modId: string)
+                            : Promise<void> {
+  const mod = api.getState().persistent.mods[gameId][modId];
+
+  const now = Date.now();
+
+  if ((now - mod.attributes?.lastSMAPIQuery ?? 0) < SMAPI_QUERY_FREQUENCY) {
+    return Promise.resolve();
+  }
+
+  let additionalLogicalFileNames = mod.attributes?.additionalLogicalFileNames;
+  if (additionalLogicalFileNames === undefined) {
+    if (mod.attributes?.logicalFileName) {
+      additionalLogicalFileNames = [mod.attributes?.logicalFileName];
+    } else {
+      additionalLogicalFileNames = [];
+    }
+  }
+
+  const query = additionalLogicalFileNames
+    .map(name => ({
+      id: name,
+      installedVersion: mod.attributes?.manifestVersion
+                     ?? semver.coerce(mod.attributes?.version).version,
+    }));
+
+  const stat = (item: ISMAPIResult): CompatibilityStatus => {
+    const status = item.metadata?.compatibilityStatus?.toLowerCase?.();
+    if (!compatibilityOptions.includes(status as any)) {
+      return 'unknown';
+    } else {
+      return status as CompatibilityStatus;
+    }
+  };
+
+  const compatibilityPrio = (item: ISMAPIResult) => compatibilityOptions.indexOf(stat(item));
+
+  return smapi.findByNames(query)
+    .then(results => {
+      const worstStatus: ISMAPIResult[] = results
+        .sort((lhs, rhs) => compatibilityPrio(lhs) - compatibilityPrio(rhs));
+      if (worstStatus.length > 0) {
+        api.store.dispatch(actions.setModAttributes(gameId, modId, {
+          lastSMAPIQuery: now,
+          compatibilityStatus: worstStatus[0].metadata.compatibilityStatus,
+          compatibilityMessage: worstStatus[0].metadata.compatibilitySummary,
+          compatibilityUpdate: worstStatus[0].suggestedUpdate?.version,
+        }));
+      } else {
+        log('debug', 'no manifest');
+        api.store.dispatch(actions.setModAttribute(gameId, modId, 'lastSMAPIQuery', now));
+      }
+    })
+    .catch(err => {
+      log('warn', 'error reading manifest', err.message);
+      api.store.dispatch(actions.setModAttribute(gameId, modId, 'lastSMAPIQuery', now));
+    });
+}
+
 function init(context: types.IExtensionContext) {
   let dependencyManager: DependencyManager;
   const getDiscoveryPath = () => {
@@ -574,13 +636,30 @@ function init(context: types.IExtensionContext) {
         return Promise.resolve({});
       }
 
-      // we can only use one manifest to get the id from
-      const refManifest = await parseManifest(manifests[0]);
+      const parsedManifests = await Promise.all(manifests.map(
+        async man => await parseManifest(man)));
 
-      return Promise.resolve({
-        logicalFileName: refManifest.UniqueID,
+      // we can only use one manifest to get the id from
+      const refManifest = parsedManifests[0];
+
+      const additionalLogicalFileNames = parsedManifests
+        .map(manifest => manifest.UniqueID.toLowerCase());
+      const minSMAPIVersion = parsedManifests
+        .map(manifest => manifest.MinimumApiVersion)
+        .filter(version => semver.valid(version))
+        .sort((lhs, rhs) => semver.compare(rhs, lhs))[0];
+
+      const result = {
         customFileName: refManifest.Name,
-      });
+        additionalLogicalFileNames,
+        minSMAPIVersion,
+      };
+
+      if (typeof(refManifest.Version) === 'string') {
+        result['manifestVersion'] = refManifest.Version;
+      }
+
+      return Promise.resolve(result);
     });
 
   context.registerGame(new StardewValley(context));
@@ -636,6 +715,21 @@ function init(context: types.IExtensionContext) {
 
   context.registerAttributeExtractor(25, manifestExtractor);
 
+  context.registerTableAttribute('mods', {
+    id: 'sdv-compatibility',
+    position: 100,
+    condition: () => selectors.activeGameId(context.api.getState()) === GAME_ID,
+    placement: 'table',
+    calc: (mod: types.IMod) => mod.attributes?.compatibilityStatus,
+    customRenderer: (mod: types.IMod, detailCell: boolean, t: types.TFunction) => {
+      return React.createElement(CompatibilityIcon,
+                                 { t, mod, detailCell }, []);
+    },
+    name: 'Compatibility',
+    isDefaultVisible: true,
+    edit: {},
+  });
+
   /*
   context.registerTest('sdv-missing-dependencies', 'gamemode-activated',
     () => testMissingDependencies(context.api, dependencyManager));
@@ -650,6 +744,8 @@ function init(context: types.IExtensionContext) {
 
   context.once(() => {
     const proxy = new SMAPIProxy(context.api);
+    context.api.setStylesheet('sdv', path.join(__dirname, 'sdvstyle.scss'));
+
     context.api.addMetaServer('smapi.io', {
       url: '',
       loopbackCB: (query: IQuery) => Bluebird.resolve(proxy.find(query)),
@@ -705,7 +801,6 @@ function init(context: types.IExtensionContext) {
       });
     });
 
-
     context.api.onAsync('did-deploy', async (profileId) => {
       const state = context.api.getState();
       const profile = selectors.profileById(state, profileId);
@@ -736,6 +831,33 @@ function init(context: types.IExtensionContext) {
       }
 
       return Promise.resolve();
+    });
+
+    context.api.events.on('did-install-mod', (gameId: string, archiveId: string, modId: string) => {
+      if (gameId !== GAME_ID) {
+        return;
+      }
+      updateConflictInfo(context.api, proxy, gameId, modId)
+        .then(() => log('debug', 'added compatibility info', { modId }))
+        .catch(err => log('error', 'failed to add compatibility info', { modId, error: err.message }));
+
+    });
+
+    context.api.events.on('gamemode-activated', (gameMode: string) => {
+      if (gameMode !== GAME_ID) {
+        return;
+      }
+
+      const state = context.api.getState();
+      log('debug', 'updating SDV compatibility info');
+      Promise.all(Object.keys(state.persistent.mods[gameMode]).map(modId =>
+        updateConflictInfo(context.api, proxy, gameMode, modId)))
+        .then(() => {
+          log('debug', 'done updating compatibility info');
+        })
+        .catch(err => {
+          log('error', 'failed to update conflict info', err.message);
+        });
     });
   });
 }

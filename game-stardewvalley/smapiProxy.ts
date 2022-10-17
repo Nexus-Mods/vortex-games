@@ -3,32 +3,11 @@ import * as https from 'https';
 import { ILookupResult, IQuery } from 'modmeta-db';
 import { types } from 'vortex-api';
 import { GAME_ID } from './common';
+import { SMAPI_IO_API_VERSION } from './constants';
+import { ISMAPIIOQuery, ISMAPIResult } from './types';
 
 const SMAPI_HOST = 'smapi.io';
 
-export interface ISMAPIResult {
-  id: string;
-  metadata: {
-    id: string[],
-    name: string,
-    nexusID?: number,
-    chucklefishID?: number,
-    curseForgeID?: number,
-    curseForkeKey?: string,
-    modDropID?: number,
-    gitHubRepo: string,
-    customSourceUrl: string,
-    customUrl: string,
-    main: {
-      version?: string,
-      url?: string,
-    },
-    compatibilityStatus: string,
-    compatibilitySummary: string,
-  },
-  "errors": []
-}
- 
 class SMAPIProxy {
   private mAPI: types.IExtensionApi;
   private mOptions: https.RequestOptions;
@@ -47,7 +26,7 @@ class SMAPIProxy {
 
   public async find(query: IQuery): Promise<ILookupResult[]> {
     if (query.name !== undefined) {
-      const res = await this.findByName(query.name);
+      const res = await this.findByNames([{ id: query.name }]);
       if ((res.length === 0) || (res[0].metadata?.main === undefined)) {
         return [];
       }
@@ -68,11 +47,30 @@ class SMAPIProxy {
           } },
         ];
       }
-
-     
     } else {
-      throw new Error('only lookup by logical name supported at this time');
+      return [];
     }
+  }
+
+  public async findByNames(query: ISMAPIIOQuery[]): Promise<ISMAPIResult[]> {
+    return new Promise((resolve, reject) => {
+      const req = https.request(this.mOptions, res => {
+        let body = Buffer.from([]);
+        res
+          .on('error', err => reject(err))
+          .on('data', chunk => {
+            body = Buffer.concat([body, chunk]);
+          })
+          .on('end', () => resolve(JSON.parse(body.toString('utf8'))));
+      })
+        .on('error', err => reject(err))
+      req.write(JSON.stringify({
+        mods: query,
+        includeExtendedMetadata: true,
+        apiVersion: SMAPI_IO_API_VERSION,
+      }));
+      req.end();
+    });
   }
 
   private makeKey(query: IQuery): string {
@@ -96,7 +94,7 @@ class SMAPIProxy {
         fileVersion: file.version,
         gameId: GAME_ID,
         sourceURI: `nxm://${GAME_ID}/mods/${nexusId}/files/${file.file_id}`,
-        logicalFileName: query.name,
+        logicalFileName: query.name.toLowerCase(),
         source: 'nexus',
         domainName: GAME_ID,
         details: {
@@ -107,26 +105,6 @@ class SMAPIProxy {
         }
       },
     }];
-  }
-
-  private async findByName(name: string): Promise<ISMAPIResult[]> {
-    return new Promise((resolve, reject) => {
-      const req = https.request(this.mOptions, res => {
-        let body = Buffer.from([]);
-        res
-          .on('error', err => reject(err))
-          .on('data', chunk => {
-            body = Buffer.concat([body, chunk]);
-          })
-          .on('end', () => resolve(JSON.parse(body.toString('utf8'))));
-      })
-        .on('error', err => reject(err))
-      req.write(JSON.stringify({
-        mods: [{ "id": name }],
-        "includeExtendedMetadata": true,
-      }));
-      req.end();
-    });
   }
 }
 
