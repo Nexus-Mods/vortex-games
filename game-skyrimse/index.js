@@ -5,6 +5,7 @@ const { fs, selectors, util } = require('vortex-api');
 const GAME_ID = 'skyrimse';
 const GOG_ID = '1711230643';
 const MS_ID = 'BethesdaSoftworks.SkyrimSE-PC';
+const EPIC_ID = 'ac82db5035584c7f8a2c548d98c86b2c';
 
 const tools = [
   {
@@ -135,6 +136,7 @@ function main(context) {
       steam: [{ name: 'The Elder Scrolls V: Skyrim Special Edition', prefer: 0 }],
       xbox: [{ id: MS_ID }],
       gog: [{ id: GOG_ID }],
+      epic: [{ id: EPIC_ID }],
       registry: [{ id: 'HKEY_LOCAL_MACHINE:Software\\Wow6432Node\\Bethesda Softworks\\Skyrim Special Edition:Installed Path' }],
     },
     supportedTools: tools,
