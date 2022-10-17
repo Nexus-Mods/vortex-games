@@ -344,7 +344,7 @@ async function install(api,
           versionMatch,
         },
         extra: {
-          dropIfUnfulfilled: true,
+          onlyIfFulfillable: true,
         },
       };
       instructions.push({
