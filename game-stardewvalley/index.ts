@@ -524,7 +524,7 @@ function updateConflictInfo(api: types.IExtensionApi,
   }
 
   let additionalLogicalFileNames = mod.attributes?.additionalLogicalFileNames;
-  if (additionalLogicalFileNames === undefined) {
+  if (!additionalLogicalFileNames) {
     if (mod.attributes?.logicalFileName) {
       additionalLogicalFileNames = [mod.attributes?.logicalFileName];
     } else {
@@ -850,7 +850,7 @@ function init(context: types.IExtensionContext) {
 
       const state = context.api.getState();
       log('debug', 'updating SDV compatibility info');
-      Promise.all(Object.keys(state.persistent.mods[gameMode]).map(modId =>
+      Promise.all(Object.keys(state.persistent.mods[gameMode] ?? {}).map(modId =>
         updateConflictInfo(context.api, proxy, gameMode, modId)))
         .then(() => {
           log('debug', 'done updating compatibility info');

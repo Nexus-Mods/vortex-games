@@ -81,6 +81,8 @@ class SMAPIProxy {
                               nexusId: number,
                               version: string)
                               : Promise<ILookupResult[]> {
+    await this.mAPI.ext.ensureLoggedIn();
+
     const file: IFileInfo = (await this.mAPI.emitAndAwait('get-latest-file', nexusId, GAME_ID, `>=${version}`))[0];
     if (file === undefined) {
       throw new Error('no file found');
