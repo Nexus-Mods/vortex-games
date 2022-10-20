@@ -1,10 +1,7 @@
-import NexusT from '@nexusmods/nexus-api';
 import { actions, types, selectors, util } from 'vortex-api';
 import { GAME_ID } from './common';
 import { gte } from 'semver';
-
-export const SMAPI_MOD_ID = 2400;
-export const SMAPI_URL = `https://www.nexusmods.com/stardewvalley/mods/${SMAPI_MOD_ID}`;
+import { SMAPI_MOD_ID, SMAPI_URL } from './constants';
 
 export function findSMAPIMod(api: types.IExtensionApi): types.IMod {
   const state = api.getState();
@@ -30,18 +27,14 @@ export function findSMAPIMod(api: types.IExtensionApi): types.IMod {
 }
 
 export async function deploySMAPI(api: types.IExtensionApi) {
-  return new Promise<void>((resolve) => {
-    api.events.emit('deploy-mods', () => {
-      api.events.emit('start-quick-discovery', () => {
-        const discovery = selectors.discoveryByGame(api.getState(), GAME_ID);
-        const tool = discovery?.tools?.['smapi'];
-        if (tool) {
-          api.store.dispatch(actions.setPrimaryTool(GAME_ID, tool.id));
-        }
-        return resolve();
-      });
-    })
-  });
+  await util.toPromise(cb => api.events.emit('deploy-mods', cb));
+  await util.toPromise(cb => api.events.emit('start-quick-discovery', () => cb(null)));
+
+  const discovery = selectors.discoveryByGame(api.getState(), GAME_ID);
+  const tool = discovery?.tools?.['smapi'];
+  if (tool) {
+    api.store.dispatch(actions.setPrimaryTool(GAME_ID, tool.id));
+  }
 }
 
 export async function downloadSMAPI(api: types.IExtensionApi, update?: boolean) {
@@ -58,72 +51,40 @@ export async function downloadSMAPI(api: types.IExtensionApi, update?: boolean) 
     await api.ext.ensureLoggedIn();
   }
 
-  const autoInstall = util.getSafe(api.store.getState(), ['settings', 'automation', 'install'], false);
-  const autoDeploy = util.getSafe(api.store.getState(), ['settings', 'automation', 'deploy'], false);
-  const autoEnable = util.getSafe(api.store.getState(), ['settings', 'automation', 'enable'], false);
-  const APIKEY = util.getSafe(api.store.getState(), ['confidential', 'account', 'nexus', 'APIKey'], '');
   try {
-    const automationActions = [];
-    if (autoInstall) {
-      automationActions.push(actions.setAutoInstall(false));
-    }
-    if (autoDeploy) {
-      automationActions.push(actions.setAutoDeployment(false));
-    }
-    if (automationActions.length > 0) {
-      util.batchDispatch(api.store, automationActions);
+    const modFiles = await api.ext.nexusGetModFiles(GAME_ID, SMAPI_MOD_ID);
+
+    const fileTime = (input: any) => Number.parseInt(input.uploaded_time, 10);
+
+    const file = modFiles
+      .filter(file => file.category_id === 1)
+      .sort((lhs, rhs) => fileTime(lhs) - fileTime(rhs))[0];
+
+    if (file === undefined) {
+      throw new util.ProcessCanceled('No SMAPI main file found');
     }
 
-    if (!APIKEY) {
-      throw new Error('No API key found');
-    }
-    const nexus = new NexusT('Vortex', util.getApplication().version, GAME_ID, 30000);
-    await nexus.setKey(APIKEY);
-    const modFiles = await nexus.getModFiles(SMAPI_MOD_ID, GAME_ID);
-    const file = modFiles.files.reduce((acc, cur) => {
-      if (!acc) {
-        acc = cur;
-      } else {
-        if (Number.parseInt(cur.uploaded_time, 10) > Number.parseInt(acc.uploaded_time), 10) {
-          acc = cur;
-        }
-      }
-      return acc;
-    }, undefined);
     const dlInfo = {
       game: GAME_ID,
       name: 'SMAPI',
     };
+
     const nxmUrl = `nxm://${GAME_ID}/mods/${SMAPI_MOD_ID}/files/${file.file_id}`;
-    await new Promise<void>((resolve, reject) => {
-      api.events.emit('start-download', [nxmUrl], dlInfo, undefined, (err, id) => {
-        if (err) {
-          return reject(err);
-        }
-        api.events.emit('start-install-download', id, undefined, (err, mId) => {
-          if (err) {
-            return reject(err);
-          }
-          const profileId = selectors.lastActiveProfileForGame(api.getState(), GAME_ID);
-          if (!autoEnable) {
-            api.store.dispatch(actions.setModEnabled(profileId, mId, true));
-          }
-          return resolve(deploySMAPI(api));
-        });
-      });
+    const dlId = await util.toPromise<string>(cb =>
+      api.events.emit('start-download', [nxmUrl], dlInfo, undefined, cb, undefined, { allowInstall: false }));
+    const modId = await util.toPromise<string>(cb =>
+      api.events.emit('start-install-download', dlId, { allowAutoEnable: false }, cb));
+    const profileId = selectors.lastActiveProfileForGame(api.getState(), GAME_ID);
+    await actions.setModsEnabled(api, profileId, [modId], true, {
+      allowAutoDeploy: false,
+      installed: true,
     });
+
+    await deploySMAPI(api);
   } catch (err) {
     api.showErrorNotification('Failed to download/install SMAPI', err);
-    util.opn(SMAPI_URL).catch(err => null);
+    util.opn(SMAPI_URL).catch(() => null);
   } finally {
     api.dismissNotification('smapi-installing');
-    const automationActions = [];
-    if (autoDeploy) {
-      automationActions.push(actions.setAutoDeployment(true));
-    }
-    if (autoInstall) {
-      automationActions.push(actions.setAutoInstall(true));
-    }
-    util.batchDispatch(api.store, automationActions);
   }
 }
