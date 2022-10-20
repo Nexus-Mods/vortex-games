@@ -533,11 +533,18 @@ function updateConflictInfo(api: types.IExtensionApi,
   }
 
   const query = additionalLogicalFileNames
-    .map(name => ({
-      id: name,
-      installedVersion: mod.attributes?.manifestVersion
-                     ?? semver.coerce(mod.attributes?.version).version,
-    }));
+    .map(name => {
+      const res = {
+        id: name,
+      };
+      const ver = mod.attributes?.manifestVersion
+                     ?? semver.coerce(mod.attributes?.version)?.version;
+      if (!!ver) {
+        res['installedVersion'] = ver;
+      }
+
+      return res;
+    });
 
   const stat = (item: ISMAPIResult): CompatibilityStatus => {
     const status = item.metadata?.compatibilityStatus?.toLowerCase?.();
@@ -631,6 +638,10 @@ function init(context: types.IExtensionContext) {
 
   const manifestExtractor = toBlue(
     async (modInfo: any, modPath?: string): Promise<{ [key: string]: any; }> => {
+      if (selectors.activeGameId(context.api.getState()) !== GAME_ID) {
+        return Promise.resolve({});
+      }
+
       const manifests = await getModManifests(modPath);
       if (manifests.length === 0) {
         return Promise.resolve({});
@@ -644,16 +655,21 @@ function init(context: types.IExtensionContext) {
 
       const additionalLogicalFileNames = parsedManifests
         .map(manifest => manifest.UniqueID.toLowerCase());
+
       const minSMAPIVersion = parsedManifests
         .map(manifest => manifest.MinimumApiVersion)
         .filter(version => semver.valid(version))
         .sort((lhs, rhs) => semver.compare(rhs, lhs))[0];
 
       const result = {
-        customFileName: refManifest.Name,
         additionalLogicalFileNames,
         minSMAPIVersion,
       };
+
+      // don't set a custom file name for SMAPI
+      if (modInfo.download.modInfo.nexus.ids.modId !== 2400) {
+        result['customFileName'] = refManifest.Name;
+      }
 
       if (typeof(refManifest.Version) === 'string') {
         result['manifestVersion'] = refManifest.Version;

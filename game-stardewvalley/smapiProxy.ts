@@ -1,10 +1,12 @@
 import { IFileInfo } from '@nexusmods/nexus-api';
 import * as https from 'https';
 import { ILookupResult, IQuery } from 'modmeta-db';
+import * as semver from 'semver';
 import { types } from 'vortex-api';
 import { GAME_ID } from './common';
 import { SMAPI_IO_API_VERSION } from './constants';
 import { ISMAPIIOQuery, ISMAPIResult } from './types';
+import { coerce, semverCompare } from './util';
 
 const SMAPI_HOST = 'smapi.io';
 
@@ -83,7 +85,14 @@ class SMAPIProxy {
                               : Promise<ILookupResult[]> {
     await this.mAPI.ext.ensureLoggedIn();
 
-    const file: IFileInfo = (await this.mAPI.emitAndAwait('get-latest-file', nexusId, GAME_ID, `>=${version}`))[0];
+    const files: IFileInfo[] = this.mAPI.ext.nexusGetModFiles?.(GAME_ID, nexusId) ?? [];
+
+    const versionPattern = `>=${version}`;
+
+    const file = files
+      .filter(iter => semver.satisfies(coerce(iter.version), versionPattern))
+      .sort((lhs, rhs) => semverCompare(rhs.version, lhs.version))[0];
+
     if (file === undefined) {
       throw new Error('no file found');
     }
