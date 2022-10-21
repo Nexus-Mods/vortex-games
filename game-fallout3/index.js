@@ -3,6 +3,12 @@ const path = require('path');
 const { fs, util } = require('vortex-api');
 const winapi = require('winapi-bindings');
 
+const STEAMAPP_ID = '22300';
+const STEAMAPP_ID2 = '22370';
+const GOGAPP_ID = '1454315831';
+const EPIC_ID = 'adeae8bbfc94427db57c7dfecce3f1d4';
+const XBOX_ID = 'BethesdaSoftworks.Fallout3';
+
 function findGame() {
   try {
     const instPath = winapi.RegGetValue(
@@ -14,7 +20,7 @@ function findGame() {
     }
     return Promise.resolve(instPath.value);
   } catch (err) {
-    return util.GameStoreHelper.findByAppId(['22300', '22370', '1454315831'])
+    return util.GameStoreHelper.findByAppId([STEAMAPP_ID, STEAMAPP_ID2, GOGAPP_ID, EPIC_ID, XBOX_ID])
       .catch(err => util.GameStoreHelper.findByName('Fallout 3.*'))
       .then(game => game.gamePath);
   }
