@@ -3,24 +3,13 @@ const path = require('path');
 const { fs, util } = require('vortex-api');
 const winapi = require('winapi-bindings');
 
-function findGame() {
-  try {
-    const instPath = winapi.RegGetValue(
-      'HKEY_LOCAL_MACHINE',
-      'Software\\Wow6432Node\\Bethesda Softworks\\Fallout3',
-      'Installed Path');
-    if (!instPath) {
-      throw new Error('empty registry key');
-    }
-    return Promise.resolve(instPath.value);
-  } catch (err) {
-    return util.GameStoreHelper.findByAppId(['22300', '22370', '1454315831'])
-      .catch(err => util.GameStoreHelper.findByName('Fallout 3.*'))
-      .then(game => game.gamePath);
-  }
-}
+const STEAMAPP_ID = '22300';
+const STEAMAPP_ID2 = '22370';
+const GOG_ID = '1454315831';
+const EPIC_ID = 'adeae8bbfc94427db57c7dfecce3f1d4';
+const MS_ID = 'BethesdaSoftworks.Fallout3';
 
-let tools = [
+const tools = [
   {
     id: 'FO3Edit',
     name: 'FO3Edit',
@@ -59,7 +48,13 @@ function main(context) {
     id: 'fallout3',
     name: 'Fallout 3',
     mergeMods: true,
-    queryPath: findGame,
+    queryArgs: {
+      steam: [{ id: STEAMAPP_ID, prefer: 0 }, { id: STEAMAPP_ID2 }, { name: 'Fallout 3.*' }],
+      xbox: [{ id: MS_ID }],
+      gog: [{ id: GOG_ID }],
+      epic: [{ id: EPIC_ID }],
+      registry: [{ id: 'HKEY_LOCAL_MACHINE:Software\\Wow6432Node\\Bethesda Softworks\\Fallout3:Installed Path' }],
+    },
     supportedTools: tools,
     queryModPath: () => 'Data',
     logo: 'gameart.jpg',
