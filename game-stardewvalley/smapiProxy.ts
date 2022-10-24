@@ -85,7 +85,7 @@ class SMAPIProxy {
                               : Promise<ILookupResult[]> {
     await this.mAPI.ext.ensureLoggedIn();
 
-    const files: IFileInfo[] = this.mAPI.ext.nexusGetModFiles?.(GAME_ID, nexusId) ?? [];
+    const files: IFileInfo[] = await this.mAPI.ext.nexusGetModFiles?.(GAME_ID, nexusId) ?? [];
 
     const versionPattern = `>=${version}`;
 
