@@ -43,6 +43,28 @@ const tools = [
   }
 ];
 
+// List of folders in the various languages on Epic, for now we default to English but this could be enhanced to select a folder based on the Vortex locale.
+// It's possible that some mods don't work with the non-English variant. 
+// Structure is {GAME FOLDER}\{LANGUAGE FOLDER}
+const localeFoldersEpic = {
+  en: 'Fallout 3 GOTY English',
+  fr: 'Fallout 3 GOTY French',
+  de: 'Fallout 3 GOTY German',
+  it: 'Fallout 3 GOTY Italian',
+  es: 'Fallout 3 GOTY Spanish',
+};
+
+// List of folders in the various languages on Xbox, for now we default to English but this could be enhanced to select a folder based on the Vortex locale.
+// It's possible that some mods don't work with the non-English variant. 
+// Structure is {GAME FOLDER}\Content\{LANGUAGE FOLDER}
+const localeFoldersXbox = {
+  en: 'Fallout 3 GOTY English',
+  fr: 'Fallout 3 GOTY French',
+  de: 'Fallout 3 GOTY German',
+  it: 'Fallout 3 GOTY Italian',
+  es: 'Fallout 3 GOTY Spanish',
+}
+
 function main(context) {
   context.registerGame({
     id: 'fallout3',
@@ -50,9 +72,9 @@ function main(context) {
     mergeMods: true,
     queryArgs: {
       steam: [{ id: STEAMAPP_ID, prefer: 0 }, { id: STEAMAPP_ID2 }, { name: 'Fallout 3.*' }],
-      xbox: [{ id: MS_ID }],
+      xbox: [{ id: MS_ID, modifyPath: (base) => path.join(base, localeFoldersXbox.en) }],
       gog: [{ id: GOG_ID }],
-      epic: [{ id: EPIC_ID }],
+      epic: [{ id: EPIC_ID, modifyPath: (base) => path.join(base, localeFoldersEpic.en) }],
       registry: [{ id: 'HKEY_LOCAL_MACHINE:Software\\Wow6432Node\\Bethesda Softworks\\Fallout3:Installed Path' }],
     },
     supportedTools: tools,
