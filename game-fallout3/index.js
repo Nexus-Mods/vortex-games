@@ -76,7 +76,7 @@ async function findGame() {
 
   if (!storeGames.length) return;
   
-  if (storeGames.length > 1) log('debug', 'Mutliple copies for Fallout 3 found', storeGames);
+  if (storeGames.length > 1) log('debug', 'Mutliple copies for Fallout 3 found', storeGames.map(s => s.gameStoreId));
 
   const selectedGame = storeGames[0];
   if (['epic', 'xbox'].includes(selectedGame.gameStoreId)) {
