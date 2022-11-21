@@ -1,13 +1,19 @@
 const Promise = require('bluebird');
 const path = require('path');
-const { fs, util } = require('vortex-api');
-const winapi = require('winapi-bindings');
-
+const { fs, util, log } = require('vortex-api');
 const STEAMAPP_ID = '22300';
 const STEAMAPP_ID2 = '22370';
 const GOG_ID = '1454315831';
 const EPIC_ID = 'adeae8bbfc94427db57c7dfecce3f1d4';
 const MS_ID = 'BethesdaSoftworks.Fallout3';
+
+const gameStoreIds = {
+  steam: [{ id: STEAMAPP_ID, prefer: 0 }, { id: STEAMAPP_ID2 }, { name: 'Fallout 3.*' }],
+  xbox: [{ id: MS_ID }],
+  gog: [{ id: GOG_ID }],
+  epic: [{ id: EPIC_ID }],
+  registry: [{ id: 'HKEY_LOCAL_MACHINE:Software\\Wow6432Node\\Bethesda Softworks\\Fallout3:Installed Path' }],
+};
 
 const tools = [
   {
@@ -65,18 +71,31 @@ const localeFoldersXbox = {
   es: 'Fallout 3 GOTY Spanish',
 }
 
+async function findGame() {
+  const storeGames = await util.GameStoreHelper.find(gameStoreIds).catch(() => []);
+
+  if (!storeGames.length) return;
+  
+  if (storeGames.length > 1) log('debug', 'Mutliple copies for Fallout 3 found', storeGames);
+
+  const selectedGame = storeGames[0];
+  if (['epic', 'xbox'].includes(selectedGame.gameStoreId)) {
+    const folderList = selectedGame.gameStoreId === 'epic' ? localeFoldersEpic : localeFoldersXbox;
+    // Get the user's chosen language
+    // state.interface.language || 'en';
+    log('debug', 'Defaulting to the English game version', { store: selectedGame.gameStoreId, folder: folderList['en'] });
+    return path.join(selectedGame.gamePath, folderList['en']);
+  }
+  else return selectedGame.gamePath;
+}
+
+
 function main(context) {
   context.registerGame({
     id: 'fallout3',
     name: 'Fallout 3',
     mergeMods: true,
-    queryArgs: {
-      steam: [{ id: STEAMAPP_ID, prefer: 0 }, { id: STEAMAPP_ID2 }, { name: 'Fallout 3.*' }],
-      xbox: [{ id: MS_ID, modifyPath: (base) => path.join(base, localeFoldersXbox.en) }],
-      gog: [{ id: GOG_ID }],
-      epic: [{ id: EPIC_ID, modifyPath: (base) => path.join(base, localeFoldersEpic.en) }],
-      registry: [{ id: 'HKEY_LOCAL_MACHINE:Software\\Wow6432Node\\Bethesda Softworks\\Fallout3:Installed Path' }],
-    },
+    queryPath: findGame,
     supportedTools: tools,
     queryModPath: () => 'Data',
     logo: 'gameart.jpg',
