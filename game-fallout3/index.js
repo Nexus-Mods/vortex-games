@@ -76,7 +76,7 @@ async function findGame() {
 
   if (!storeGames.length) return;
   
-  if (storeGames.length > 1) log('debug', 'Mutliple copies for Fallout 3 found', storeGames.map(s => s.gameStoreId));
+  if (storeGames.length > 1) log('debug', 'Mutliple copies of Fallout 3 found', storeGames.map(s => s.gameStoreId));
 
   const selectedGame = storeGames[0];
   if (['epic', 'xbox'].includes(selectedGame.gameStoreId)) {
@@ -89,12 +89,47 @@ async function findGame() {
   else return selectedGame.gamePath;
 }
 
+function prepareForModding(api, discovery) {
+  const gameName = util.getGame(GAME_ID)?.name || 'This game';
+
+  if (discovery.store && ['epic', 'xbox'].includes(discovery.store)) {
+    const storeName = discovery.store === 'epic' ? 'Epic Games' : 'Xbox Game Pass';
+    // If this is an Epic or Xbox game we've defaulted to English, so we should let the user know.
+    api.sendNotification({
+      id: `${GAME_ID}-locale-message`,
+      type: 'info',
+      title: 'Multiple Languages Available',
+      message: 'Default: English',
+      allowSuppress: true,
+      actions: [
+        {
+          title: 'More',
+          action: (dismiss) => {
+            dismiss();
+            api.showDialog('info', 'Mutliple Languages Available', {
+              bbcode: '{{gameName}} has multiple language options when downloaded from {{storeName}}. [br][/br][br][/br]'+
+                'Vortex has selected the English variant by default. [br][/br][br][/br]'+
+                'If you would prefer to manage a different language you can change the path to the game using the "Manually Set Location" option in the games tab.',
+              parameters: { gameName, storeName }
+            }, 
+            [ 
+              { label: 'Close', action: () => api.suppressNotification(`${GAME_ID}-locale-message`) }
+            ]
+            );
+          }
+        }
+      ]
+    });
+  }
+}
+
 
 function main(context) {
   context.registerGame({
     id: 'fallout3',
     name: 'Fallout 3',
     mergeMods: true,
+    setup: (discovery) => prepareForModding(context.api, discovery),
     queryPath: findGame,
     supportedTools: tools,
     queryModPath: () => 'Data',
