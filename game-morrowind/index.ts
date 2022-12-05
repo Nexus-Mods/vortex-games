@@ -1,7 +1,5 @@
-import * as Bluebird from 'bluebird';
 import path from 'path';
-import { actions, selectors, types, util } from 'vortex-api';
-import winapi from 'winapi-bindings';
+import { actions, log, selectors, types, util } from 'vortex-api';
 import * as React from 'react';
 
 const walk = require('turbowalk').default;
@@ -18,8 +16,23 @@ import MorrowindCollectionsDataView from './views/MorrowindCollectionsDataView';
 import { migrate103 } from './migrations';
 
 const STEAMAPP_ID = '22320';
-const GOGAPP_ID = '1435828767';
+const GOG_ID = '1435828767';
 const MS_ID = 'BethesdaSoftworks.TESMorrowind-PC';
+
+const GAME_ID = MORROWIND_ID;
+
+const localeFoldersXbox = {
+  en: 'Morrowind GOTY English',
+  fr: 'Morrowind GOTY French',
+  de: 'Morrowind GOTY German',
+}
+
+const gameStoreIds: any = {
+  steam: [{ id: STEAMAPP_ID, prefer: 0 }],
+  xbox: [{ id: MS_ID }],
+  gog: [{ id: GOG_ID }],
+  registry: [{ id: 'HKEY_LOCAL_MACHINE:Software\\Wow6432Node\\Bethesda Softworks\\oblivion:Installed Path' }],
+};
 
 const tools = [
   {
@@ -41,28 +54,25 @@ const tools = [
   }
 ];
 
-function findGame() {
-  return util.GameStoreHelper.findByAppId([STEAMAPP_ID, GOGAPP_ID, MS_ID])
-    .then(game => {
-      const isXbox = game.gameStoreId === 'xbox';
-      // The xbox pass variant has a different file structure; we're naively
-      //  assuming that all XBOX copies (regardless of locale) will contain
-      //  the English variant as well (fingers crossed)
-      return (isXbox)
-        ? Promise.resolve(path.join(game.gamePath, 'Morrowind GOTY English'))
-        : Promise.resolve(game.gamePath);
-    })
-    .catch(() => {
-      const instPath = winapi.RegGetValue(
-        'HKEY_LOCAL_MACHINE',
-        'Software\\Wow6432Node\\Bethesda Softworks\\Morrowind',
-        'Installed Path'
-      );
+async function findGame() {
+  const storeGames = await util.GameStoreHelper.find(gameStoreIds).catch(() => []);
 
-      if (!instPath) throw new Error('empty registry key');
-      return Promise.resolve(instPath.value);
-    });
+  if (!storeGames.length) return;
+  
+  if (storeGames.length > 1) log('debug', 'Mutliple copies of Oblivion found', storeGames.map(s => s.gameStoreId));
+
+  const selectedGame = storeGames[0];
+  if (['epic', 'xbox'].includes(selectedGame.gameStoreId)) {
+    // Get the user's chosen language
+    // state.interface.language || 'en';
+    log('debug', 'Defaulting to the English game version', { store: selectedGame.gameStoreId, folder: localeFoldersXbox['en'] });
+    selectedGame.gamePath = path.join(selectedGame.gamePath, localeFoldersXbox['en']);
+  }
+  return selectedGame;
 }
+
+/* Morrowind seems to start fine when running directly. If we do go through the launcher then the language version being
+   started might not be the one we're modding
 
 function requiresLauncher(gamePath) {
   return util.GameStoreHelper.findByAppId([MS_ID], 'xbox')
@@ -77,6 +87,43 @@ function requiresLauncher(gamePath) {
     }))
     .catch(err => Promise.resolve(undefined));
 }
+*/
+
+function prepareForModding(api: types.IExtensionApi, discovery: types.IDiscoveryResult) {
+  const gameName = util.getGame(GAME_ID)?.name || 'This game';
+
+  // the game doesn't actually exist on the epic game store, this chunk is copy&pasted, doesn't hurt
+  // keeping it identical
+  if (discovery.store && ['epic', 'xbox'].includes(discovery.store)) {
+    const storeName = discovery.store === 'epic' ? 'Epic Games' : 'Xbox Game Pass';
+    // If this is an Epic or Xbox game we've defaulted to English, so we should let the user know.
+    api.sendNotification({
+      id: `${GAME_ID}-locale-message`,
+      type: 'info',
+      title: 'Multiple Languages Available',
+      message: 'Default: English',
+      allowSuppress: true,
+      actions: [
+        {
+          title: 'More',
+          action: (dismiss) => {
+            dismiss();
+            api.showDialog('info', 'Mutliple Languages Available', {
+              bbcode: '{{gameName}} has multiple language options when downloaded from {{storeName}}. [br][/br][br][/br]'+
+                'Vortex has selected the English variant by default. [br][/br][br][/br]'+
+                'If you would prefer to manage a different language you can change the path to the game using the "Manually Set Location" option in the games tab.',
+              parameters: { gameName, storeName }
+            }, 
+            [ 
+              { label: 'Close', action: () => api.suppressNotification(`${GAME_ID}-locale-message`) }
+            ]
+            );
+          }
+        }
+      ]
+    });
+  }
+}
 
 function CollectionDataWrap(api: types.IExtensionApi, props: IExtendedInterfaceProps): JSX.Element {
   return React.createElement(MorrowindCollectionsDataView, { ...props, api, });
@@ -89,19 +136,20 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     supportedTools: tools,
+    setup: (discovery) => prepareForModding(context.api, discovery),
     queryModPath: () => 'Data Files',
     logo: 'gameart.jpg',
     executable: () => 'morrowind.exe',
     requiredFiles: [
       'morrowind.exe',
     ],
-    requiresLauncher,
+    // requiresLauncher,
     environment: {
       SteamAPPId: STEAMAPP_ID,
     },
     details: {
       steamAppId: parseInt(STEAMAPP_ID, 10),
-      gogAppId: GOGAPP_ID
+      gogAppId: GOG_ID
     },
   });
 

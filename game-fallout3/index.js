@@ -7,6 +7,8 @@ const GOG_ID = '1454315831';
 const EPIC_ID = 'adeae8bbfc94427db57c7dfecce3f1d4';
 const MS_ID = 'BethesdaSoftworks.Fallout3';
 
+const GAME_ID = 'fallout3';
+
 const gameStoreIds = {
   steam: [{ id: STEAMAPP_ID, prefer: 0 }, { id: STEAMAPP_ID2 }, { name: 'Fallout 3.*' }],
   xbox: [{ id: MS_ID }],
@@ -84,9 +86,9 @@ async function findGame() {
     // Get the user's chosen language
     // state.interface.language || 'en';
     log('debug', 'Defaulting to the English game version', { store: selectedGame.gameStoreId, folder: folderList['en'] });
-    return path.join(selectedGame.gamePath, folderList['en']);
+    selectedGame.gamePath = path.join(selectedGame.gamePath, folderList['en']);
   }
-  else return selectedGame.gamePath;
+  return selectedGame;
 }
 
 function prepareForModding(api, discovery) {
@@ -126,7 +128,7 @@ function prepareForModding(api, discovery) {
 
 function main(context) {
   context.registerGame({
-    id: 'fallout3',
+    id: GAME_ID,
     name: 'Fallout 3',
     mergeMods: true,
     setup: (discovery) => prepareForModding(context.api, discovery),

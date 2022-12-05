@@ -1,6 +1,5 @@
-const Promise = require('bluebird');
 const path = require('path');
-const { util } = require('vortex-api');
+const { log, util } = require('vortex-api');
 
 // List of folders in the various languages on Xbox, for now we default to English but this could be enhanced to select a folder based on the Vortex locale.
 // It's possible that some mods don't work with the non-English variant. 
@@ -42,12 +41,13 @@ async function findGame() {
     // Get the user's chosen language
     // state.interface.language || 'en';
     log('debug', 'Defaulting to the English game version', { store: selectedGame.gameStoreId, folder: localeFoldersXbox['en'] });
-    return path.join(selectedGame.gamePath, localeFoldersXbox['en']);
+    selectedGame.gamePath = path.join(selectedGame.gamePath, localeFoldersXbox['en']);
   }
-  else return selectedGame.gamePath;
+
+  return selectedGame;
 }
 
-let tools = [
+const tools = [
   {
     id: 'TES4Edit',
     name: 'TES4Edit',
@@ -79,6 +79,8 @@ let tools = [
   },
 ];
 
+/* by starting directly we control the language version being run and can thus ensure we
+   run the version that the user is modding
 async function requiresLauncher(gamePath, store) {
   const xboxSettings = {
     launcher: 'xbox',
@@ -107,6 +109,7 @@ async function requiresLauncher(gamePath, store) {
     return undefined;
   }
 }
+*/
 
 function prepareForModding(api, discovery) {
   const gameName = util.getGame(GAME_ID)?.name || 'This game';
@@ -156,7 +159,7 @@ function main(context) {
     requiredFiles: [
       'oblivion.exe',
     ],
-    requiresLauncher,
+    // requiresLauncher,
     environment: {
       SteamAPPId: '22330',
     },
