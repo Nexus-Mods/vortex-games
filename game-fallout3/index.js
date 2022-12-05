@@ -123,6 +123,7 @@ function prepareForModding(api, discovery) {
       ]
     });
   }
+  return Promise.resolve();
 }
 
 

@@ -123,6 +123,7 @@ function prepareForModding(api: types.IExtensionApi, discovery: types.IDiscovery
       ]
     });
   }
+  return Promise.resolve();
 }
 
 function CollectionDataWrap(api: types.IExtensionApi, props: IExtendedInterfaceProps): JSX.Element {

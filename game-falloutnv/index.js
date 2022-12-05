@@ -114,6 +114,7 @@ function prepareForModding(api, discovery) {
       ]
     });
   }
+  return Promise.resolve();
 }
 
 function main(context) {
