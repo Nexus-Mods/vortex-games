@@ -79,8 +79,9 @@ const tools = [
   },
 ];
 
-/* by starting directly we control the language version being run and can thus ensure we
-   run the version that the user is modding
+// we can run the xbox version of Oblivion directly and that ensures we start the language version
+// the user is modding
+/*
 async function requiresLauncher(gamePath, store) {
   const xboxSettings = {
     launcher: 'xbox',
@@ -160,7 +161,6 @@ function main(context) {
     requiredFiles: [
       'oblivion.exe',
     ],
-    // requiresLauncher,
     environment: {
       SteamAPPId: '22330',
     },

@@ -12,11 +12,8 @@ const localeFoldersXbox = {
   es: 'Fallout New Vegas Spanish',
 }
 
-
-// In case the findByName functionality doesn't work properly.
-//  It didn't seem to when we last checked (01/06/2022) due to
-//  a trailing ' ' in the Steam manifest file.
-const GAME_ID = 'newvegas';
+const GAME_ID = 'falloutnv';
+const NEXUS_DOMAIN_NAME = 'newvegas';
 const STEAMAPP_ID = '22380';
 const STEAMAPP_ID2 = '22490';
 const GOG_ID = '1454587428';
@@ -117,14 +114,44 @@ function prepareForModding(api, discovery) {
   return Promise.resolve();
 }
 
+async function requiresLauncher(gamePath, store) {
+  const xboxSettings = {
+    launcher: 'xbox',
+    addInfo: {
+      appId: MS_ID,
+      parameters: [
+        { appExecName: 'Game' },
+      ],
+    }
+  };
+
+  if (store !== undefined) {
+    if (store === 'xbox') return xboxSettings;
+    else return undefined;
+  }
+
+  // Store type isn't detected. Try and match the Xbox path. 
+
+  try {
+    const game = await util.GameStoreHelper.findByAppId([MS_ID], 'xbox');
+    const normalizeFunc = await util.getNormalizeFunc(gamePath);
+    if (normalizeFunc(game.gamePath) === normalizeFunc(gamePath)) return xboxSettings;
+    else return undefined;
+  }
+  catch(err) {
+    return undefined;
+  }
+}
+
 function main(context) {
   context.registerGame({
-    id: 'falloutnv',
+    id: GAME_ID,
     name: 'Fallout:\tNew Vegas',
     setup: (discovery) => prepareForModding(context.api, discovery),
     shortName: 'New Vegas',
     mergeMods: true,
     queryPath: findGame,
+    requiresLauncher,
     supportedTools: tools,
     queryModPath: () => 'Data',
     logo: 'gameart.jpg',
@@ -137,7 +164,7 @@ function main(context) {
     },
     details: {
       steamAppId: 22380,
-      nexusPageId: GAME_ID,
+      nexusPageId: NEXUS_DOMAIN_NAME,
       hashFiles: [
         'Data/Update.bsa',
         'Data/FalloutNV.esm',

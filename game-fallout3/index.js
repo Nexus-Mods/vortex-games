@@ -126,6 +126,34 @@ function prepareForModding(api, discovery) {
   return Promise.resolve();
 }
 
+async function requiresLauncher(gamePath, store) {
+  const xboxSettings = {
+    launcher: 'xbox',
+    addInfo: {
+      appId: MS_ID,
+      parameters: [
+        { appExecName: 'Game' },
+      ],
+    }
+  };
+
+  if (store !== undefined) {
+    if (store === 'xbox') return xboxSettings;
+    else return undefined;
+  }
+
+  // Store type isn't detected. Try and match the Xbox path. 
+
+  try {
+    const game = await util.GameStoreHelper.findByAppId([MS_ID], 'xbox');
+    const normalizeFunc = await util.getNormalizeFunc(gamePath);
+    if (normalizeFunc(game.gamePath) === normalizeFunc(gamePath)) return xboxSettings;
+    else return undefined;
+  }
+  catch(err) {
+    return undefined;
+  }
+}
 
 function main(context) {
   context.registerGame({
@@ -136,6 +164,7 @@ function main(context) {
     queryPath: findGame,
     supportedTools: tools,
     queryModPath: () => 'Data',
+    requiresLauncher,
     logo: 'gameart.jpg',
     executable: (discoveryPath) => {
       if (discoveryPath === undefined) {
