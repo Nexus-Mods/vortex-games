@@ -130,13 +130,12 @@ function prepareForModding(api, discovery) {
           action: (dismiss) => {
             dismiss();
             api.showDialog('info', 'Mutliple Languages Available', {
-              bbcode: '{{gameName}} has multiple language options when downloaded from {{storeName}}. [br][/br][br][/br]'+
-                'Vortex has selected the English variant by default. [br][/br][br][/br]'+
+              bbcode: '{{gameName}} has multiple language options when downloaded from {{storeName}}. [br][/br][br][/br]' +
+                'Vortex has selected the English variant by default. [br][/br][br][/br]' +
                 'If you would prefer to manage a different language you can change the path to the game using the "Manually Set Location" option in the games tab.',
               parameters: { gameName, storeName }
-            }, 
-            [ 
-              { label: 'Close', action: () => api.suppressNotification(`${GAME_ID}-locale-message`) }
+            }, [
+              { label: 'Close', action: () => api.suppressNotification(`${GAME_ID}-locale-message`) },
             ]
             );
           }

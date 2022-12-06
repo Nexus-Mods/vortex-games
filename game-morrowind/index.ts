@@ -31,7 +31,7 @@ const gameStoreIds: any = {
   steam: [{ id: STEAMAPP_ID, prefer: 0 }],
   xbox: [{ id: MS_ID }],
   gog: [{ id: GOG_ID }],
-  registry: [{ id: 'HKEY_LOCAL_MACHINE:Software\\Wow6432Node\\Bethesda Softworks\\oblivion:Installed Path' }],
+  registry: [{ id: 'HKEY_LOCAL_MACHINE:Software\\Wow6432Node\\Bethesda Softworks\\Morrowind:Installed Path' }],
 };
 
 const tools = [
