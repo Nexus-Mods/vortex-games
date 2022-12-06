@@ -419,6 +419,8 @@ export async function makeOnContextImport(context: types.IExtensionContext, coll
       await importScriptMerges(context, profileId, hex2Buffer(scriptMergedData));
     }
   } catch (err) {
-    context.api.showErrorNotification('Failed to import script merges', err);
+    if (!(err instanceof util.UserCanceled)) {
+      context.api.showErrorNotification('Failed to import script merges', err);
+    }
   }
 }
