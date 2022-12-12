@@ -334,6 +334,10 @@ async function install(api,
     }
 
     const addRuleForDependency = (dep: ISDVDependency) => {
+      if (dep.UniqueID === undefined) {
+        return;
+      }
+
       const versionMatch = dep.MinimumVersion !== undefined
         ? `>=${dep.MinimumVersion}`
         : '*';
@@ -654,6 +658,7 @@ function init(context: types.IExtensionContext) {
       const refManifest = parsedManifests[0];
 
       const additionalLogicalFileNames = parsedManifests
+        .filter(manifest => manifest.UniqueID !== undefined)
         .map(manifest => manifest.UniqueID.toLowerCase());
 
       const minSMAPIVersion = parsedManifests
