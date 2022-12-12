@@ -667,7 +667,7 @@ function init(context: types.IExtensionContext) {
       };
 
       // don't set a custom file name for SMAPI
-      if (modInfo.download.modInfo.nexus.ids?.modId !== 2400) {
+      if (modInfo.download.modInfo?.nexus?.ids?.modId !== 2400) {
         result['customFileName'] = refManifest.Name;
       }
 
