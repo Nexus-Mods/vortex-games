@@ -64,6 +64,7 @@ const tools: types.ITool[] = [
     id: GAME_ID + '_DX12',
     name: 'The Witcher 3 (DX12)',
     logo: 'auto',
+    relative: true,
     executable: () => 'bin/x64_DX12/witcher3.exe',
     requiredFiles: [
       'bin/x64_DX12/witcher3.exe',
