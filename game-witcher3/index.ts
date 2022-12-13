@@ -60,6 +60,15 @@ const tools = [
       'WitcherScriptMerger.exe',
     ],
   },
+  {
+    id: GAME_ID + '_DX12',
+    name: 'The Witcher 3 (DX12)',
+    logo: 'gameart.jpg',
+    executable: () => 'bin/x64_DX12/witcher3.exe',
+    requiredFiles: [
+      'bin/x64_DX12/witcher3.exe',
+    ],
+  },
 ];
 
 function writeToModSettings() {
