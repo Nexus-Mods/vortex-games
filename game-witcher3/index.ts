@@ -50,7 +50,7 @@ const CONFIG_MATRIX_REL_PATH = path.join('bin', 'config', 'r4game', 'user_config
 let _INI_STRUCT = {};
 let _PREVIOUS_LO = {};
 
-const tools = [
+const tools: types.ITool[] = [
   {
     id: SCRIPT_MERGER_ID,
     name: 'W3 Script Merger',
@@ -63,7 +63,7 @@ const tools = [
   {
     id: GAME_ID + '_DX12',
     name: 'The Witcher 3 (DX12)',
-    logo: 'gameart.jpg',
+    logo: 'auto',
     executable: () => 'bin/x64_DX12/witcher3.exe',
     requiredFiles: [
       'bin/x64_DX12/witcher3.exe',
