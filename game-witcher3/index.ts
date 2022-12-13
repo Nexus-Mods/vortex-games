@@ -50,7 +50,7 @@ const CONFIG_MATRIX_REL_PATH = path.join('bin', 'config', 'r4game', 'user_config
 let _INI_STRUCT = {};
 let _PREVIOUS_LO = {};
 
-const tools = [
+const tools: types.ITool[] = [
   {
     id: SCRIPT_MERGER_ID,
     name: 'W3 Script Merger',
@@ -58,6 +58,15 @@ const tools = [
     executable: () => 'WitcherScriptMerger.exe',
     requiredFiles: [
       'WitcherScriptMerger.exe',
+    ],
+  },
+  {
+    id: GAME_ID + '_DX12',
+    name: 'The Witcher 3 (DX12)',
+    logo: 'auto',
+    executable: () => 'bin/x64_DX12/witcher3.exe',
+    requiredFiles: [
+      'bin/x64_DX12/witcher3.exe',
     ],
   },
 ];
@@ -1104,6 +1113,7 @@ function main(context: types.IExtensionContext) {
       steamAppId: 292030,
       ignoreConflicts: DO_NOT_DEPLOY,
       ignoreDeploy: DO_NOT_DEPLOY,
+      hashFiles: ['bin/x64/witcher3.exe'],
     },
   });
 
@@ -1317,7 +1327,7 @@ function main(context: types.IExtensionContext) {
           + 'remove the existing merge and re-apply it.');
       }
       const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
-      const docFiles = deployment['witcher3menumodroot']
+      const docFiles = (deployment['witcher3menumodroot'] ?? [])
         .filter(file => file.relPath.endsWith(PART_SUFFIX)
                         && (file.relPath.indexOf(INPUT_XML_FILENAME) === -1));
       const menuModPromise = () => {

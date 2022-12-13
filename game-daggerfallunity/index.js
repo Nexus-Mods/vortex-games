@@ -19,7 +19,7 @@ function resolveGameVersion() {
       return (match)
         ? Promise.resolve(match[0].substr(VERSION_PATTERN.length).trim())
         : Promise.reject(new util.DataInvalid('Unable to resolve game version'));
-  })
+    });
 }
 
 function findGame() {
@@ -35,7 +35,10 @@ function findGame() {
       return (gamePathLine !== undefined)
         ? Promise.resolve(getTrimmedPath(gamePathLine))
         : Promise.resolve(undefined);
-  });
+    })
+    .catch(err => (err['code'] === 'ENOENT')
+      ? Promise.resolve(undefined)
+      : Promise.reject(err));
 }
 
 function testSupported(files, gameId) {

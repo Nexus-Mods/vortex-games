@@ -1,6 +1,7 @@
 import * as _ from 'lodash';
 import { actions, fs, types, util } from 'vortex-api';
 
+import { setPreviousLO } from './actions';
 import { GAME_ID, INVALID_LO_MOD_TYPES } from './common';
 import { ILoadOrderEntry, IProps, ISerializableData, LoadOrder } from './types';
 import { ensureLOFile, genProps, getPrefixOffset, makePrefix } from './util';
@@ -35,6 +36,7 @@ function corruptLODialog(props: IProps, filePath: string, err: Error) {
 
 export async function serialize(context: types.IExtensionContext,
                                 loadOrder: LoadOrder,
+                                previousLO: LoadOrder,
                                 profileId?: string): Promise<void> {
   const props: IProps = genProps(context);
   if (props === undefined) {
@@ -60,7 +62,7 @@ export async function serialize(context: types.IExtensionContext,
 
   const fileData = await fs.readFileAsync(loFilePath, { encoding: 'utf8' })
     .catch(err => (err.code === 'ENOENT')
-      ? Promise.resolve('')
+      ? Promise.resolve('[]')
       : Promise.reject(err));
 
   let savedLO: ILoadOrderEntry[] = [];
@@ -70,9 +72,12 @@ export async function serialize(context: types.IExtensionContext,
     savedLO = await corruptLODialog(props, loFilePath, err);
   }
 
-  if (isLODifferent(savedLO, prefixedLO)) {
-    context.api.store.dispatch(actions.setLoadOrder(props.profile.id, prefixedLO));
-  }
+  const batchedActions = [];
+  // if (isLODifferent(savedLO, prefixedLO)) {
+  //   batchedActions.push(actions.setLoadOrder(props.profile.id, prefixedLO));
+  // }
+  batchedActions.push(setPreviousLO(props.profile.id, previousLO));
+  util.batchDispatch(context.api.store, batchedActions);
 
   // Write the prefixed LO to file.
   await fs.removeAsync(loFilePath).catch({ code: 'ENOENT' }, () => Promise.resolve());

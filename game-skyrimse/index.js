@@ -1,25 +1,11 @@
 const { getFileVersion, getFileVersionLocalized } = require('exe-version');
 const path = require('path');
-const { util } = require('vortex-api');
-const winapi = require('winapi-bindings');
+const { fs, selectors, util } = require('vortex-api');
 
+const GAME_ID = 'skyrimse';
+const GOG_ID = '1711230643';
 const MS_ID = 'BethesdaSoftworks.SkyrimSE-PC';
-function findGame() {
-  try {
-    const instPath = winapi.RegGetValue(
-      'HKEY_LOCAL_MACHINE',
-      'Software\\Wow6432Node\\Bethesda Softworks\\Skyrim Special Edition',
-      'Installed Path');
-    if (!instPath) {
-      throw new Error('empty registry key');
-    }
-    return Promise.resolve(instPath.value);
-  } catch (err) {
-    return util.steam.findByName('The Elder Scrolls V: Skyrim Special Edition')
-      .catch(() => util.GameStoreHelper.findByAppId([MS_ID], 'xbox'))
-      .then(game => game.gamePath);
-  }
-}
+const EPIC_ID = 'ac82db5035584c7f8a2c548d98c86b2c';
 
 const tools = [
   {
@@ -76,50 +62,103 @@ const tools = [
   },
 ];
 
-function requiresLauncher(gamePath) {
+function requiresLauncher(gamePath, store) {
+  const xboxSettings = {
+    launcher: 'xbox',
+    addInfo: {
+      appId: MS_ID,
+      parameters: [
+        { appExecName: 'Game' },
+      ],
+    }
+  };
+
+  if (store !== undefined) {
+    // early out if the app gave us the storeid
+    if (store === 'xbox') {
+      return Promise.resolve(xboxSettings);
+    } else {
+      return Promise.resolve(undefined);
+    }
+  }
+
+  let normalize;
+
   return util.GameStoreHelper.findByAppId([MS_ID], 'xbox')
-    .then(() => Promise.resolve({
-      launcher: 'xbox',
-      addInfo: {
-        appId: MS_ID,
-        parameters: [
-          { appExecName: 'Game' },
-        ],
+    .then(gameEntry => {
+      util.getNormalizeFunc(gamePath)
+        .then(norm => normalize = norm);
+      return gameEntry;
+    })
+    .then(gameEntry => {
+      if (normalize(gameEntry.gamePath) === normalize(gamePath)) {
+        return Promise.resolve(xboxSettings);
       }
-    }))
-    .catch(err => Promise.resolve(undefined));
+    })
+    .catch(() => Promise.resolve(undefined));
 }
 
-function getGameVersion(gamePath, exePath) {
-  const fullPath = path.join(gamePath, exePath);
-  const fileVersion = getFileVersion(fullPath);
-  return Promise.resolve((fileVersion !== '1.0.0.0')
-    ? fileVersion
-    : getFileVersionLocalized(fullPath));
+async function getGameVersion(api, gamePath, exePath) {
+  const appManifest = path.join(gamePath, 'appxmanifest.xml');
+  try {
+    await fs.statAsync(appManifest);
+    if (api.ext?.['getHashVersion']) {
+      const state = api.getState();
+      const game = selectors.gameById(state, GAME_ID);
+      const discovery = selectors.discoveryByGame(state, GAME_ID);
+      return new Promise((resolve, reject) => {
+        api.ext?.['getHashVersion'](game, discovery, (err, ver) => {
+          return err !== null
+            ? reject(err)
+            : resolve(ver);
+        });
+      }); 
+    } else {
+      throw new util.NotSupportedError();
+    }
+  } catch (err) {
+    const fullPath = path.join(gamePath, exePath);
+    const fileVersion = getFileVersion(fullPath);
+    return (fileVersion !== '1.0.0.0')
+      ? fileVersion
+      : getFileVersionLocalized(fullPath);
+  }
 }
 
 function main(context) {
   context.registerGame({
-    id: 'skyrimse',
+    id: GAME_ID,
     name: 'Skyrim Special Edition',
     shortName: 'SSE',
     mergeMods: true,
-    queryPath: findGame,
+    queryArgs: {
+      // prefer steam because it was released first and users may have pre-1.6.12 installs with store not saved in state
+      steam: [{ name: 'The Elder Scrolls V: Skyrim Special Edition', prefer: 0 }],
+      xbox: [{ id: MS_ID }],
+      gog: [{ id: GOG_ID }],
+      epic: [{ id: EPIC_ID }],
+      registry: [{ id: 'HKEY_LOCAL_MACHINE:Software\\Wow6432Node\\Bethesda Softworks\\Skyrim Special Edition:Installed Path' }],
+    },
     supportedTools: tools,
-    queryModPath: () => 'data',
+    queryModPath: () => 'Data',
     logo: 'gameart.jpg',
     executable: () => 'SkyrimSE.exe',
     requiredFiles: [
       'SkyrimSE.exe',
     ],
     requiresLauncher,
-    getGameVersion,
+    getGameVersion: (gamePath, exePath) => getGameVersion(context.api, gamePath, exePath),
     environment: {
       SteamAPPId: '489830',
     },
     details: {
       steamAppId: 489830,
       nexusPageId: 'skyrimspecialedition',
+      hashFiles: [
+        'appxmanifest.xml',
+        path.join('Data', 'Skyrim.esm'),
+        path.join('Data', 'Update.esm'),
+      ],
     }
   });
 

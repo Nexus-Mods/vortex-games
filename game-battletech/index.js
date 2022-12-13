@@ -68,7 +68,7 @@ function main(context) {
     context.api.onAsync('added-files', async (profileId, files) => {
       const state = context.api.store.getState();
       const profile = selectors.profileById(state, profileId);
-      if (profile.gameId !== GAME_ID) {
+      if (profile?.gameId !== GAME_ID) {
         // don't care about any other games
         return;
       }

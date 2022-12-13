@@ -11,22 +11,6 @@ This issue is compounded by users extracting all their BA2s.
 const IGNORED_FILES = [ path.join('**', 'PersistantSubgraphInfoAndOffsetData.txt') ];
 
 const MS_ID = 'BethesdaSoftworks.Fallout4-PC';
-function findGame() {
-  try {
-    const instPath = winapi.RegGetValue(
-      'HKEY_LOCAL_MACHINE',
-      'Software\\Wow6432Node\\Bethesda Softworks\\Fallout4',
-      'Installed Path');
-    if (!instPath) {
-      throw new Error('empty registry key');
-    }
-    return Promise.resolve(instPath.value);
-  } catch (err) {
-    return util.steam.findByName('Fallout 4')
-      .catch(() => util.GameStoreHelper.findByAppId([MS_ID], 'xbox'))
-      .then(game => game.gamePath);
-  }
-}
 
 let tools = [
   {
@@ -91,9 +75,13 @@ function main(context) {
     id: 'fallout4',
     name: 'Fallout 4',
     mergeMods: true,
-    queryPath: findGame,
+    queryArgs: {
+      steam: [{ name: 'Fallout 4' }],
+      xbox: [{ id: MS_ID }],
+      registry: [{ id: 'HKEY_LOCAL_MACHINE:Software\\Wow6432Node\\Bethesda Softworks\\Fallout4:Installed Path' }],
+    },
     supportedTools: tools,
-    queryModPath: () => 'data',
+    queryModPath: () => 'Data',
     logo: 'gameart.jpg',
     executable: () => 'Fallout4.exe',
     requiredFiles: [
@@ -105,7 +93,11 @@ function main(context) {
     },
     details: {
       steamAppId: 377160,
-      ignoreConflicts: IGNORED_FILES
+      ignoreConflicts: IGNORED_FILES,
+      hashFiles: [
+        'appxmanifest.xml',
+        'Data/Fallout4.esm',
+      ]
     }
   });
 

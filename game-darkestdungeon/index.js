@@ -384,7 +384,7 @@ function main(context) {
     logo: 'gameart.jpg',
     executable: (discoveryPath) => getExecutable(discoveryPath),
     requiredFiles: [
-      'audio/secondary_banks/en_darkestdungeon.bank',
+      GOG_EXE,
     ],
     setup: prepareForModding,
     environment: {
@@ -392,6 +392,7 @@ function main(context) {
     },
     details: {
       steamAppId: parseInt(STEAM_ID),
+      hashFiles: [GOG_EXE], // Both Steam and GOG builds have the GOG exec present.
     },
   });
 

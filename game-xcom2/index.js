@@ -15,6 +15,10 @@ const STEAMAPP_ID = '268500'; //WOTC is 593380 but it's the same folder so we do
 const GOGAPP_ID = '1482002159'; //WOTC is 1414942413 but it's the same folder so we don't need it.
 const EPICAPP_ID = '3be3c4d681bc46b3b8b26c5df3ae0a18';
 
+// Dev tools
+const X2DEVTOOLSSTEAMAPP_ID = '299990';
+const WOTCDEVTOOLSSTEAMAPP_ID = '602410';
+
 const optionsPath = (gameId) => {
   switch(gameId) {
     case(XCOM2_ID): return XCOM2_CONFIG;
@@ -37,14 +41,19 @@ const instructions = (gameId) => {
 }
 
 /*
-2.0 update based on the following information sources 
+1.1 update based on the following information sources 
 https://support.feralinteractive.com/docs/en/xcom2warofthechosen/1.3/steam/faqs/?access=FOJzacYvnB
 https://www.gog.com/forum/xcom_2/actually_where_do_mods_go_in_this_version/page1
-
 */
 
 function findGame() {
   return util.GameStoreHelper.findByAppId([STEAMAPP_ID, GOGAPP_ID, EPICAPP_ID])
+      .then(game => game.gamePath);
+}
+
+function findDevTools(game) {
+  const steamId = game === XCOM2_ID ? X2DEVTOOLSSTEAMAPP_ID : WOTCDEVTOOLSSTEAMAPP_ID;
+  return util.GameStoreHelper.findByAppId([steamId])
       .then(game => game.gamePath);
 }
 
@@ -64,6 +73,16 @@ function supportedTools(game) {
         path.join('Launcher', 'launcher.exe'),
       ],
       relative: true,
+    },
+    {
+      id: `${game}-devtools`,
+      name: 'ModBuddy',
+      logo: path.join('icons', 'modbuddy.png'),
+      queryPath: () => findDevTools(game),
+      executable: () =>  path.join('Binaries', 'Win32', 'ModBuddy', 'XCOM ModBuddy.exe'),
+      requiredFiles: [
+        path.join('Binaries', 'Win32', 'ModBuddy', 'XCOM ModBuddy.exe')
+      ]
     }
   ]
 }
@@ -76,12 +95,12 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: () => XCOM2_MODS,
-    executable: () => 'Binaries/Win64/XCom2.exe',
+    executable: () => path.join('Binaries', 'Win64', 'XCom2.exe'),
     setup: (discovery) => prepareForModding(discovery, XCOM2_MODS),
     requiredFiles: [
       'XComGame',
-      'XComGame/CookedPCConsole/3DUIBP.upk',
-      'XComGame/CharacterPool/Importable/Demos&Replays.bin'
+      path.join('XComGame', 'CookedPCConsole', '3DUIBP.upk'),
+      path.join('XComGame', 'CharacterPool', 'Importable', 'Demos&Replays.bin')
     ],
     supportedTools: supportedTools(XCOM2_ID),
     parameters: ['-fromLauncher', '-review', '-noRedScreens', '-noStartupMovies', '-CrashDumpWatcher'],
@@ -101,11 +120,11 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     queryModPath: () => WOTC_MODS,
-    executable: () => 'XCom2-WarOfTheChosen/Binaries/Win64/XCom2.exe',
+    executable: () => path.join('XCom2-WarOfTheChosen', 'Binaries', 'Win64', 'XCom2.exe'),
     setup: (discovery) => prepareForModding(discovery, WOTC_MODS),
     requiredFiles: [
       'XCom2-WarOfTheChosen',
-      'XCom2-WarOfTheChosen/XComGame/CookedPCConsole/3DUIBP.upk',
+      path.join('XCom2-WarOfTheChosen', 'XComGame', 'CookedPCConsole', '3DUIBP.upk')
     ],
     parameters: ['-fromLauncher', '-review', '-noRedScreens', '-noStartupMovies', '-CrashDumpWatcher'],
     environment: {
@@ -177,7 +196,7 @@ async function installMod(files) {
     // Instructions for Vortex from the file list.
     const modInstructions = modFiles.map(file => {
       // Trim off the folder name, in case it doesn't match the modName.
-      const shortPath = file.substr(file.indexOf(modFolder) + modFolder.length);
+      const shortPath = modFolder != '.' ? file.substr(file.indexOf(modFolder) + modFolder.length) : file;
       return {
       type: 'copy',
       source: file,
@@ -289,11 +308,12 @@ async function deserializeLoadOrder(api, gameId) {
 
   // Map our data into a load order.
   const loadOrder = [...loadOrderUniques].map(xmod => {
+    const steamMod = workshopMods.includes(xmod);
     const enabled = enabledMods.includes(xmod);
     const xmodPath = path.join(xmod, `${xmod}${MOD_EXT}`);
     const deployed = deployedFiles.find(file => file.relPath.toLowerCase() === xmodPath.toLowerCase());
     return {
-      id: xmod.toLowerCase(),
+      id: (steamMod === true) ? `steam-${xmod}.toLowerCase()`: xmod.toLowerCase(),
       name: xmod,
       enabled,
       modId: deployed ? deployed.source : undefined

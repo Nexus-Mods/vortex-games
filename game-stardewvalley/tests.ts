@@ -1,0 +1,50 @@
+import { types } from 'vortex-api';
+
+import DependencyManager from './DependencyManager';
+
+import { coerce, gte } from 'semver';
+
+import { downloadSMAPI, findSMAPIMod } from './SMAPI';
+
+export async function testSMAPIOutdated(api: types.IExtensionApi,
+                                        depManager: DependencyManager)
+                                        : Promise<types.ITestResult> {
+  let currentSMAPIVersion = findSMAPIMod(api)?.attributes?.version;
+  if (currentSMAPIVersion === undefined) {
+    // SMAPI isn't installed or enabled.
+    return Promise.resolve(undefined);
+  }
+
+  const isSmapiOutdated = async () => {
+    currentSMAPIVersion = findSMAPIMod(api)?.attributes?.version;
+    const enabledManifests = await depManager.getManifests();
+    const incompatibleModIds: string[] = [];
+    for (const [id, manifests] of Object.entries(enabledManifests)) {
+      const incompatible = manifests.filter((iter) => {
+        if (iter.MinimumApiVersion !== undefined) {
+          return !gte(currentSMAPIVersion, coerce(iter.MinimumApiVersion ?? '0.0.0'));
+        }
+        return false;
+      });
+      if (incompatible.length > 0) {
+        incompatibleModIds.push(id);
+      }
+    }
+    return Promise.resolve((incompatibleModIds.length > 0));
+  }
+
+  const outdated = await isSmapiOutdated();
+  const t = api.translate;
+  return outdated
+    ? Promise.resolve({
+      description: {
+        short: t('SMAPI update required'),
+        long: t('Some Stardew Valley mods require a newer version of SMAPI to function correctly, '
+              + 'you should check for SMAPI updates in the mods page.'),
+      },
+      automaticFix: () => downloadSMAPI(api, true),
+      onRecheck: () => isSmapiOutdated(),
+      severity: 'warning' as types.ProblemSeverity,
+    })
+    : Promise.resolve(undefined);
+}

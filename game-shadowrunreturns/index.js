@@ -46,6 +46,12 @@ function main(context) {
     },
     details: {
       steamAppId: 234650,
+      hashFiles: [
+        'Shadowrun_Data/Managed/Assembly-UnityScript.dll',
+        'Shadowrun_Data/Managed/Assembly-CSharp.dll',
+        'Shadowrun_Data/Managed/Assembly-CSharp-firstpass.dll',
+        'ShadowrunEditor.exe',
+      ],
     }
   });
 

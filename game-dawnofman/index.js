@@ -166,6 +166,9 @@ function main(context) {
     },
     details: {
       steamAppId: STEAM_ID,
+      hashFiles: [
+        'DawnOfMan_Data/Managed/Assembly-CSharp.dll',
+      ],
     },
     setup: prepareForModding,
   });

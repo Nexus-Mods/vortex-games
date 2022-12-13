@@ -4,7 +4,7 @@ import turbowalk from 'turbowalk';
 import { fs, selectors, types, util } from 'vortex-api';
 import { parseStringPromise } from 'xml2js';
 
-import { GAME_ID, LO_FILE_NAME, MOD_INFO } from './common';
+import { GAME_ID, MOD_INFO, loadOrderFilePath } from './common';
 import { IProps } from './types';
 
 // We _should_ just export this from vortex-api, but I guess it's not wise to make it
@@ -45,7 +45,7 @@ export async function ensureLOFile(context: types.IExtensionContext,
     return Promise.reject(new util.ProcessCanceled('failed to generate game props'));
   }
 
-  const targetPath = path.join(props.discovery.path, props.profile.id + '_' + LO_FILE_NAME);
+  const targetPath = loadOrderFilePath(props.profile.id);
   try {
     await fs.statAsync(targetPath)
       .catch({ code: 'ENOENT' }, () => fs.writeFileAsync(targetPath, JSON.stringify([]), { encoding: 'utf8' }));

@@ -44,6 +44,7 @@ function main(context) {
     },
     details: {
       steamAppId: 219990,
+      hashFiles: ['Grim Dawn.exe', 'Game.dll'],
     }
   });
 

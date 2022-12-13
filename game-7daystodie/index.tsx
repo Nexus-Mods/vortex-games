@@ -1,33 +1,22 @@
 import path from 'path';
 import { useSelector } from 'react-redux';
-import { createAction } from 'redux-act';
-import { actions, fs, log, selectors, types, util } from 'vortex-api';
+import { actions, fs, selectors, types, util } from 'vortex-api';
 
 import * as React from 'react';
 
-import { GAME_ID, gameExecutable, MOD_INFO, modsRelPath } from './common';
+import { setPrefixOffset, setUDF } from './actions';
+import { reducer } from './reducers';
+
+import { GAME_ID, gameExecutable, MOD_INFO, launcherSettingsFilePath, DEFAULT_LAUNCHER_SETTINGS } from './common';
 import { deserialize, serialize, validate } from './loadOrder';
-import { migrate020, migrate100 } from './migrations';
+import { migrate020, migrate100, migrate1011 } from './migrations';
 import { ILoadOrderEntry, IProps } from './types';
-import { genProps, getModName, makePrefix, reversePrefix, toBlue } from './util';
+import { ensureLOFile, genProps, getModName, makePrefix, reversePrefix, toBlue } from './util';
 
 const STEAM_ID = '251570';
 const STEAM_DLL = 'steamclient64.dll';
 
 const ROOT_MOD_CANDIDATES = ['bepinex'];
-
-const setPrefixOffset = createAction('7DTD_SET_PREFIX_OFFSET',
-  (profile: string, offset: number) => ({ profile, offset }));
-
-const reducer: types.IReducerSpec = {
-  reducers: {
-    [setPrefixOffset as any]: (state, payload) => {
-      const { profile, offset } = payload;
-      return util.setSafe(state, ['prefixOffset', profile], offset);
-    },
-  },
-  defaults: {},
-};
 
 function resetPrefixOffset(api: types.IExtensionApi) {
   const state = api.getState();
@@ -100,13 +89,73 @@ async function findGame() {
     .then(game => game.gamePath);
 }
 
+function parseAdditionalParameters(parameters: string) {
+  const udfParam = parameters.split('-').find(param => param.startsWith('UserDataFolder='));
+  const udf = udfParam ? udfParam.split('=')?.[1]?.trimEnd() : undefined;
+  return (udf && path.isAbsolute(udf)) ? udf : undefined;
+}
+
 async function prepareForModding(context: types.IExtensionContext,
                                  discovery: types.IDiscoveryResult) {
-  const modsPath = path.join(discovery.path, modsRelPath());
+  const requiresRestart = util.getSafe(context.api.getState(),
+    ['settings', '7daystodie', 'udf'], undefined) === undefined;
+  const launcherSettings = launcherSettingsFilePath();
+  const relaunchExt = () => {
+    return context.api.showDialog('info', 'Restart Required', {
+      text: 'The extension requires a restart to complete the UDF setup. '
+          + 'The extension will now exit - please re-activate it via the games page or dashboard.',
+    }, [ { label: 'Restart Extension' } ])
+    .then(() => {
+      return Promise.reject(new util.ProcessCanceled('Restart required'));
+    });
+  }
+  const selectUDF = async () => {
+    const res = await context.api.showDialog('info', 'Choose User Defined Folder', {
+      text: 'The modding pattern for 7DTD is changing. The Mods path inside the game directory '
+          + 'is being deprecated and mods located in the old path will no longer work in the near '
+          + 'future. Please select your User Defined Folder (UDF) - Vortex will deploy to this new location.',
+    },
+    [
+      { label: 'Cancel' },
+      { label: 'Select UDF' },
+    ]);
+    if (res.action !== 'Select UDF') {
+      return Promise.reject(new util.ProcessCanceled('Cannot proceed without UFD'));
+    }
+    await fs.ensureDirWritableAsync(path.dirname(launcherSettings));
+    await ensureLOFile(context);
+    const directory = await context.api.selectDir({
+      title: 'Select User Data Folder',
+      defaultPath: path.join(path.dirname(launcherSettings)),
+    });
+    if (!directory) {
+      return Promise.reject(new util.ProcessCanceled('Cannot proceed without UFD'));
+    }
+    await fs.ensureDirWritableAsync(path.join(directory, 'Mods'));
+    const launcher = DEFAULT_LAUNCHER_SETTINGS;
+    launcher.DefaultRunConfig.AdditionalParameters = `-UserDataFolder=${directory}`;
+    const launcherData = JSON.stringify(launcher, null, 2);
+    await fs.writeFileAsync(launcherSettings, launcherData, { encoding: 'utf8' });
+    context.api.store.dispatch(setUDF(directory));
+    return (requiresRestart) ? relaunchExt() : Promise.resolve();
+  };
+
   try {
-    await fs.ensureDirWritableAsync(modsPath);
+    const data = await fs.readFileAsync(launcherSettings, { encoding: 'utf8' });
+    const settings = JSON.parse(data);
+    if (settings?.DefaultRunConfig?.AdditionalParameters !== undefined) {
+      const udf = parseAdditionalParameters(settings.DefaultRunConfig.AdditionalParameters);
+      if (!!udf) {
+        await fs.ensureDirWritableAsync(path.join(udf, 'Mods'));
+        await ensureLOFile(context);
+        context.api.store.dispatch(setUDF(udf));
+        return (requiresRestart) ? relaunchExt() : Promise.resolve();
+      } else {
+        return selectUDF();
+      }
+    }
   } catch (err) {
-    return Promise.reject(err);
+    return selectUDF();
   }
 }
 
@@ -192,7 +241,17 @@ function toLOPrefix(context: types.IExtensionContext, mod: types.IMod): string {
 
   // Find the mod entry in the load order state and insert the prefix in front
   //  of the mod's name/id/whatever
-  const loEntry: ILoadOrderEntry = loadOrder.find(loEntry => loEntry.id === mod.id);
+  let loEntry: ILoadOrderEntry = loadOrder.find(loEntry => loEntry.id === mod.id);
+  if (loEntry === undefined) {
+    // The mod entry wasn't found in the load order state - this is potentially
+    //  due to the mod being removed as part of an update or uninstallation.
+    //  It's important we find the prefix of the mod in this case, as the deployment
+    //  method could potentially fail to remove the mod! We're going to check
+    //  the previous load order saved for this profile and use that if it exists.
+    const prev = util.getSafe(props.state, ['settings', '7daystodie', 'previousLO', props.profile.id], []);
+    loEntry = prev.find(loEntry => loEntry.id === mod.id);
+  }
+
   return (loEntry?.data?.prefix !== undefined)
     ? loEntry.data.prefix + '-' + mod.id
     : 'ZZZZ-' + mod.id;
@@ -241,14 +300,20 @@ function InfoPanelWrap(props: { api: types.IExtensionApi, profileId: string }) {
 
 function main(context: types.IExtensionContext) {
   context.registerReducer(['settings', '7daystodie'], reducer);
+
+  const getModsPath = () => {
+    const state = context.api.getState();
+    const udf = util.getSafe(state, ['settings', '7daystodie', 'udf'], undefined);
+    return udf !== undefined ? path.join(udf, 'Mods') : 'Mods';
+  }
+
   context.registerGame({
     id: GAME_ID,
     name: '7 Days to Die',
     mergeMods: (mod) => toLOPrefix(context, mod),
     queryPath: toBlue(findGame),
-    requiresCleanup: true,
     supportedTools: [],
-    queryModPath: () => modsRelPath(),
+    queryModPath: getModsPath,
     logo: 'gameart.jpg',
     executable: gameExecutable,
     requiredFiles: [
@@ -261,12 +326,13 @@ function main(context: types.IExtensionContext) {
     },
     details: {
       steamAppId: +STEAM_ID,
+      hashFiles: ['7DaysToDie_Data/Managed/Assembly-CSharp.dll'],
     },
   });
 
   context.registerLoadOrder({
     deserializeLoadOrder: () => deserialize(context),
-    serializeLoadOrder: (loadOrder) => serialize(context, loadOrder),
+    serializeLoadOrder: ((loadOrder, prev) => serialize(context, loadOrder, prev)) as any,
     validate,
     gameId: GAME_ID,
     toggleableEntries: false,
@@ -303,7 +369,7 @@ function main(context: types.IExtensionContext) {
   const getOverhaulPath = (game: types.IGame) => {
     const state = context.api.getState();
     const discovery = selectors.discoveryByGame(state, GAME_ID);
-    return discovery?.path || '.';
+    return discovery?.path;
   };
 
   context.registerInstaller('7dtd-mod', 25,
@@ -317,10 +383,11 @@ function main(context: types.IExtensionContext) {
         .map(instr => instr.destination));
       return Promise.resolve(candidateFound) as any;
     },
-      { name: 'Root Directory Mod', mergeMods: true });
+      { name: 'Root Directory Mod', mergeMods: true, deploymentEssential: false });
 
   context.registerMigration(toBlue(old => migrate020(context.api, old)));
   context.registerMigration(toBlue(old => migrate100(context, old)));
+  context.registerMigration(toBlue(old => migrate1011(context, old)));
 
   return true;
 }

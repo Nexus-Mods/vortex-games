@@ -19,6 +19,9 @@ async function migrate103(api, oldVersion) {
 
   const batched = [];
   for (const mod of Object.values(mods)) {
+    if (mod?.installationPath === undefined) {
+      continue;
+    }
     const modPath = path.join(installPath, mod.installationPath);
     const plugins = [];
     await walk(modPath, entries => {
@@ -33,8 +36,12 @@ async function migrate103(api, oldVersion) {
     }
   }
 
-  if (batched.length > 0) {
+  if (batched.length > 0 && util.batchDispatch !== undefined) {
     util.batchDispatch(api.store, batched);
+  } else {
+    for (const action of batched) {
+      api.store.dispatch(action);
+    }
   }
   return Promise.resolve();
 }

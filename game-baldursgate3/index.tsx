@@ -539,7 +539,7 @@ function divine(api: types.IExtensionApi,
         returned = true;
         if (code === 0) {
           return resolve({ stdout, returnCode: 0 });
-        } else if (code === 2) {
+        } else if ([2, 102].includes(code)) {
           return resolve({ stdout: '', returnCode: 2 });
         } else {
           // divine.exe returns the actual error code + 100 if a fatal error occured
@@ -560,7 +560,7 @@ async function extractPak(api: types.IExtensionApi, pakPath, destPath, pattern) 
     { source: pakPath, destination: destPath, expression: pattern });
 }
 
-async function extractMeta(api: types.IExtensionApi, pakPath: string): Promise<IModSettings> {
+async function extractMeta(api: types.IExtensionApi, pakPath: string, mod: types.IMod): Promise<IModSettings> {
   const metaPath = path.join(util.getVortexPath('temp'), 'lsmeta', shortid());
   await fs.ensureDirAsync(metaPath);
   await extractPak(api, pakPath, metaPath, '*/meta.lsx');
@@ -581,6 +581,24 @@ async function extractMeta(api: types.IExtensionApi, pakPath: string): Promise<I
   } catch (err) {
     await fs.removeAsync(metaPath);
     if (err.code === 'ENOENT') {
+      return Promise.resolve(undefined);
+    } else if (err.message.includes('Column') && (err.message.includes('Line'))) {
+      // an error message specifying column and row indicate a problem parsing the xml file
+      api.sendNotification({
+        type: 'warning',
+        message: 'The meta.lsx file in "{{modName}}" is invalid, please report this to the author',
+        actions: [{
+          title: 'More',
+          action: () => {
+            api.showDialog('error', 'Invalid meta.lsx file', {
+              message: err.message,
+            }, [{ label: 'Close' }])
+          }
+        }],
+        replace: {
+          modName: util.renderModName(mod),
+        }
+      })
       return Promise.resolve(undefined);
     } else {
       throw err;
@@ -612,8 +630,8 @@ async function isLOListed(api: types.IExtensionApi, pakPath: string): Promise<bo
   return metaLSX === undefined;
 }
 
-async function extractPakInfoImpl(api: types.IExtensionApi, pakPath: string): Promise<IPakInfo> {
-  const meta = await extractMeta(api, pakPath);
+async function extractPakInfoImpl(api: types.IExtensionApi, pakPath: string, mod: types.IMod): Promise<IPakInfo> {
+  const meta = await extractMeta(api, pakPath, mod);
   const config = findNode(meta?.save?.region, 'Config');
   const configRoot = findNode(config?.node, 'root');
   const moduleInfo = findNode(configRoot?.children?.[0]?.node, 'ModuleInfo');
@@ -731,11 +749,11 @@ async function readPAKList(api: types.IExtensionApi) {
   let paks: string[];
   try {
     paks = (await fs.readdirAsync(modsPath()))
-    .filter(fileName => path.extname(fileName).toLowerCase() === '.pak');
+      .filter(fileName => path.extname(fileName).toLowerCase() === '.pak');
   } catch (err) {
     if (err.code === 'ENOENT') {
       try {
-      await fs.ensureDirWritableAsync(modsPath(), () => Bluebird.resolve());
+        await fs.ensureDirWritableAsync(modsPath(), () => Bluebird.resolve());
       } catch (err) {
         // nop
       }
@@ -778,10 +796,12 @@ async function readPAKs(api: types.IExtensionApi)
             ? state.persistent.mods[GAME_ID]?.[manifestEntry.source]
             : undefined;
 
+          const pakPath = path.join(modsPath(), fileName);
+
           return {
             fileName,
             mod,
-            info: await extractPakInfoImpl(api, path.join(modsPath(), fileName)),
+            info: await extractPakInfoImpl(api, pakPath, mod),
           };
         } catch (err) {
           if (err instanceof DivineExecMissing) {

@@ -67,6 +67,11 @@ function main(context) {
     details: {
       steamAppId: STEAMAPP_ID,
       stopPattern: STOP_PATTERNS.map(toWordExp),
+      hashFiles: [
+        'ConanSandbox.exe',
+        'Manifest_UFSFiles_Win64.txt',
+        'ConanSandbox/AssetRegistry.bin'
+      ]
     },
     compatible: {
       nulldeployment: true

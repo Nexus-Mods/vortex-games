@@ -181,7 +181,7 @@ function migrate101(api, oldVersion) {
 // if merged. E.g. texture/mesh replacers affecting the same armor wouldn't.
 // I further found that merging bbsrpg_core.arc somehow breaks the number one mod on the site,
 // haven't figured out why yet.
-const mergeNames = [ 'game_main.arc'/*, 'bbsrpg_core.arc', 'bbs_rpg.arc'*/ ];
+const mergeNames = [ 'game_main.arc', 'title.arc'/*, 'bbsrpg_core.arc', 'bbs_rpg.arc'*/ ];
 
 function main(context) {
   context.requireExtension('mtframework-arc-support');
@@ -204,26 +204,38 @@ function main(context) {
     },
     details: {
       steamAppId: 367500,
+      // in dragons dogma the data archives are commonly replaced or modified during modding
+      // so using any of those for determining the game version might be problematic
+      hashFiles: [
+        'DDDA.exe',
+      ],
     },
   });
 
   context.registerMigration(old => migrate101(context.api, old));
-  context.registerInstaller('dddainvalidmod', 25, testIsInvalidMod, (files) => reportInvalidMod(context, files));
+  context.registerInstaller('dddainvalidmod', 25, testIsInvalidMod, (...args) => reportInvalidMod(context, ...args));
 
   return true;
 }
 
-function reportInvalidMod(context, files) {
+function reportInvalidMod(context, files, destinationPath, gameId, progressDelegate, choices, unattended, archivePath) {
   const invalidModDialog = () => new Promise((resolve, reject) => {
-    context.api.showDialog('question', 'Invalid mod', {
-      text: context.api.translate('This mod does not fit the expected packaging pattern '
+    if (unattended) {
+      return resolve();
+    }
+
+    context.api.showDialog('question', 'Invalid archive', {
+      text: 'The archive "{{archiveName}}" does not fit the expected packaging pattern '
         + 'for this game, and probably will not install correctly. Are you sure you want '
-        + 'to proceed?', { ns: I18N_NAMESPACE }),
+        + 'to proceed?',
+      parameters: {
+        archiveName: archivePath !== undefined ? path.basename(archivePath) : '',
+      }
     }, [
-      { label: 'Cancel', action: () => reject(new util.ProcessCanceled()) },
+      { label: 'Cancel', action: () => reject(new util.UserCanceled()) },
       { label: 'Proceed', action: () => resolve() },
     ]);
-  })
+  });
 
   return invalidModDialog()
     .then(() => {
@@ -234,7 +246,7 @@ function reportInvalidMod(context, files) {
       }))
 
       return Promise.resolve({ instructions });
-    })
+    });
 }
 
 function testIsInvalidMod(files, gameId) {

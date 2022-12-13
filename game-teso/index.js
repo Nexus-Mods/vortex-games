@@ -46,6 +46,11 @@ function main(context) {
     details: {
       steamAppId: 306130,
       nexusPageId: 'elderscrollsonline',
+      hashFiles: [
+        '../The Elder Scrolls Online/game/game_player.version',
+        '../The Elder Scrolls Online/depot/depot.version',
+        'Bethesda.net_Launcher.version',
+      ],
     },
   });
 
