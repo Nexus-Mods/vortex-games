@@ -37,4 +37,3 @@ export function semverCompare(lhs: string, rhs: string): number {
     return lhs.localeCompare(rhs, 'en-US');
   }
 }
-

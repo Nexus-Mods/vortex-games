@@ -297,7 +297,7 @@ async function install(api,
   }
 
   await dependencyManager.scanManifests(true);
-  const mods: IModInfo[] = await Promise.all(manifestFiles.map(async manifestFile => {
+  let mods: IModInfo[] = await Promise.all(manifestFiles.map(async manifestFile => {
     const rootFolder = path.dirname(manifestFile);
     const manifestIndex = manifestFile.toLowerCase().indexOf(MANIFEST_FILE);
     const filterFunc = (file) => (rootFolder !== '.')
@@ -305,15 +305,22 @@ async function install(api,
         && (path.dirname(file) !== '.')
         && !file.endsWith(path.sep))
       : !file.endsWith(path.sep);
-    const manifest: ISDVModManifest = await parseManifest(path.join(destinationPath, manifestFile));
-    const modFiles = files.filter(filterFunc);
-    return {
-      manifest,
-      rootFolder,
-      manifestIndex,
-      modFiles,
-    };
+    try {
+      const manifest: ISDVModManifest = await parseManifest(path.join(destinationPath, manifestFile));
+      const modFiles = files.filter(filterFunc);
+      return {
+        manifest,
+        rootFolder,
+        manifestIndex,
+        modFiles,
+      };
+    } catch (err) {
+      log('warn', 'Failed to parse manifest', { manifestFile });
+      return undefined;
+    }
   }));
+
+  mods = mods.filter(x => x !== undefined);
 
   return Bluebird.map(mods, mod => {
     const modName = (mod.rootFolder !== '.')
