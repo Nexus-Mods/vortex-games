@@ -1105,9 +1105,10 @@ function determineExecutable(discoveredPath: string): string {
       fs.statSync(path.join(discoveredPath, 'bin', 'x64_DX12', 'witcher3.exe'));
       return 'bin/x64_DX12/witcher3.exe';
     } catch (err) {
-      return 'bin/x64/witcher3.exe';
+      // nop, use fallback
     }
   }
+  return 'bin/x64/witcher3.exe';
 }
 
 function main(context: types.IExtensionContext) {
