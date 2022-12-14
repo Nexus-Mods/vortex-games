@@ -61,6 +61,16 @@ const tools: types.ITool[] = [
     ],
   },
   {
+    id: GAME_ID + '_DX11',
+    name: 'The Witcher 3 (DX11)',
+    logo: 'auto',
+    relative: true,
+    executable: () => 'bin/x64/witcher3.exe',
+    requiredFiles: [
+      'bin/x64/witcher3.exe',
+    ],
+  },
+  {
     id: GAME_ID + '_DX12',
     name: 'The Witcher 3 (DX12)',
     logo: 'auto',
@@ -1089,6 +1099,17 @@ export function toBlue<T>(func: (...args: any[]) => Promise<T>): (...args: any[]
   return (...args: any[]) => Bluebird.resolve(func(...args));
 }
 
+function determineExecutable(discoveredPath: string): string {
+  if (discoveredPath !== undefined) {
+    try {
+      fs.statSync(path.join(discoveredPath, 'bin', 'x64_DX12', 'witcher3.exe'));
+      return 'bin/x64_DX12/witcher3.exe';
+    } catch (err) {
+      return 'bin/x64/witcher3.exe';
+    }
+  }
+}
+
 function main(context: types.IExtensionContext) {
   context.registerReducer(['settings', 'witcher3'], W3Reducer);
   let priorityManager: PriorityManager;
@@ -1100,7 +1121,7 @@ function main(context: types.IExtensionContext) {
     queryPath: findGame,
     queryModPath: () => 'Mods',
     logo: 'gameart.jpg',
-    executable: () => 'bin/x64/witcher3.exe',
+    executable: determineExecutable,
     setup: toBlue((discovery) => prepareForModding(context, discovery)),
     supportedTools: tools,
     requiresCleanup: true,
