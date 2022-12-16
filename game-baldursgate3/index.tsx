@@ -4,7 +4,7 @@ import getVersion from 'exe-version';
 import * as _ from 'lodash';
 import * as path from 'path';
 import * as React from 'react';
-import { FormControl } from 'react-bootstrap';
+import { Alert, FormControl } from 'react-bootstrap';
 import { useSelector } from 'react-redux';
 import { createAction } from 'redux-act';
 import * as semver from 'semver';
@@ -302,9 +302,16 @@ const getPlayerProfiles = (() => {
   return () => cached;
 })();
 
+function gameSupportsProfile(gameVersion: string) {
+  return semver.lt(semver.coerce(gameVersion), '4.1.206');
+}
+
 function InfoPanel(props) {
-  const { t, currentProfile, onInstallLSLib,
+  const { t, gameVersion, onInstallLSLib,
           onSetPlayerProfile, isLsLibInstalled } = props;
+
+  const supportsProfiles = gameSupportsProfile(gameVersion);
+  const currentProfile = supportsProfiles ? props.currentProfile : 'Public';
 
   const onSelect = React.useCallback((ev) => {
     onSetPlayerProfile(ev.currentTarget.value);
@@ -314,17 +321,28 @@ function InfoPanel(props) {
     <div style={{ display: 'flex', flexDirection: 'column', padding: '16px' }}>
       <div style={{ display: 'flex', whiteSpace: 'nowrap', alignItems: 'center' }}>
         {t('Ingame Profile: ')}
-        <FormControl
-          componentClass='select'
-          name='userProfile'
-          className='form-control'
-          value={currentProfile}
-          onChange={onSelect}
-        >
-          <option key='global' value='global'>{t('All Profiles')}</option>
-          {getPlayerProfiles().map(prof => (<option key={prof} value={prof}>{prof}</option>))}
-        </FormControl>
+        {supportsProfiles ? (
+          <FormControl
+            componentClass='select'
+            name='userProfile'
+            className='form-control'
+            value={currentProfile}
+            onChange={onSelect}
+          >
+            <option key='global' value='global'>{t('All Profiles')}</option>
+            {getPlayerProfiles().map(prof => (<option key={prof} value={prof}>{prof}</option>))}
+          </FormControl>
+        ) : null}
       </div>
+      {supportsProfiles ? null : (
+        <div>
+          <Alert bsStyle='info'>
+            {t('Patch 9 removed the feature of switching profiles inside the game, savegames are '
+              + 'now tied to the character.\n It is currently unknown if these profiles will '
+              + 'return but of course you can continue to use Vortex profiles.')}
+          </Alert>
+        </div>
+      )}
       <hr/>
       <div>
         {t('Please refer to mod descriptions from mod authors to determine the right order. '
@@ -356,13 +374,20 @@ function InfoPanel(props) {
   );
 }
 
-function getActivePlayerProfile(api: types.IExtensionApi) {
-  return api.store.getState().settings.baldursgate3?.playerProfile || 'global';
+async function getOwnGameVersion(state: types.IState): Promise<string> {
+  const discovery = selectors.discoveryByGame(state, GAME_ID);
+  return await util.getGame(GAME_ID).getInstalledVersion(discovery);
+}
+
+async function getActivePlayerProfile(api: types.IExtensionApi) {
+  return gameSupportsProfile(await getOwnGameVersion(api.getState()))
+    ? api.store.getState().settings.baldursgate3?.playerProfile || 'global'
+    : 'Public';
 }
 
 async function writeLoadOrder(api: types.IExtensionApi,
                               loadOrder: { [key: string]: ILoadOrderEntry }) {
-  const bg3profile: string = getActivePlayerProfile(api);
+  const bg3profile: string = await getActivePlayerProfile(api);
   const playerProfiles = (bg3profile === 'global') ? getPlayerProfiles() : [bg3profile];
   if (playerProfiles.length === 0) {
     api.sendNotification({
@@ -668,7 +693,7 @@ function parseModNode(node: IModNode) {
 }
 
 async function readModSettings(api: types.IExtensionApi): Promise<IModSettings> {
-  const bg3profile: string = getActivePlayerProfile(api);
+  const bg3profile: string = await getActivePlayerProfile(api);
   const playerProfiles = getPlayerProfiles();
   if (playerProfiles.length === 0) {
     storedLO = [];
@@ -893,8 +918,16 @@ function InfoPanelWrap(props: { api: types.IExtensionApi, refresh: () => void })
   const currentProfile = useSelector((state: types.IState) =>
     state.settings['baldursgate3']?.playerProfile);
 
+  const [gameVersion, setGameVersion] = React.useState<string>();
+
   React.useEffect(() => {
     forceRefresh = props.refresh;
+  }, []);
+
+  React.useEffect(() => {
+    (async () => {
+      setGameVersion(await getOwnGameVersion(api.getState()));
+    })();
   }, []);
 
   const onSetProfile = React.useCallback((profileName: string) => {
@@ -921,9 +954,14 @@ function InfoPanelWrap(props: { api: types.IExtensionApi, refresh: () => void })
     onGameModeActivated(api, GAME_ID);
   }, [api]);
 
+  if (!gameVersion) {
+    return null;
+  }
+
   return (
     <InfoPanel
       t={api.translate}
+      gameVersion={gameVersion}
       currentProfile={currentProfile}
       onSetPlayerProfile={onSetProfile}
       isLsLibInstalled={isLsLibInstalled}

@@ -658,8 +658,15 @@ function init(context: types.IExtensionContext) {
         return Promise.resolve({});
       }
 
-      const parsedManifests = await Promise.all(manifests.map(
-        async man => await parseManifest(man)));
+      const parsedManifests = (await Promise.all(manifests.map(
+        async manifest => {
+          try {
+            return await parseManifest(manifest);
+          } catch (err) {
+            log('warn', 'Failed to parse manifest', { manifestFile: manifest, error: err.message });
+            return undefined;
+          }
+        }))).filter(manifest => manifest !== undefined);
 
       // we can only use one manifest to get the id from
       const refManifest = parsedManifests[0];
