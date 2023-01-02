@@ -855,7 +855,7 @@ function init(context: types.IExtensionContext) {
     context.api.onAsync('did-purge', async (profileId) => {
       const state = context.api.getState();
       const profile = selectors.profileById(state, profileId);
-      if (profile.gameId !== GAME_ID) {
+      if (profile?.gameId !== GAME_ID) {
         return Promise.resolve();
       }
 
