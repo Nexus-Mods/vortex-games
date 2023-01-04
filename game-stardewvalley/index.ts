@@ -341,7 +341,8 @@ async function install(api,
     }
 
     const addRuleForDependency = (dep: ISDVDependency) => {
-      if (dep.UniqueID === undefined) {
+      if ((dep.UniqueID === undefined)
+          || (dep.UniqueID.toLowerCase() === 'yourname.yourotherspacksandmods')) {
         return;
       }
 

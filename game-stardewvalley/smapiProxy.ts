@@ -37,7 +37,6 @@ class SMAPIProxy {
         return await this.lookupOnNexus(
           query, res[0].metadata.nexusID, res[0].metadata.main.version);
       } else {
-        console.log('returning third-party dependency info');
         return [
           { key, value: {
             gameId: GAME_ID,
