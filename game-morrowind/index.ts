@@ -130,14 +130,14 @@ function CollectionDataWrap(api: types.IExtensionApi, props: IExtendedInterfaceP
   return React.createElement(MorrowindCollectionsDataView, { ...props, api, });
 }
 
-function main(context) {
+function main(context: types.IExtensionContext) {
   context.registerGame({
     id: MORROWIND_ID,
     name: 'Morrowind',
     mergeMods: true,
-    queryPath: findGame,
+    queryPath: util.toBlue(findGame),
     supportedTools: tools,
-    setup: (discovery) => prepareForModding(context.api, discovery),
+    setup: util.toBlue((discovery) => prepareForModding(context.api, discovery)),
     queryModPath: () => 'Data Files',
     logo: 'gameart.jpg',
     executable: () => 'morrowind.exe',
@@ -161,8 +161,8 @@ function main(context) {
     validate,
     noCollectionGeneration: true,
     toggleableEntries: true,
-    usageInstructions: (() => 'Drag your plugins as needed - the game will load '
-                            + 'load them from top to bottom.'),
+    usageInstructions: 'Drag your plugins as needed - the game will load '
+      + 'load them from top to bottom.',
   });
 
   context.optional.registerCollectionFeature(
@@ -191,13 +191,17 @@ function main(context) {
       }
       const modPath = path.join(installPath, mod.installationPath);
       const plugins = [];
-      await walk(modPath, entries => {
-        for (let entry of entries) {
-          if (['.esp', '.esm'].includes(path.extname(entry.filePath.toLowerCase()))) {
-            plugins.push(path.basename(entry.filePath));
+      try {
+        await walk(modPath, entries => {
+          for (let entry of entries) {
+            if (['.esp', '.esm'].includes(path.extname(entry.filePath.toLowerCase()))) {
+              plugins.push(path.basename(entry.filePath));
+            }
           }
-        }
-      }, { recurse: true, skipLinks: true, skipInaccessible: true });
+        }, { recurse: true, skipLinks: true, skipInaccessible: true });
+      } catch (err) {
+        context.api.showErrorNotification('Failed to read list of plugins', err, { allowReport: false });
+      }
       if ( plugins.length > 0) {
         context.api.store.dispatch(actions.setModAttribute(MORROWIND_ID, mod.id, 'plugins', plugins));
       }
