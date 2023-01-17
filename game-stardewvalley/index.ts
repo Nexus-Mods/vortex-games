@@ -529,6 +529,10 @@ function updateConflictInfo(api: types.IExtensionApi,
                             : Promise<void> {
   const mod = api.getState().persistent.mods[gameId][modId];
 
+  if (mod === undefined) {
+    return Promise.resolve();
+  }
+
   const now = Date.now();
 
   if ((now - mod.attributes?.lastSMAPIQuery ?? 0) < SMAPI_QUERY_FREQUENCY) {
