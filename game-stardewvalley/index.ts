@@ -784,7 +784,13 @@ function init(context: types.IExtensionContext) {
 
     context.api.addMetaServer('smapi.io', {
       url: '',
-      loopbackCB: (query: IQuery) => Bluebird.resolve(proxy.find(query)),
+      loopbackCB: (query: IQuery) => {
+        return Bluebird.resolve(proxy.find(query))
+          .catch(err => {
+            log('error', 'failed to look up smapi meta info', err.message);
+            return Bluebird.resolve([]);
+          });
+      },
       cacheDurationSec: 86400,
       priority: 25,
     });
