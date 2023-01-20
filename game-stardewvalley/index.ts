@@ -296,6 +296,8 @@ async function install(api,
     modFiles: string[];
   }
 
+  let parseError: Error;
+
   await dependencyManager.scanManifests(true);
   let mods: IModInfo[] = await Promise.all(manifestFiles.map(async manifestFile => {
     const rootFolder = path.dirname(manifestFile);
@@ -306,7 +308,8 @@ async function install(api,
         && !file.endsWith(path.sep))
       : !file.endsWith(path.sep);
     try {
-      const manifest: ISDVModManifest = await parseManifest(path.join(destinationPath, manifestFile));
+      const manifest: ISDVModManifest =
+        await parseManifest(path.join(destinationPath, manifestFile));
       const modFiles = files.filter(filterFunc);
       return {
         manifest,
@@ -315,12 +318,22 @@ async function install(api,
         modFiles,
       };
     } catch (err) {
-      log('warn', 'Failed to parse manifest', { manifestFile });
+      // just a warning at this point as this may not be the main manifest for the mod
+      log('warn', 'Failed to parse manifest', { manifestFile, error: err.message });
+      parseError = err;
       return undefined;
     }
   }));
 
   mods = mods.filter(x => x !== undefined);
+  
+  if (mods.length === 0) {
+    api.showErrorNotification(
+      'The mod manifest is invalid and can\'t be read. You can try to install the mod anyway via right-click -> "Unpack (as-is)"',
+      parseError, {
+      allowReport: false,
+    });
+  }
 
   return Bluebird.map(mods, mod => {
     const modName = (mod.rootFolder !== '.')
@@ -659,9 +672,6 @@ function init(context: types.IExtensionContext) {
       }
 
       const manifests = await getModManifests(modPath);
-      if (manifests.length === 0) {
-        return Promise.resolve({});
-      }
 
       const parsedManifests = (await Promise.all(manifests.map(
         async manifest => {
@@ -672,6 +682,10 @@ function init(context: types.IExtensionContext) {
             return undefined;
           }
         }))).filter(manifest => manifest !== undefined);
+
+      if (parsedManifests.length === 0) {
+        return Promise.resolve({});
+      }
 
       // we can only use one manifest to get the id from
       const refManifest = parsedManifests[0];
@@ -690,13 +704,15 @@ function init(context: types.IExtensionContext) {
         minSMAPIVersion,
       };
 
-      // don't set a custom file name for SMAPI
-      if (modInfo.download.modInfo?.nexus?.ids?.modId !== 2400) {
-        result['customFileName'] = refManifest.Name;
-      }
+      if (refManifest !== undefined) {
+        // don't set a custom file name for SMAPI
+        if (modInfo.download.modInfo?.nexus?.ids?.modId !== 2400) {
+          result['customFileName'] = refManifest.Name;
+        }
 
-      if (typeof(refManifest.Version) === 'string') {
-        result['manifestVersion'] = refManifest.Version;
+        if (typeof (refManifest.Version) === 'string') {
+          result['manifestVersion'] = refManifest.Version;
+        }
       }
 
       return Promise.resolve(result);
