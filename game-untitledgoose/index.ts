@@ -2,7 +2,7 @@ import Bluebird from 'bluebird';
 import path from 'path';
 import { fs, log, types, util } from 'vortex-api';
 
-import { migrate010, migrate020 } from './migrations';
+import { migrate020 } from './migrations';
 import { EPIC_APP_ID, GAME_ID } from './statics';
 import { toBlue } from './util';
 
@@ -63,7 +63,7 @@ function main(context: types.IExtensionContext) {
     setup: prepareForModding,
   });
 
-  context.registerMigration(toBlue(old => migrate010(context, old) as any));
+  // context.registerMigration(toBlue(old => migrate010(context, old) as any));
   context.registerMigration(toBlue(old => migrate020(context, old)));
 
   context.once(() => {
