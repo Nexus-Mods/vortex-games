@@ -5,10 +5,13 @@ import * as semver from 'semver';
 import turbowalk from 'turbowalk';
 import { actions, fs, log, selectors, util, types } from 'vortex-api';
 import * as winapi from 'winapi-bindings';
+import { setRecommendations } from './actions';
 import CompatibilityIcon from './CompatibilityIcon';
 import { SMAPI_QUERY_FREQUENCY } from './constants';
 
 import DependencyManager from './DependencyManager';
+import sdvReducers from './reducers';
+import Settings from './Settings';
 import SMAPIProxy from './smapiProxy';
 import { testSMAPIOutdated } from './tests';
 import { compatibilityOptions, CompatibilityStatus, ISDVDependency, ISDVModManifest, ISMAPIResult } from './types';
@@ -161,9 +164,35 @@ class StardewValley implements types.IGame {
     // skip if SMAPI found
     const smapiPath = path.join(discovery.path, SMAPI_EXE);
     const smapiFound = await this.getPathExistsAsync(smapiPath);
-    if (smapiFound)
-      return;
+    if (!smapiFound) {
+      this.recommendSmapi();
+    }
+    
+    const state = this.context.api.getState();
+    if (state.settings['SDV'].useRecommendations === undefined) {
+      this.context.api.showDialog('question', 'Show Recommendations?', {
+        text: 'Vortex can optionally use data from SMAPI\'s database and '
+            + 'the manifest files included with mods to recommend additional '
+            + 'compatible mods that work with those that you have installed. '
+            + 'In some cases, this information could be wrong or incomplete '
+            + 'which may lead to unreliable prompts showing in the app.\n'
+            + 'All recommendations shown should be carefully considered '
+            + 'before accepting them - if you are unsure please check the '
+            + 'mod page to see if the author has provided any further instructions. '
+            + 'Would you like to enable this feature? You can update your choice '
+            + 'from the Settings menu at any time.'
+      }, [
+        { label: 'Continue without recommendations', action: () => {
+          this.context.api.store.dispatch(setRecommendations(false));
+        } },
+        { label: 'Enable recommendations', action: () => {
+          this.context.api.store.dispatch(setRecommendations(true));
+        } },
+      ])
+    }
+  });
 
+  private recommendSmapi() {
     const smapiMod = findSMAPIMod(this.context.api);
     const title = smapiMod ? 'SMAPI is not deployed' : 'SMAPI is not installed';
     const actionTitle = smapiMod ? 'Deploy' : 'Get SMAPI';
@@ -184,8 +213,7 @@ class StardewValley implements types.IGame {
         },
       ]
     });
-  });
-
+  }
 
   /*********
   ** Internal methods
@@ -363,13 +391,18 @@ async function install(api,
         ? `>=${dep.MinimumVersion}`
         : '*';
       const rule: types.IModRule = {
-        type: (dep.IsRequired ?? true) ? 'requires' : 'recommends',
+        // treating all dependencies as recommendations because the dependency information
+        // provided by some mod authors is a bit hit-and-miss and Vortex fairly aggressively
+        // enforces requirements
+        // type: (dep.IsRequired ?? true) ? 'requires' : 'recommends',
+        type: 'recommends',
         reference: {
           logicalFileName: dep.UniqueID.toLowerCase(),
           versionMatch,
         },
         extra: {
           onlyIfFulfillable: true,
+          automatic: true,
         },
       };
       instructions.push({
@@ -378,11 +411,13 @@ async function install(api,
       });
     }
 
-    for (const dep of dependencies) {
-      addRuleForDependency(dep);
-    }
-    if (mod.manifest.ContentPackFor !== undefined) {
-      addRuleForDependency(mod.manifest.ContentPackFor);
+    if (api.getState().settings['SDV']?.useRecommendations ?? false) {
+      for (const dep of dependencies) {
+        addRuleForDependency(dep);
+      }
+      if (mod.manifest.ContentPackFor !== undefined) {
+        addRuleForDependency(mod.manifest.ContentPackFor);
+      }
     }
     return instructions;
   })
@@ -719,6 +754,11 @@ function init(context: types.IExtensionContext) {
     });
 
   context.registerGame(new StardewValley(context));
+  context.registerReducer(['settings', 'SDV'], sdvReducers);
+
+  context.registerSettings('Mods', Settings, undefined, () =>
+    selectors.activeGameId(context.api.getState()) === GAME_ID, 50);
+
   // Register our SMAPI mod type and installer. Note: This currently flags an error in Vortex on installing correctly.
   context.registerInstaller('smapi-installer', 30, testSMAPI, (files, dest) => Bluebird.resolve(installSMAPI(getDiscoveryPath, files, dest)));
   context.registerModType('SMAPI', 30, gameId => gameId === GAME_ID, getSMAPIPath, isSMAPIModType);
