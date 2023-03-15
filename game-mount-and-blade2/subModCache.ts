@@ -20,7 +20,7 @@ export function getLauncherData() {
 
 let CACHE: ISubModCache = {};
 export function getCache() {
-  return CACHE;
+  return CACHE ?? {};
 }
 
 export async function refreshCache(context: types.IExtensionContext,

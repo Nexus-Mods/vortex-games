@@ -757,7 +757,7 @@ function init(context: types.IExtensionContext) {
   context.registerReducer(['settings', 'SDV'], sdvReducers);
 
   context.registerSettings('Mods', Settings, undefined, () =>
-    selectors.activeGameId(context.api.getState()) === GAME_ID, 50);
+    selectors.activeGameId(context.api.getState()) === GAME_ID, 150);
 
   // Register our SMAPI mod type and installer. Note: This currently flags an error in Vortex on installing correctly.
   context.registerInstaller('smapi-installer', 30, testSMAPI, (files, dest) => Bluebird.resolve(installSMAPI(getDiscoveryPath, files, dest)));
