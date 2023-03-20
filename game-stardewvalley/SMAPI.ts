@@ -21,7 +21,7 @@ export function findSMAPIMod(api: types.IExtensionApi): types.IMod {
         if (prev === undefined) {
           return iter;
         }
-        return (gte(iter.attributes.version, prev.attributes.version)) ? iter : prev;
+        return (gte(iter.attributes.version ?? '0.0.0', prev.attributes.version ?? '0.0.0')) ? iter : prev;
       }, undefined)
       : SMAPIMods[0];
 }
