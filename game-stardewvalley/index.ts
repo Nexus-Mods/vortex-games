@@ -364,9 +364,15 @@ async function install(api,
   }
 
   return Bluebird.map(mods, mod => {
+    // TODO: we might get here with a mod that has a manifest.json file but wasn't intended for Stardew Valley, all
+    //  thunderstore mods will contain a manifest.json file
     const modName = (mod.rootFolder !== '.')
       ? mod.rootFolder
-      : mod.manifest.Name;
+      : mod.manifest.Name ?? mod.rootFolder;
+
+    if (modName === undefined) {
+      return [];
+    }
 
     const dependencies = mod.manifest.Dependencies || [];
 
