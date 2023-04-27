@@ -108,6 +108,9 @@ function populateCache(api, activeProfile, modIds, initialCacheValue) {
 
   const stagingFolder = selectors.installPathForGame(state, GAME_ID);
   return Promise.reduce(enabledMods, (accum, mod) => {
+    if (mod.installationPath === undefined) {
+      return accum;
+    }
     return getRelevantModEntries(path.join(stagingFolder, mod.installationPath))
       .then(entries => {
         return Promise.each(entries, filepath => {
