@@ -94,7 +94,8 @@ function main(context) {
             await fs.copyAsync(entry.filePath, targetPath);
             await fs.removeAsync(entry.filePath);
           } catch (err) {
-            if (err.message.includes('are the same file')) {
+            if ((err instanceof util.UserCanceled)
+                || (err.message.includes('are the same file'))) {
               // Identical file already there? smells like user tampering to me!
               //  Either way, if the file is already there then we have no problems.
             } else {
