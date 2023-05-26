@@ -47,6 +47,7 @@ async function findGame() {
       const availableLocales = Object.keys(localeFoldersXbox).reduce((accum, cur) => {
         const localeFolderName = localeFoldersXbox[cur];
         if (folders.includes(localeFolderName)) accum.push(cur);
+        return accum;
       }, []);
       if (!availableLocales.length) {
         log('warn', 'Could not find any recognised locale folders for New Vegas', {folders, path: selectedGame.gamePath});
