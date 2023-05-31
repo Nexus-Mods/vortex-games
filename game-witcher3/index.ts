@@ -1396,7 +1396,9 @@ function main(context: types.IExtensionContext) {
         await storeToProfile(context, lastProfId)
           .then(() => restoreFromProfile(context, profile.id));
       } catch (err) {
-        context.api.showErrorNotification('Failed to store profile specific merged items', err);
+        if (!(err instanceof util.UserCanceled)) {
+          context.api.showErrorNotification('Failed to store profile specific merged items', err);
+        }
       }
     });
 

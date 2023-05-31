@@ -372,7 +372,12 @@ function main(context: types.IExtensionContext) {
       getManuallyAddedMods(disabled, enabled, modsOrderFilePath, context.api)
         .then(manuallyAdded => {
           writeOrderFile(modsOrderFilePath, manuallyAdded)
-            .then(() => setNewOrder({ context, profile }, manuallyAdded));
+            .then(() => setNewOrder({ context, profile }, manuallyAdded))
+            .catch(err => {
+              const allowReport = !(err instanceof util.UserCanceled)
+                                && (err['code'] !== 'EPERM');
+              context.api.showErrorNotification('Failed to write to load order file', err, { allowReport });
+            });
         })
         .catch(err => {
           const userCanceled = (err instanceof util.UserCanceled);

@@ -5,10 +5,13 @@ import * as semver from 'semver';
 import turbowalk from 'turbowalk';
 import { actions, fs, log, selectors, util, types } from 'vortex-api';
 import * as winapi from 'winapi-bindings';
+import { setRecommendations } from './actions';
 import CompatibilityIcon from './CompatibilityIcon';
 import { SMAPI_QUERY_FREQUENCY } from './constants';
 
 import DependencyManager from './DependencyManager';
+import sdvReducers from './reducers';
+import Settings from './Settings';
 import SMAPIProxy from './smapiProxy';
 import { testSMAPIOutdated } from './tests';
 import { compatibilityOptions, CompatibilityStatus, ISDVDependency, ISDVModManifest, ISMAPIResult } from './types';
@@ -161,9 +164,35 @@ class StardewValley implements types.IGame {
     // skip if SMAPI found
     const smapiPath = path.join(discovery.path, SMAPI_EXE);
     const smapiFound = await this.getPathExistsAsync(smapiPath);
-    if (smapiFound)
-      return;
+    if (!smapiFound) {
+      this.recommendSmapi();
+    }
+    
+    const state = this.context.api.getState();
+    if (state.settings['SDV'].useRecommendations === undefined) {
+      this.context.api.showDialog('question', 'Show Recommendations?', {
+        text: 'Vortex can optionally use data from SMAPI\'s database and '
+            + 'the manifest files included with mods to recommend additional '
+            + 'compatible mods that work with those that you have installed. '
+            + 'In some cases, this information could be wrong or incomplete '
+            + 'which may lead to unreliable prompts showing in the app.\n'
+            + 'All recommendations shown should be carefully considered '
+            + 'before accepting them - if you are unsure please check the '
+            + 'mod page to see if the author has provided any further instructions. '
+            + 'Would you like to enable this feature? You can update your choice '
+            + 'from the Settings menu at any time.'
+      }, [
+        { label: 'Continue without recommendations', action: () => {
+          this.context.api.store.dispatch(setRecommendations(false));
+        } },
+        { label: 'Enable recommendations', action: () => {
+          this.context.api.store.dispatch(setRecommendations(true));
+        } },
+      ])
+    }
+  });
 
+  private recommendSmapi() {
     const smapiMod = findSMAPIMod(this.context.api);
     const title = smapiMod ? 'SMAPI is not deployed' : 'SMAPI is not installed';
     const actionTitle = smapiMod ? 'Deploy' : 'Get SMAPI';
@@ -184,8 +213,7 @@ class StardewValley implements types.IGame {
         },
       ]
     });
-  });
-
+  }
 
   /*********
   ** Internal methods
@@ -296,6 +324,8 @@ async function install(api,
     modFiles: string[];
   }
 
+  let parseError: Error;
+
   await dependencyManager.scanManifests(true);
   let mods: IModInfo[] = await Promise.all(manifestFiles.map(async manifestFile => {
     const rootFolder = path.dirname(manifestFile);
@@ -306,7 +336,8 @@ async function install(api,
         && !file.endsWith(path.sep))
       : !file.endsWith(path.sep);
     try {
-      const manifest: ISDVModManifest = await parseManifest(path.join(destinationPath, manifestFile));
+      const manifest: ISDVModManifest =
+        await parseManifest(path.join(destinationPath, manifestFile));
       const modFiles = files.filter(filterFunc);
       return {
         manifest,
@@ -315,17 +346,33 @@ async function install(api,
         modFiles,
       };
     } catch (err) {
-      log('warn', 'Failed to parse manifest', { manifestFile });
+      // just a warning at this point as this may not be the main manifest for the mod
+      log('warn', 'Failed to parse manifest', { manifestFile, error: err.message });
+      parseError = err;
       return undefined;
     }
   }));
 
   mods = mods.filter(x => x !== undefined);
+  
+  if (mods.length === 0) {
+    api.showErrorNotification(
+      'The mod manifest is invalid and can\'t be read. You can try to install the mod anyway via right-click -> "Unpack (as-is)"',
+      parseError, {
+      allowReport: false,
+    });
+  }
 
   return Bluebird.map(mods, mod => {
+    // TODO: we might get here with a mod that has a manifest.json file but wasn't intended for Stardew Valley, all
+    //  thunderstore mods will contain a manifest.json file
     const modName = (mod.rootFolder !== '.')
       ? mod.rootFolder
-      : mod.manifest.Name;
+      : mod.manifest.Name ?? mod.rootFolder;
+
+    if (modName === undefined) {
+      return [];
+    }
 
     const dependencies = mod.manifest.Dependencies || [];
 
@@ -341,7 +388,8 @@ async function install(api,
     }
 
     const addRuleForDependency = (dep: ISDVDependency) => {
-      if (dep.UniqueID === undefined) {
+      if ((dep.UniqueID === undefined)
+          || (dep.UniqueID.toLowerCase() === 'yourname.yourotherspacksandmods')) {
         return;
       }
 
@@ -349,13 +397,18 @@ async function install(api,
         ? `>=${dep.MinimumVersion}`
         : '*';
       const rule: types.IModRule = {
-        type: (dep.IsRequired ?? true) ? 'requires' : 'recommends',
+        // treating all dependencies as recommendations because the dependency information
+        // provided by some mod authors is a bit hit-and-miss and Vortex fairly aggressively
+        // enforces requirements
+        // type: (dep.IsRequired ?? true) ? 'requires' : 'recommends',
+        type: 'recommends',
         reference: {
           logicalFileName: dep.UniqueID.toLowerCase(),
           versionMatch,
         },
         extra: {
           onlyIfFulfillable: true,
+          automatic: true,
         },
       };
       instructions.push({
@@ -364,11 +417,13 @@ async function install(api,
       });
     }
 
-    for (const dep of dependencies) {
-      addRuleForDependency(dep);
-    }
-    if (mod.manifest.ContentPackFor !== undefined) {
-      addRuleForDependency(mod.manifest.ContentPackFor);
+    if (api.getState().settings['SDV']?.useRecommendations ?? false) {
+      for (const dep of dependencies) {
+        addRuleForDependency(dep);
+      }
+      if (mod.manifest.ContentPackFor !== undefined) {
+        addRuleForDependency(mod.manifest.ContentPackFor);
+      }
     }
     return instructions;
   })
@@ -528,6 +583,10 @@ function updateConflictInfo(api: types.IExtensionApi,
                             : Promise<void> {
   const mod = api.getState().persistent.mods[gameId][modId];
 
+  if (mod === undefined) {
+    return Promise.resolve();
+  }
+
   const now = Date.now();
 
   if ((now - mod.attributes?.lastSMAPIQuery ?? 0) < SMAPI_QUERY_FREQUENCY) {
@@ -654,9 +713,6 @@ function init(context: types.IExtensionContext) {
       }
 
       const manifests = await getModManifests(modPath);
-      if (manifests.length === 0) {
-        return Promise.resolve({});
-      }
 
       const parsedManifests = (await Promise.all(manifests.map(
         async manifest => {
@@ -667,6 +723,10 @@ function init(context: types.IExtensionContext) {
             return undefined;
           }
         }))).filter(manifest => manifest !== undefined);
+
+      if (parsedManifests.length === 0) {
+        return Promise.resolve({});
+      }
 
       // we can only use one manifest to get the id from
       const refManifest = parsedManifests[0];
@@ -685,19 +745,26 @@ function init(context: types.IExtensionContext) {
         minSMAPIVersion,
       };
 
-      // don't set a custom file name for SMAPI
-      if (modInfo.download.modInfo?.nexus?.ids?.modId !== 2400) {
-        result['customFileName'] = refManifest.Name;
-      }
+      if (refManifest !== undefined) {
+        // don't set a custom file name for SMAPI
+        if (modInfo.download.modInfo?.nexus?.ids?.modId !== 2400) {
+          result['customFileName'] = refManifest.Name;
+        }
 
-      if (typeof(refManifest.Version) === 'string') {
-        result['manifestVersion'] = refManifest.Version;
+        if (typeof (refManifest.Version) === 'string') {
+          result['manifestVersion'] = refManifest.Version;
+        }
       }
 
       return Promise.resolve(result);
     });
 
   context.registerGame(new StardewValley(context));
+  context.registerReducer(['settings', 'SDV'], sdvReducers);
+
+  context.registerSettings('Mods', Settings, undefined, () =>
+    selectors.activeGameId(context.api.getState()) === GAME_ID, 150);
+
   // Register our SMAPI mod type and installer. Note: This currently flags an error in Vortex on installing correctly.
   context.registerInstaller('smapi-installer', 30, testSMAPI, (files, dest) => Bluebird.resolve(installSMAPI(getDiscoveryPath, files, dest)));
   context.registerModType('SMAPI', 30, gameId => gameId === GAME_ID, getSMAPIPath, isSMAPIModType);
@@ -783,7 +850,13 @@ function init(context: types.IExtensionContext) {
 
     context.api.addMetaServer('smapi.io', {
       url: '',
-      loopbackCB: (query: IQuery) => Bluebird.resolve(proxy.find(query)),
+      loopbackCB: (query: IQuery) => {
+        return Bluebird.resolve(proxy.find(query))
+          .catch(err => {
+            log('error', 'failed to look up smapi meta info', err.message);
+            return Bluebird.resolve([]);
+          });
+      },
       cacheDurationSec: 86400,
       priority: 25,
     });
@@ -855,7 +928,7 @@ function init(context: types.IExtensionContext) {
     context.api.onAsync('did-purge', async (profileId) => {
       const state = context.api.getState();
       const profile = selectors.profileById(state, profileId);
-      if (profile.gameId !== GAME_ID) {
+      if (profile?.gameId !== GAME_ID) {
         return Promise.resolve();
       }
 

@@ -801,6 +801,7 @@ async function readPAKs(api: types.IExtensionApi)
   if (lsLib === undefined) {
     return [];
   }
+  
   const paks = await readPAKList(api);
 
   let manifest;
@@ -841,8 +842,8 @@ async function readPAKs(api: types.IExtensionApi)
           // could happen if the file got deleted since reading the list of paks.
           // actually, this seems to be fairly common when updating a mod
           if (err.code !== 'ENOENT') {
-            api.showErrorNotification('Failed to read pak', err, {
-              allowReport: true,
+            api.showErrorNotification('Failed to read pak. Please make sure you are using the latest version of LSLib by using the "Re-install LSLib/Divine" toolbar button on the Mods page.', err, {
+              allowReport: false,
               message: fileName,
             });
           }

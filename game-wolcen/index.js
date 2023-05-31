@@ -84,6 +84,11 @@ async function getTargetData(targetPath) {
   }
 }
 
+/**
+ * 
+ * @param {import('vortex-api/lib/types/IExtensionContext').IExtensionApi} api 
+ * @returns 
+ */
 function makeMergeXML(api) {
   return async (filePath, mergePath) => {
     const installPath = selectors.installPathForGame(api.store.getState(), GAME_ID);
@@ -118,13 +123,14 @@ function makeMergeXML(api) {
         */
       }
     } catch (err) {
-      if (err instanceof util.ProcessCanceled) {
-        return;
-      } else {
-        err.message = `Failed to merge "${relPath}": ${err.message}`;
-        log('error', 'failed to merge xml file', {
-          filePath, error: err.message, name: err.name });
-        throw err;
+      if (!(err instanceof util.ProcessCanceled)) {
+        api.showErrorNotification(
+          'Failed to merge xml file, this indicates a bug in the mod owning this file',
+          err,
+          {
+            allowReport: false,
+            message: relPath,
+          })
       }
     }
   }

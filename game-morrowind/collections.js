@@ -1,6 +1,6 @@
 const { actions, selectors, util } = require('vortex-api');
 const { MORROWIND_ID, NATIVE_PLUGINS } = require('./constants');
-const { deserializeLoadOrder, serializeLoadOrder } = require('./loadOrder');
+const { deserializeLoadOrder, serializeLoadOrder } = require('./loadorder');
 
 async function genCollectionsData(context,
                                   gameId,

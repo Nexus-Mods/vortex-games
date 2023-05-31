@@ -442,6 +442,9 @@ function main(context) {
     callback: (loadOrder) => {
       writeLOToFile(context.api, loadOrder)
         .catch(err => {
+          if (err instanceof util.UserCanceled) {
+            return;
+          }
           const allowReport = !['EPERM', 'EISDIR'].includes(err.code) && !(err instanceof GameNotDiscoveredException)
           context.api.showErrorNotification('failed to write to load order file', err,
             { allowReport });

@@ -78,10 +78,9 @@ function testSupportedContent(files, gameId) {
   });
 }
 
-function requiresLauncher(gamePath) {
-  return fs.statAsync(path.join(gamePath, 'steam_api.dll'))
-    .then(() => Promise.resolve({ launcher: 'steam' }))
-    .catch(err => Promise.resolve(undefined));
+function requiresLauncher(gamePath, store) {
+
+  return store === 'steam' ?  Promise.resolve({ launcher: 'steam' }) : Promise.resolve(undefined);
 }
 
 function main(context) {

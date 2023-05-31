@@ -81,7 +81,9 @@ function populateCache(api, activeProfile, modIds, initialCacheValue) {
   const invalidModTypes = ['witcher3menumoddocuments'];
   const affectedModIds = modIds === undefined ? Object.keys(mods) : modIds;
   const enabledMods = affectedModIds
-    .filter(key => !!modState[key]?.enabled && !invalidModTypes.includes(mods[key].type))
+    .filter(key => (mods[key]?.installationPath !== undefined)
+                && !!modState[key]?.enabled &&
+                !invalidModTypes.includes(mods[key].type))
     .sort((lhs, rhs) => (loadOrder[lhs]?.pos || getNextId()) - (loadOrder[rhs]?.pos || getNextId()))
     .map(key => mods[key]);
 
@@ -106,6 +108,9 @@ function populateCache(api, activeProfile, modIds, initialCacheValue) {
 
   const stagingFolder = selectors.installPathForGame(state, GAME_ID);
   return Promise.reduce(enabledMods, (accum, mod) => {
+    if (mod.installationPath === undefined) {
+      return accum;
+    }
     return getRelevantModEntries(path.join(stagingFolder, mod.installationPath))
       .then(entries => {
         return Promise.each(entries, filepath => {

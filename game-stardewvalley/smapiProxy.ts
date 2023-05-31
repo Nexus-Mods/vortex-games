@@ -2,7 +2,7 @@ import { IFileInfo } from '@nexusmods/nexus-api';
 import * as https from 'https';
 import { ILookupResult, IQuery } from 'modmeta-db';
 import * as semver from 'semver';
-import { types } from 'vortex-api';
+import { log, types } from 'vortex-api';
 import { GAME_ID } from './common';
 import { SMAPI_IO_API_VERSION } from './constants';
 import { ISMAPIIOQuery, ISMAPIResult } from './types';
@@ -37,7 +37,6 @@ class SMAPIProxy {
         return await this.lookupOnNexus(
           query, res[0].metadata.nexusID, res[0].metadata.main.version);
       } else {
-        console.log('returning third-party dependency info');
         return [
           { key, value: {
             gameId: GAME_ID,
@@ -63,7 +62,16 @@ class SMAPIProxy {
           .on('data', chunk => {
             body = Buffer.concat([body, chunk]);
           })
-          .on('end', () => resolve(JSON.parse(body.toString('utf8'))));
+          .on('end', () => {
+            const textual = body.toString('utf8');
+            try {
+              const parsed = JSON.parse(textual);
+              resolve(parsed);
+            } catch (err) {
+              log('error', 'failed to parse smapi response', textual);
+              reject(err);
+            }
+          });
       })
         .on('error', err => reject(err))
       req.write(JSON.stringify({

@@ -48,12 +48,9 @@ function prepareForModding(discovery) {
 
 // Kenshi's Steam version requires the game to be executed
 //  via Steam in order for it to add workshop mods.
-function requiresLauncher(gamePath) {
-  return fs.readdirAsync(gamePath)
-    .then(files => (files.find(file => file.indexOf(STEAM_DLL) !== -1) !== undefined)
-      ? Promise.resolve({ launcher: 'steam' })
-      : Promise.resolve(undefined))
-    .catch(err => Promise.reject(err));
+function requiresLauncher(gamePath, store) {
+
+    return store === 'steam' ?  Promise.resolve({ launcher: 'steam' }) : Promise.resolve(undefined);
 }
 
 function installContent(files) {

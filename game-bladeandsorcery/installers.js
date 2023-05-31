@@ -30,7 +30,15 @@ async function installOfficialMod(files,
   let gameVersion;
   const discoveryPath = getDiscoveryPath(api);
   if (discoveryPath === undefined) {
-    return Promise.reject(new GameNotDiscoveredException());
+    return {
+      instructions: [
+        {
+          type: 'error',
+          value: 'fatal',
+          source: 'Blade & Sorcery is not discovered, please manage the game first and follow the instructions there.',
+        },
+      ],
+    };
   }
   let isEngineInject;
   try {

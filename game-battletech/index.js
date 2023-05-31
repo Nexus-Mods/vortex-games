@@ -89,18 +89,19 @@ function main(context) {
           const targetPath = path.join(installPath, mod.id, relPath);
           // copy the new file back into the corresponding mod, then delete it. That way, vortex will
           // create a link to it with the correct deployment method and not ask the user any questions
-          await fs.ensureDirAsync(path.dirname(targetPath));
           try {
+            await fs.ensureDirAsync(path.dirname(targetPath));
             await fs.copyAsync(entry.filePath, targetPath);
+            await fs.removeAsync(entry.filePath);
           } catch (err) {
-            if (err.message.includes('are the same file')) {
+            if ((err instanceof util.UserCanceled)
+                || (err.message.includes('are the same file'))) {
               // Identical file already there? smells like user tampering to me!
               //  Either way, if the file is already there then we have no problems.
             } else {
-              return Promise.reject(err);
+              context.api.showErrorNotification('Failed to re-import mod file', err);
             }
           }
-          await fs.removeAsync(entry.filePath);
         }
       });
     });

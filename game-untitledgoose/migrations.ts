@@ -1,4 +1,4 @@
-import { runPatcher } from 'harmony-patcher';
+// import { runPatcher } from 'harmony-patcher';
 import path from 'path';
 import semver from 'semver';
 import { fs } from 'vortex-api';
@@ -6,6 +6,7 @@ import { fs } from 'vortex-api';
 import { DATAPATH, ENTRY_POINT, GAME_ID } from './statics';
 import { getDiscoveryPath } from './util';
 
+/*
 export function migrate010(context, oldVersion) {
   if (semver.gte(oldVersion, '0.1.0')) {
     return Promise.resolve();
@@ -27,6 +28,7 @@ export function migrate010(context, oldVersion) {
       path.join(getDiscoveryPath(state), DATAPATH, 'VortexMods')))
     .catch(err => err.code === 'ENOENT' ? Promise.resolve() : Promise.reject(err));
 }
+*/
 
 export function migrate020(context, oldVersion) {
   if (semver.gte(oldVersion, '0.2.0')) {
