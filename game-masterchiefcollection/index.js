@@ -171,7 +171,7 @@ class MasterChiefCollectionGame {
         launcher: 'steam',
         addInfo: {
           appId: STEAM_ID,
-          parameters: ['option1'],
+          parameters: ['option2'],
           launchType: 'gamestore',
         }
       });
