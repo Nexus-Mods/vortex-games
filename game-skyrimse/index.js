@@ -66,6 +66,9 @@ const tools = [
     executable: () => 'CreationKit.exe',
     logo: 'CK.png',
     relative: true,
+    requiredFiles: [
+      'CreationKit.exe',
+    ],
   }
 ];
 
