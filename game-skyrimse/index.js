@@ -41,10 +41,10 @@ const tools = [
     id: 'skse64',
     name: 'Skyrim Script Extender 64',
     shortName: 'SKSE64',
+    logo: 'SKSE.png',
     executable: () => 'skse64_loader.exe',
     requiredFiles: [
       'skse64_loader.exe',
-      'SkyrimSE.exe',
     ],
     relative: true,
     exclusive: true,
@@ -60,6 +60,13 @@ const tools = [
     relative: true,
     logo: 'auto',
   },
+  {
+    id: 'creation-kit-64',
+    name: 'Creation Kit',
+    executable: () => 'CreationKit.exe',
+    logo: 'CK.png',
+    relative: true,
+  }
 ];
 
 function requiresLauncher(gamePath, store) {
