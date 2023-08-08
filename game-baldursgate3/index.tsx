@@ -19,6 +19,9 @@ import * as gitHubDownloader from './githubDownloader';
 
 const STOP_PATTERNS = ['[^/]*\\.pak$'];
 
+const GOG_ID = '1456460669';
+const STEAM_ID = '1086940';
+
 function toWordExp(input) {
   return '(^|/)' + input + '(/|$)';
 }
@@ -60,7 +63,7 @@ function globalProfilePath() {
 }
 
 function findGame(): any {
-  return util.GameStoreHelper.findByAppId(['1456460669', '1086940'])
+  return util.GameStoreHelper.findByAppId([GOG_ID, STEAM_ID])
     .then(game => game.gamePath);
 }
 
@@ -82,7 +85,10 @@ async function ensureGlobalProfile(api: types.IExtensionApi, discovery: types.ID
 }
 
 function prepareForModding(api: types.IExtensionApi, discovery): any {
-  const mp = modsPath();
+  const mp = modsPath();  
+
+  showFullReleaseModFixerRecommendation(api);
+
   api.sendNotification({
     id: 'bg3-uses-lslib',
     type: 'info',
@@ -94,17 +100,41 @@ function prepareForModding(api: types.IExtensionApi, discovery): any {
     ],
   });
   return fs.statAsync(mp)
-    .catch(() => fs.ensureDirWritableAsync(mp, () => Bluebird.resolve() as any)
-      .then(() => api.showDialog('info', 'Early Access Game', {
-        bbcode: 'Baldur\'s Gate 3 is currently in Early Access. It doesn\'t officially '
-            + 'support modding, doesn\'t include any modding tools and will receive '
-            + 'frequent updates.<br/>'
-            + 'Mods may become incompatible within days of being released, generally '
-            + 'not work and/or break unrelated things within the game.<br/><br/>'
-            + '[color="red"]Please don\'t report issues that happen in connection with mods to the '
-            + 'game developers (Larian Studios) or through the Vortex feedback system.[/color]',
-      }, [ { label: 'I understand' } ])))
+    .catch(() => fs.ensureDirWritableAsync(mp, () => Bluebird.resolve() as any))
     .finally(() => ensureGlobalProfile(api, discovery));
+}
+
+
+function showFullReleaseModFixerRecommendation(api: types.IExtensionApi) {
+  api.sendNotification({
+    type: 'warning',
+    title: 'Recommended Mod',
+    message: 'Most mods require this mod.',
+    allowSuppress: true,
+    actions: [
+      {
+        title: 'More', action: dismiss => {
+          api.showDialog('question', 'Recommended Mods', {
+            text:
+              'We recommend installing "Full Release Mod Fixer" to be able to mod Baldur\'s Gate 3.\n\n' + 
+              'This can be downloaded from Nexus Mods and installed using Vortex by pressing "Open Nexus Mods'
+          }, [
+            { label: 'Dismiss' },
+            { label: 'Open Nexus Mods', default: true },
+          ])
+            .then(result => {
+              dismiss();
+              if (result.action === 'Open Nexus Mods') {
+                util.opn('https://www.nexusmods.com/baldursgate3/mods/550?tab=description').catch(() => null)
+              } else if (result.action === 'Cancel') {
+                // dismiss anyway
+              }
+              return Promise.resolve();
+            });
+        }
+      }
+    ],
+  });
 }
 
 function getGamePath(api) {
@@ -229,7 +259,8 @@ function isReplacer(api: types.IExtensionApi, files: types.IInstruction[]) {
           + 'no longer matches the game version.',
     }, [
       { label: 'Install as Mod (will likely not work)' },
-      { label: 'Install as Replacer' },
+      { label: 'Install as Replacer',
+        default: true },
     ]).then(result => result.action === 'Install as Replacer');
   } else {
     return Bluebird.resolve(false);
@@ -410,9 +441,12 @@ async function writeLoadOrder(api: types.IExtensionApi,
     if ((loNode.children === undefined) || ((loNode.children[0] as any) === '')) {
       loNode.children = [{ node: [] }];
     }
+    if ((modsNode.children === undefined) || ((modsNode.children[0] as any) === '')) {
+      modsNode.children = [{ node: [] }];
+    }
     // drop all nodes except for the game entry
     const descriptionNodes = modsNode?.children?.[0]?.node?.filter?.(iter =>
-      iter.attribute.find(attr => (attr.$.id === 'Name') && (attr.$.value === 'Gustav'))) ?? [];
+      iter.attribute.find(attr => (attr.$.id === 'Name') && (attr.$.value === 'GustavDev'))) ?? [];
 
     const enabledPaks = Object.keys(loadOrder)
         .filter(key => !!loadOrder[key].data?.uuid
@@ -652,7 +686,8 @@ async function isLOListed(api: types.IExtensionApi, pakPath: string): Promise<bo
   // const nonGUI = lines.find(line => !line.toLowerCase().startsWith('public/game/gui'));
   const metaLSX = lines.find(line =>
     path.basename(line.split('\t')[0]).toLowerCase() === 'meta.lsx');
-  return metaLSX === undefined;
+  
+    return metaLSX === undefined;
 }
 
 async function extractPakInfoImpl(api: types.IExtensionApi, pakPath: string, mod: types.IMod): Promise<IPakInfo> {
@@ -666,6 +701,8 @@ async function extractPakInfoImpl(api: types.IExtensionApi, pakPath: string, mod
 
   const genName = path.basename(pakPath, path.extname(pakPath));
 
+  let isListed = await isLOListed(api, pakPath);
+
   return {
     author: attr('Author', () => 'Unknown'),
     description: attr('Description', () => 'Missing'),
@@ -675,7 +712,7 @@ async function extractPakInfoImpl(api: types.IExtensionApi, pakPath: string, mod
     type: attr('Type', () => 'Adventure'),
     uuid: attr('UUID', () => require('uuid').v4()),
     version: attr('Version', () => '1'),
-    isListed: await isLOListed(api, pakPath),
+    isListed: isListed
   };
 }
 
@@ -1087,10 +1124,10 @@ function main(context: types.IExtensionContext) {
       'bin/bg3_dx11.exe',
     ],
     environment: {
-      SteamAPPId: '1086940',
+      SteamAPPId: STEAM_ID,
     },
     details: {
-      steamAppId: 1086940,
+      steamAppId: +STEAM_ID,
       stopPatterns: STOP_PATTERNS.map(toWordExp),
       ignoreConflicts: [
         'info.json',
