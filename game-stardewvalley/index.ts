@@ -420,6 +420,7 @@ async function install(api,
       });
     }
 
+    /*
     if (api.getState().settings['SDV']?.useRecommendations ?? false) {
       for (const dep of dependencies) {
         addRuleForDependency(dep);
@@ -427,7 +428,7 @@ async function install(api,
       if (mod.manifest.ContentPackFor !== undefined) {
         addRuleForDependency(mod.manifest.ContentPackFor);
       }
-    }
+    }*/
     return instructions;
   })
     .then(data => {
