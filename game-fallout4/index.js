@@ -11,6 +11,7 @@ This issue is compounded by users extracting all their BA2s.
 const IGNORED_FILES = [ path.join('**', 'PersistantSubgraphInfoAndOffsetData.txt') ];
 
 const MS_ID = 'BethesdaSoftworks.Fallout4-PC';
+const GOG_ID = '1998527297';
 
 let tools = [
   {
@@ -77,7 +78,8 @@ function main(context) {
     mergeMods: true,
     queryArgs: {
       steam: [{ name: 'Fallout 4' }],
-      xbox: [{ id: MS_ID }],
+      xbox: [{ id: MS_ID }],      
+      gog: [{ id: GOG_ID, prefer: 0 }],
       registry: [{ id: 'HKEY_LOCAL_MACHINE:Software\\Wow6432Node\\Bethesda Softworks\\Fallout4:Installed Path' }],
     },
     supportedTools: tools,
@@ -89,10 +91,11 @@ function main(context) {
     ],
     requiresLauncher,
     environment: {
-      SteamAPPId: '377160',
+      SteamAPPId: '377160',     
     },
     details: {
       steamAppId: 377160,
+      gogAppId: GOG_ID,
       ignoreConflicts: IGNORED_FILES,
       hashFiles: [
         'appxmanifest.xml',
