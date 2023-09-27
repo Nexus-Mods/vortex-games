@@ -16,6 +16,8 @@ import { ILoadOrderEntry, IModNode, IModSettings, IPakInfo, IXmlNode } from './t
 
 import { DEFAULT_MOD_SETTINGS, GAME_ID, LSLIB_URL } from './common';
 import * as gitHubDownloader from './githubDownloader';
+import { IMod, IModTable } from 'vortex-api/lib/types/IState';
+import { reinterpretUntilZeros } from 'ref';
 
 const STOP_PATTERNS = ['[^/]*\\.pak$'];
 
@@ -87,7 +89,8 @@ async function ensureGlobalProfile(api: types.IExtensionApi, discovery: types.ID
 function prepareForModding(api: types.IExtensionApi, discovery): any {
   const mp = modsPath();  
 
-  showFullReleaseModFixerRecommendation(api);
+  checkForScriptExtender(api);
+  showFullReleaseModFixerRecommendation(api); 
 
   api.sendNotification({
     id: 'bg3-uses-lslib',
@@ -104,8 +107,34 @@ function prepareForModding(api: types.IExtensionApi, discovery): any {
     .finally(() => ensureGlobalProfile(api, discovery));
 }
 
+function checkForScriptExtender(api: types.IExtensionApi) {
+
+  //
+}
 
 function showFullReleaseModFixerRecommendation(api: types.IExtensionApi) {
+
+  // check to see if mod is installed first?
+  //onst mods = util.getSafe(api.store.getState(), ['persistent', 'mods', 'baldursgate3'], undefined);
+
+  const mods = api.store.getState().persistent?.mods?.baldursgate3;
+  console.log('mods', mods);
+
+  if(mods !== undefined) {
+
+    const modArray: types.IMod[] = mods ? Object.values(mods) : [];    
+    console.log('modArray', modArray);
+  
+    const modFixerInstalled:boolean =  modArray.filter(mod => !!mod?.attributes?.modFixer).length != 0;  
+    console.log('modFixerInstalled', modFixerInstalled);
+
+    // if we've found an installed modfixer, then don't bother showing notification 
+    if(modFixerInstalled) {
+      return;
+    }
+  }
+
+  // no mounds found
   api.sendNotification({
     type: 'warning',
     title: 'Recommended Mod',
@@ -116,7 +145,7 @@ function showFullReleaseModFixerRecommendation(api: types.IExtensionApi) {
         title: 'More', action: dismiss => {
           api.showDialog('question', 'Recommended Mods', {
             text:
-              'We recommend installing "Full Release Mod Fixer" to be able to mod Baldur\'s Gate 3.\n\n' + 
+              'We recommend installing "Baldur\'s Gate 3 Mod Fixer" to be able to mod Baldur\'s Gate 3.\n\n' + 
               'This can be downloaded from Nexus Mods and installed using Vortex by pressing "Open Nexus Mods'
           }, [
             { label: 'Dismiss' },
@@ -125,7 +154,7 @@ function showFullReleaseModFixerRecommendation(api: types.IExtensionApi) {
             .then(result => {
               dismiss();
               if (result.action === 'Open Nexus Mods') {
-                util.opn('https://www.nexusmods.com/baldursgate3/mods/550?tab=description').catch(() => null)
+                util.opn('https://www.nexusmods.com/baldursgate3/mods/141?tab=description').catch(() => null)
               } else if (result.action === 'Cancel') {
                 // dismiss anyway
               }
@@ -137,9 +166,9 @@ function showFullReleaseModFixerRecommendation(api: types.IExtensionApi) {
   });
 }
 
-function getGamePath(api) {
+function getGamePath(api): string {
   const state = api.getState();
-  return state.settings.gameMode.discovered?.[GAME_ID]?.path;
+  return state.settings.gameMode.discovered?.[GAME_ID]?.path as string;
 }
 
 function getGameDataPath(api) {
@@ -188,6 +217,15 @@ function isLSLib(api: types.IExtensionApi, files: types.IInstruction[]) {
     : Bluebird.resolve(false);
 }
 
+
+function isBG3SE(api: types.IExtensionApi, files: types.IInstruction[]) {
+  const origFile = files.find(iter =>
+    (iter.type === 'copy') && (path.basename(iter.destination).toLowerCase() === 'dwrite.dll'));
+  return origFile !== undefined
+    ? Bluebird.resolve(true)
+    : Bluebird.resolve(false);
+}
+
 function testLSLib(files: string[], gameId: string): Bluebird<types.ISupportedResult> {
   if (gameId !== GAME_ID) {
     return Bluebird.resolve({ supported: false, requiredFiles: [] });
@@ -196,6 +234,20 @@ function testLSLib(files: string[], gameId: string): Bluebird<types.ISupportedRe
 
   return Bluebird.resolve({
     supported: matchedFiles.length >= 2,
+    requiredFiles: [],
+  });
+}
+
+function testBG3SE(files: string[], gameId: string): Bluebird<types.ISupportedResult> {
+  
+  if (gameId !== GAME_ID) {
+    return Bluebird.resolve({ supported: false, requiredFiles: [] });
+  }
+
+  const hasDWriteDll = files.find(file => path.basename(file).toLowerCase() === 'dwrite.dll') !== undefined;
+
+  return Bluebird.resolve({
+    supported: hasDWriteDll,
     requiredFiles: [],
   });
 }
@@ -237,17 +289,63 @@ async function installLSLib(files: string[],
       return accum;
     }, [ modtypeAttr, versionAttr ]);
 
-  return Promise.resolve({ instructions });
+  return Bluebird.resolve({ instructions });
 }
 
-function isReplacer(api: types.IExtensionApi, files: types.IInstruction[]) {
+function isEngineInjector(api: types.IExtensionApi, instructions: types.IInstruction[]) {
+    
+  console.log('isEngineInjector instructions:', instructions);
+
+  if (instructions.find(inst => inst.destination.toLowerCase().indexOf('bin') === 0)) { // if this starts in a bin folder?
+
+    
+    return api.showDialog('question', 'Confirm mod installation', {
+      text: 'The mod you\'re about to install contains dll files that will run with the ' +
+        'game, have the same access to your system and can thus cause considerable ' +
+        'damage or infect your system with a virus if it\'s malicious.\n' +
+        'Please install this mod only if you received it from a trustworthy source ' +
+        'and if you have a virus scanner active right now.',
+    }, [
+      { label: 'Cancel' },
+      { label: 'Continue', default: true  },
+    ]).then(result => result.action === 'Continue');
+  } else {
+    return Bluebird.resolve(false);
+  }
+}
+
+function isLoose(api: types.IExtensionApi, instructions: types.IInstruction[]): Bluebird<boolean> { 
+
+  // only interested in copy instructions
+  const copyInstructions = instructions.filter(instr => instr.type === 'copy');
+
+  // do we have a data folder? 
+  const hasDataFolder:boolean = copyInstructions.find(instr =>
+    instr.source.indexOf('Data' + path.sep) !== -1) !== undefined;
+
+  // do we have a public or generated folder?
+  const hasGenOrPublicFolder:boolean = copyInstructions.find(instr =>
+    instr.source.indexOf('Generated' + path.sep) !== -1 || 
+    instr.source.indexOf('Public' + path.sep) !== -1
+    ) !== undefined;
+
+  console.log('isLoose', { instructions: instructions, hasDataFolder: hasDataFolder || hasGenOrPublicFolder });
+
+  return Bluebird.resolve(hasDataFolder || hasGenOrPublicFolder);
+}
+
+function isReplacer(api: types.IExtensionApi, files: types.IInstruction[]): Bluebird<boolean> {
+
   const origFile = files.find(iter =>
     (iter.type === 'copy') && ORIGINAL_FILES.has(iter.destination.toLowerCase()));
 
   const paks = files.filter(iter =>
     (iter.type === 'copy') && (path.extname(iter.destination).toLowerCase() === '.pak'));
 
-  if ((origFile !== undefined) || (paks.length === 0)) {
+  console.log('isReplacer',  {origFile: origFile, paks: paks});
+
+  //if ((origFile !== undefined) || (paks.length === 0)) {
+  if ((origFile !== undefined)) {
     return api.showDialog('question', 'Mod looks like a replacer', {
       bbcode: 'The mod you just installed looks like a "replacer", meaning it is intended to replace '
           + 'one of the files shipped with the game.<br/>'
@@ -259,8 +357,7 @@ function isReplacer(api: types.IExtensionApi, files: types.IInstruction[]) {
           + 'no longer matches the game version.',
     }, [
       { label: 'Install as Mod (will likely not work)' },
-      { label: 'Install as Replacer',
-        default: true },
+      { label: 'Install as Replacer', default: true },
     ]).then(result => result.action === 'Install as Replacer');
   } else {
     return Bluebird.resolve(false);
@@ -278,6 +375,8 @@ function testReplacer(files: string[], gameId: string): Bluebird<types.ISupporte
     requiredFiles: [],
   });
 }
+
+
 
 function installReplacer(files: string[],
                          destinationPath: string,
@@ -452,6 +551,8 @@ async function writeLoadOrder(api: types.IExtensionApi,
         .filter(key => !!loadOrder[key].data?.uuid
                     && loadOrder[key].enabled
                     && !loadOrder[key].data?.isListed);
+
+    console.log('enabledPaks', enabledPaks);
 
     // add new nodes for the enabled mods
     for (const key of enabledPaks) {
@@ -696,6 +797,8 @@ async function extractPakInfoImpl(api: types.IExtensionApi, pakPath: string, mod
   const configRoot = findNode(config?.node, 'root');
   const moduleInfo = findNode(configRoot?.children?.[0]?.node, 'ModuleInfo');
 
+  console.log('meta', meta);
+
   const attr = (name: string, fallback: () => any) =>
     findNode(moduleInfo?.attribute, name)?.$?.value ?? fallback();
 
@@ -815,7 +918,7 @@ async function readPAKList(api: types.IExtensionApi) {
   } catch (err) {
     if (err.code === 'ENOENT') {
       try {
-        await fs.ensureDirWritableAsync(modsPath(), () => Bluebird.resolve());
+        await fs.ensureDirWritableAsync(modsPath(), () => Promise.resolve());
       } catch (err) {
         // nop
       }
@@ -840,6 +943,8 @@ async function readPAKs(api: types.IExtensionApi)
   }
   
   const paks = await readPAKList(api);
+
+  console.log('paks', { paks: paks });
 
   let manifest;
   try {
@@ -890,6 +995,7 @@ async function readPAKs(api: types.IExtensionApi)
       return Bluebird.resolve(func());
     });
   }));
+
   return res.filter(iter => iter !== undefined);
 }
 
@@ -911,6 +1017,9 @@ async function readLO(api: types.IExtensionApi): Promise<string[]> {
 }
 
 function serializeLoadOrder(api: types.IExtensionApi, order): Promise<void> {
+
+  console.log('serializeLoadOrder');
+
   return writeLoadOrder(api, order);
 }
 
@@ -924,9 +1033,21 @@ async function deserializeLoadOrder(api: types.IExtensionApi): Promise<any> {
   // this is a hack hopefully ensureing the it's either fully there or not at all
   await util.toPromise(cb => deserializeDebouncer.schedule(cb));
 
-  const paks = await readPAKs(api);
+  console.log('deserializeLoadOrder');
 
+  const paks = await readPAKs(api);
   const order = await readLO(api);
+  
+  console.log('paks', paks);
+  console.log('order', order);
+
+  // do we have this check to force the lock of ImprovedUI as we know it overrides game data
+  // and load order irrelevant? 
+  const index = paks.findIndex(pak => pak.info.uuid === '00000000-0000-0000-0000-ImprovedUI12');
+  if(index !== -1) {
+    paks[index].info.isListed = true;
+    console.log(`ImprovedUI12 has been found. info.isListed has been changed to ${paks[index].info.isListed}`);
+  }
 
   const orderValue = (info: IPakInfo) => {
     return order.indexOf(info.uuid) + (info.isListed ? 0 : 1000);
@@ -1094,8 +1215,155 @@ async function onGameModeActivated(api: types.IExtensionApi, gameId: string) {
   const latestVer: string = getLatestInstalledLSLibVer(api);
   if (latestVer === '0.0.0') {
     await gitHubDownloader.downloadDivine(api);
-  }
+  }  
 }
+
+function testModFixer(files: string[], gameId: string): Bluebird<types.ISupportedResult> {
+
+  const notSupported = { supported: false, requiredFiles: [] };
+
+  if (gameId !== GAME_ID) {
+    // different game.
+    return Bluebird.resolve(notSupported);
+  }
+
+  const lowered = files.map(file => file.toLowerCase());
+  //const binFolder = lowered.find(file => file.split(path.sep).indexOf('bin') !== -1);
+
+  const hasModFixerPak = lowered.find(file => path.basename(file) === 'modfixer.pak') !== undefined;
+
+  if (!hasModFixerPak) {
+    // there's no modfixer.pak folder.
+    return Bluebird.resolve(notSupported);
+  }
+
+  return Bluebird.resolve({
+      supported: true,
+      requiredFiles: []
+  });
+}
+
+function testEngineInjector(files: string[], gameId: string): Bluebird<types.ISupportedResult> {
+
+  const notSupported = { supported: false, requiredFiles: [] };
+
+  if (gameId !== GAME_ID) {
+    // different game.
+    return Bluebird.resolve(notSupported);
+  }
+
+  const lowered = files.map(file => file.toLowerCase());
+  //const binFolder = lowered.find(file => file.split(path.sep).indexOf('bin') !== -1);
+
+  const hasBinFolder = lowered.find(file => file.indexOf('bin' + path.sep) !== -1) !== undefined;
+
+  if (!hasBinFolder) {
+    // there's no bin folder.
+    return Bluebird.resolve(notSupported);
+  }
+
+  return Bluebird.resolve({
+      supported: true,
+      requiredFiles: []
+  });
+}
+
+function installBG3SE(files: string[],
+  destinationPath: string,
+  gameId: string,
+  progressDelegate: types.ProgressDelegate)
+  : Bluebird<types.IInstallResult> {
+  
+  console.log('installBG3SE files:', files);
+
+  // Filter out folders as this breaks the installer.
+  files = files.filter(f => path.extname(f) !== '' && !f.endsWith(path.sep));
+
+  // Filter only dll files.
+  files = files.filter(f => path.extname(f) === '.dll');
+
+  const instructions: types.IInstruction[] = files.reduce((accum: types.IInstruction[], filePath: string) => {    
+      accum.push({
+        type: 'copy',
+        source: filePath,
+        destination: path.basename(filePath),
+      });    
+    return accum;
+  }, []);
+
+  console.log('installBG3SE instructions:', instructions);
+
+  return Bluebird.resolve({ instructions });
+} 
+
+function installModFixer(files: string[],
+  destinationPath: string,
+  gameId: string,
+  progressDelegate: types.ProgressDelegate)
+  : Bluebird<types.IInstallResult> {
+  
+  console.log('installModFixer files:', files);
+
+  // Filter out folders as this breaks the installer.
+  files = files.filter(f => path.extname(f) !== '' && !f.endsWith(path.sep));
+
+  // Filter only pak files.
+  files = files.filter(f => path.extname(f) === '.pak');
+
+  const modFixerAttribute: types.IInstruction = { type: 'attribute', key: 'modFixer', value: true }
+
+  const instructions: types.IInstruction[] = files.reduce((accum: types.IInstruction[], filePath: string) => {    
+      accum.push({
+        type: 'copy',
+        source: filePath,
+        destination: path.basename(filePath),
+      });    
+    return accum;
+  }, [ modFixerAttribute ]);
+
+  console.log('installModFixer instructions:', instructions);
+
+  return Bluebird.resolve({ instructions });
+} 
+
+function installEngineInjector(files: string[],
+  destinationPath: string,
+  gameId: string,
+  progressDelegate: types.ProgressDelegate)
+  : Bluebird<types.IInstallResult> {
+  
+  console.log('installEngineInjector files:', files);
+
+  // Filter out folders as this breaks the installer.
+  files = files.filter(f => path.extname(f) !== '' && !f.endsWith(path.sep));
+
+  const modtypeAttr: types.IInstruction = { type: 'setmodtype', value: 'dinput' } 
+
+  const instructions: types.IInstruction[] = files.reduce((accum: types.IInstruction[], filePath: string) => {
+    
+    // see if we have a bin folder
+    // then we need to use that as a new root incase the /bin is nested
+
+    const binIndex = filePath.toLowerCase().indexOf('bin' + path.sep);
+
+    if (binIndex !== -1) {
+
+      console.log(filePath.substring(binIndex));
+
+      accum.push({
+        type: 'copy',
+        source: filePath,
+        destination: filePath.substring(binIndex),
+      });
+    }
+    return accum;
+  }, [ modtypeAttr ]);
+
+  console.log('installEngineInjector instructions:', instructions);
+
+  return Bluebird.resolve({ instructions });
+}
+
 
 function main(context: types.IExtensionContext) {
   context.registerReducer(['settings', 'baldursgate3'], reducer);
@@ -1155,25 +1423,47 @@ function main(context: types.IExtensionContext) {
     const state = context.api.store.getState();
     const gameMode = selectors.activeGameId(state);
     return gameMode === GAME_ID;
-  });
+  });  
 
-  context.registerInstaller('bg3-replacer', 25, testReplacer, installReplacer);
   context.registerInstaller('bg3-lslib-divine-tool', 15, testLSLib, installLSLib as any);
+  context.registerInstaller('bg3-bg3se', 15, testBG3SE, installBG3SE as any);
+  context.registerInstaller('bg3-engine-injector', 20, testEngineInjector, installEngineInjector as any);
+  context.registerInstaller('bg3-replacer', 25, testReplacer, installReplacer);
+  context.registerInstaller('bg3-modfixer', 25, testModFixer, installModFixer);
+
+  /*
+  context.registerModType('bg3-engine-injector', 20, (gameId) => gameId === GAME_ID, 
+    () => getGamePath(context.api), 
+    instructions => isEngineInjector(context.api, instructions),
+    { name: 'BG3 Engine Injector'});*/
+    
+  context.registerModType('bg3-lslib-divine-tool', 15, (gameId) => gameId === GAME_ID,
+    () => undefined, 
+    instructions => isLSLib(context.api, instructions),
+    { name: 'BG3 LSLib' });
+
+  context.registerModType('bg3-bg3se', 15, (gameId) => gameId === GAME_ID,
+    () => path.join(getGamePath(context.api), 'bin'), 
+    instructions => isBG3SE(context.api, instructions),
+    { name: 'BG3 BG3SE' });
 
   context.registerModType('bg3-replacer', 25, (gameId) => gameId === GAME_ID,
-    () => getGameDataPath(context.api), files => isReplacer(context.api, files),
+    () => getGameDataPath(context.api), 
+    instructions => isReplacer(context.api, instructions),
     { name: 'BG3 Replacer' } as any);
 
-  context.registerModType('bg3-lslib-divine-tool', 15, (gameId) => gameId === GAME_ID,
-    () => undefined, files => isLSLib(context.api, files),
-    { name: 'BG3 LSLib' });
+    context.registerModType('bg3-loose', 20, (gameId) => gameId === GAME_ID,
+    () => getGameDataPath(context.api), 
+    instructions => isLoose(context.api, instructions),
+    { name: 'BG3 Loose' } as any);
+
 
   context.registerLoadOrder({
     gameId: GAME_ID,
     deserializeLoadOrder: () => deserializeLoadOrder(context.api),
     serializeLoadOrder: (loadOrder) => serializeLoadOrder(context.api, loadOrder),
     validate,
-    toggleableEntries: true,
+    toggleableEntries: false,
     usageInstructions: (() => (<InfoPanelWrap api={context.api} refresh={nop} />)) as any,
   });
 
