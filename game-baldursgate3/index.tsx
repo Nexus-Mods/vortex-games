@@ -19,7 +19,7 @@ import * as gitHubDownloader from './githubDownloader';
 import { IMod, IModTable } from 'vortex-api/lib/types/IState';
 import { reinterpretUntilZeros } from 'ref';
 import { ensureFileAsync } from 'vortex-api/lib/util/fs';
-import { deserialize, serialize, writeLoadOrder } from './loadOrder';
+import { deserialize, importModSettingsFile, importModSettingsGame, serialize, writeLoadOrder } from './loadOrder';
 
 const STOP_PATTERNS = ['[^/]*\\.pak$'];
 
@@ -1452,6 +1452,18 @@ function main(context: types.IExtensionContext) {
   });
 
   context.registerAction('fb-load-order-icons', 150, 'changelog', {}, 'Export to Game', () => {writeLoadOrder(context.api);}, () => {
+    const state = context.api.getState();
+    const activeGame = selectors.activeGameId(state);
+    return activeGame === GAME_ID;
+  });
+
+  context.registerAction('fb-load-order-icons', 150, 'import', {}, 'Import from File...', () => { importModSettingsFile(context.api);}, () => {
+    const state = context.api.getState();
+    const activeGame = selectors.activeGameId(state);
+    return activeGame === GAME_ID;
+  });
+
+  context.registerAction('fb-load-order-icons', 150, 'import', {}, 'Import from Game', () => { importModSettingsGame(context.api);}, () => {
     const state = context.api.getState();
     const activeGame = selectors.activeGameId(state);
     return activeGame === GAME_ID;
