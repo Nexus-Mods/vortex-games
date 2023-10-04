@@ -12,12 +12,14 @@ import { generate as shortid } from 'shortid';
 import walk, { IEntry } from 'turbowalk';
 import { actions, fs, log, selectors, tooltip, types, util } from 'vortex-api';
 import { Builder, parseStringPromise } from 'xml2js';
-import { ILoadOrderEntry, IModNode, IModSettings, IPakInfo, IXmlNode } from './types';
+import { DivineAction, IDivineOptions, IDivineOutput, IModNode, IModSettings, IPakInfo, IXmlNode } from './types';
 
-import { DEFAULT_MOD_SETTINGS, GAME_ID, LSLIB_URL } from './common';
+import { DEFAULT_MOD_SETTINGS, GAME_ID, INVALID_LO_MOD_TYPES, LO_FILE_NAME, LSLIB_URL } from './common';
 import * as gitHubDownloader from './githubDownloader';
 import { IMod, IModTable } from 'vortex-api/lib/types/IState';
 import { reinterpretUntilZeros } from 'ref';
+import { ensureFileAsync } from 'vortex-api/lib/util/fs';
+import { deserialize, serialize, writeLoadOrder } from './loadOrder';
 
 const STOP_PATTERNS = ['[^/]*\\.pak$'];
 
@@ -515,8 +517,9 @@ async function getActivePlayerProfile(api: types.IExtensionApi) {
     : 'Public';
 }
 
-async function writeLoadOrder(api: types.IExtensionApi,
-                              loadOrder: { [key: string]: ILoadOrderEntry }) {
+
+async function writeLoadOrderOld(api: types.IExtensionApi,
+                              loadOrder: { [key: string]: any }) {
   const bg3profile: string = await getActivePlayerProfile(api);
   const playerProfiles = (bg3profile === 'global') ? getPlayerProfiles() : [bg3profile];
   if (playerProfiles.length === 0) {
@@ -596,20 +599,7 @@ async function writeLoadOrder(api: types.IExtensionApi,
   }
 }
 
-type DivineAction = 'create-package' | 'list-package' | 'extract-single-file'
-                  | 'extract-package' | 'extract-packages' | 'convert-model'
-                  | 'convert-models' | 'convert-resource' | 'convert-resources';
 
-interface IDivineOptions {
-  source: string;
-  destination?: string;
-  expression?: string;
-}
-
-interface IDivineOutput {
-  stdout: string;
-  returnCode: number;
-}
 
 function getLatestLSLibMod(api: types.IExtensionApi) {
   const state = api.getState();
@@ -1016,11 +1006,12 @@ async function readLO(api: types.IExtensionApi): Promise<string[]> {
   }
 }
 
+
 function serializeLoadOrder(api: types.IExtensionApi, order): Promise<void> {
 
   console.log('serializeLoadOrder');
 
-  return writeLoadOrder(api, order);
+  return writeLoadOrderOld(api, order);
 }
 
 const deserializeDebouncer = new util.Debouncer(() => {
@@ -1028,6 +1019,7 @@ const deserializeDebouncer = new util.Debouncer(() => {
 }, 1000);
 
 async function deserializeLoadOrder(api: types.IExtensionApi): Promise<any> {
+
   // this function might be invoked by the lslib mod being (un)installed in which case it might be
   // in the middle of being unpacked or removed which leads to weird error messages.
   // this is a hack hopefully ensureing the it's either fully there or not at all
@@ -1040,14 +1032,6 @@ async function deserializeLoadOrder(api: types.IExtensionApi): Promise<any> {
   
   console.log('paks', paks);
   console.log('order', order);
-
-  // do we have this check to force the lock of ImprovedUI as we know it overrides game data
-  // and load order irrelevant? 
-  const index = paks.findIndex(pak => pak.info.uuid === '00000000-0000-0000-0000-ImprovedUI12');
-  if(index !== -1) {
-    paks[index].info.isListed = true;
-    console.log(`ImprovedUI12 has been found. info.isListed has been changed to ${paks[index].info.isListed}`);
-  }
 
   const orderValue = (info: IPakInfo) => {
     return order.indexOf(info.uuid) + (info.isListed ? 0 : 1000);
@@ -1460,14 +1444,21 @@ function main(context: types.IExtensionContext) {
 
   context.registerLoadOrder({
     gameId: GAME_ID,
-    deserializeLoadOrder: () => deserializeLoadOrder(context.api),
-    serializeLoadOrder: (loadOrder) => serializeLoadOrder(context.api, loadOrder),
+    deserializeLoadOrder: () => deserialize(context),
+    serializeLoadOrder: (loadOrder, prev) => serialize(context, loadOrder),
     validate,
     toggleableEntries: false,
     usageInstructions: (() => (<InfoPanelWrap api={context.api} refresh={nop} />)) as any,
   });
 
-  context.once(() => {
+  context.registerAction('fb-load-order-icons', 150, 'changelog', {}, 'Export to Game', () => {writeLoadOrder(context.api);}, () => {
+    const state = context.api.getState();
+    const activeGame = selectors.activeGameId(state);
+    return activeGame === GAME_ID;
+  });
+
+
+    context.once(() => {
     context.api.onStateChange(['session', 'base', 'toolsRunning'],
       async (prev: any, current: any) => {
         // when a tool exits, re-read the load order from disk as it may have been

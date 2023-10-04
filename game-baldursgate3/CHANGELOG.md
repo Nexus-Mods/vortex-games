@@ -5,11 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - UNRELEASED
+
+- Re-written load ordering so that Vortex has it's own data and doesn't rely on the game's `modsettings.lsx` file.
+- Added 'Export to Game' button on Load Order page to write the game's `modsettings.lsx` file.
+
 ## [1.3.0] - UNRELEASED
 
 - Fixed default `modsettings.lsx` having outdated Name and UUID
 - Fixed Engine Injector installer so no longer needing manual setting when installing mods to the Game root folder.
-- Manual check for ImprovedUI's PAK UUID to set it as locked in load order (to match BG3MM Override)
 - Updated extension game art
 - Updated installer and modtype for mods that need deploying to the `%GAMEROOT\Data` folder.
 - Added installer for [Mod Fixer](https://www.nexusmods.com/baldursgate3/mods/141) to fix notification showing when it's already installed

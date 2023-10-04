@@ -1,21 +1,48 @@
+import { types } from 'vortex-api';
+
 export interface IPakInfo {
-  type: string;
-  uuid: string;
-  md5: string;
-  version: string;
-  name: string;
-  folder: string;
-  author: string;
-  description: string;
-  isListed: boolean;
+  type?: string;
+  uuid?: string;
+  md5?: string;
+  version?: string;
+  name?: string;
+  folder?: string;
+  author?: string;
+  description?: string;
+  isListed?: boolean;
 }
 
+export interface IProps {
+  state: types.IState;
+  api: types.IExtensionApi;
+  profile: types.IProfile;
+  discovery: types.IDiscoveryResult;
+  mods: { [modId: string]: types.IMod };
+}
+
+//export type LoadOrder = ILoadOrderEntry[];
+
+/*
 export interface ILoadOrderEntry {
-  pos: number;
+  id: string
+  pos?: number;
   enabled: boolean;
   prefix?: string;
-  data?: IPakInfo;
+  data?: any;
+
+  // locked in UI?
+  locked?: boolean;
+
+  // Human readable name for the mod - this is what we display to the user
+  //  in the load order page.
+  name: string;
+
+  // The modId as stored by Vortex in its application state. Remember, in
+  //  other games, 1 modId could have several mod entries in the load order
+  //  page that are tied to it. That's why we have two separate id properties.
+  modId?: string;
 }
+*/
 
 export interface IXmlNode<AttributeT extends object> {
   $: AttributeT;
@@ -46,4 +73,19 @@ export interface IModSettings {
     version: IXmlNode<{ major: string, minor: string, revision: string, build: string }>;
     region: IRegion[];
   };
+}
+
+export type DivineAction = 'create-package' | 'list-package' | 'extract-single-file'
+                  | 'extract-package' | 'extract-packages' | 'convert-model'
+                  | 'convert-models' | 'convert-resource' | 'convert-resources';
+
+                  export interface IDivineOptions {
+  source: string;
+  destination?: string;
+  expression?: string;
+}
+
+export interface IDivineOutput {
+  stdout: string;
+  returnCode: number;
 }

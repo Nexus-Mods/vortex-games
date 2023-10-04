@@ -24,3 +24,5 @@ export const DEFAULT_MOD_SETTINGS = `<?xml version="1.0" encoding="UTF-8" standa
 </save>`;
 export const GAME_ID = 'baldursgate3';
 export const LSLIB_URL = 'https://github.com/Norbyte/lslib';
+export const LO_FILE_NAME = 'loadOrder.json';
+export const INVALID_LO_MOD_TYPES = ['bg3-lslib-divine-tool', 'bg3-bg3se', 'bg3-replacer', 'bg3-loose', 'dinput'];
