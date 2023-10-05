@@ -1,4 +1,4 @@
-import { fs, log, selectors, types, util } from 'vortex-api';
+import { actions, fs, log, selectors, types, util } from 'vortex-api';
 import path from 'path';
 import * as semver from 'semver';
 import { generate as shortid } from 'shortid';
@@ -36,6 +36,8 @@ export async function serialize(context: types.IExtensionContext,
   if (props === undefined) {
     return Promise.reject(new util.ProcessCanceled('invalid props'));
   }
+  
+  const state = context.api.getState();
 
   // Make sure the LO file is created and ready to be written to.
   const loFilePath = await ensureLOFile(context, profileId, props);
@@ -46,6 +48,17 @@ export async function serialize(context: types.IExtensionContext,
   // Write the prefixed LO to file.
   await fs.removeAsync(loFilePath).catch({ code: 'ENOENT' }, () => Promise.resolve());
   await fs.writeFileAsync(loFilePath, JSON.stringify(loadOrder), { encoding: 'utf8' });
+
+  // check the state for if we are keeping the game one in sync
+  // if we are writing vortex's load order, then we will also write the games one
+
+  const autoExportToGame:boolean = state.settings['baldursgate3'].autoExportLoadOrder ?? false;
+
+  console.log('serialize autoExportToGame=', autoExportToGame);
+
+  if(autoExportToGame) 
+    await exportToGame(context.api);
+
   return Promise.resolve();
 }
 
@@ -165,28 +178,27 @@ export async function importModSettingsFile(api: types.IExtensionApi): Promise<b
   const selectedPath:string = await api.selectFile(options);
 
   console.log('importModSettingsFile selectedPath=', selectedPath);
+  
+  // if no path selected, then cancel probably pressed
+  if(selectedPath === undefined)
+    return;
 
-  return processLsxFile(api, selectedPath);
+  processLsxFile(api, selectedPath);
 }
 
 export async function importModSettingsGame(api: types.IExtensionApi): Promise<boolean | void> {
-
-  const state = api.getState();
-  const profileId = selectors.activeProfile(state)?.id;
 
   const gameSettingsPath:string = path.join(profilesPath(), 'Public', 'modsettings.lsx');
 
   console.log('importModSettingsGame gameSettingsPath=', gameSettingsPath);
 
-  return processLsxFile(api, gameSettingsPath);
+  processLsxFile(api, gameSettingsPath);
 }
 
 async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {  
 
   const state = api.getState();
   const profileId = selectors.activeProfile(state)?.id;
-
-  const loadOrder:types.LoadOrder = util.getSafe(api.getState(), ['persistent', 'loadOrder', profileId], []);
 
   try {
 
@@ -204,12 +216,90 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
     if ((modsNode.children === undefined) || ((modsNode.children[0] as any) === '')) {
       modsNode.children = [{ node: [] }];
     }
-    
 
-    loNode.children[0].node.forEach(module => {
-      console.log(`processLsxFile module= ${module.attribute.find(attr => (attr.$.id === 'UUID')).$.value}`, module);      
+    // get nice string array, in order, of mods from the load order section
+    const uuidArray:string[] = loNode.children[0].node.map((loEntry) => loEntry.attribute.find(attr => (attr.$.id === 'UUID')).$.value);
+    console.log(`processLsxFile uuidArray=`, uuidArray);
+
+    // get mods, in the above order, from the mods section of the file 
+    const lsxMods:IModNode[] = uuidArray.map((uuid) => modsNode.children[0].node.find(modNode => modNode.attribute.find(attr => (attr.$.id === 'UUID') && (attr.$.value === uuid))));
+    console.log(`processLsxFile lsxMods=`, lsxMods);
+
+    // we now have all the information from file that we need
+
+    // lets get all paks from the folder
+    const paks = await readPAKs(api);
+
+    // are there any pak files not in the lsx file?
+    const missing = paks.reduce((acc, curr) => {      
+      if(lsxMods.find(lsxEntry => lsxEntry.attribute.find(attr => (attr.$.id === 'UUID') && (attr.$.value === curr.info.uuid))) === undefined) 
+        acc.push(curr);
+      return acc;
+    }, []);
+    console.log('processLsxFile missing=', missing);
+
+    // build a load order from the lsx file and add any missing paks at the end?
+
+    //let newLoadOrder: types.ILoadOrderEntry[] = [];
+
+    let newLoadOrder: types.ILoadOrderEntry[] = lsxMods.reduce((acc, curr) => {
+      // find the bg3Pak this is refering too as it's easier to get all the information
+      const pak = paks.find((entry) => entry.info.uuid === curr.attribute.find(attr => (attr.$.id === 'UUID')).$.value);
+
+      // if the pak is found, then we add a load order entry. if it isn't, then its prob been deleted in vortex and lsx has an extra entry
+      if (pak !== undefined) {
+        acc.push({
+          id: pak.fileName,
+          modId: pak.mod.id,
+          enabled: true,        
+          name: pak.info.name,
+          data: pak.info,
+          locked: pak.info.isListed as LockedState        
+        });
+      }
+
+      return acc;
+    }, []);   
+
+    console.log('processLsxFile newLoadOrder=', newLoadOrder);
+
+    // Add any newly added mods to the bottom of the loadOrder.
+    missing.forEach(pak => {
+      newLoadOrder.push({
+        id: pak.fileName,
+        modId: pak.mod.id,
+        enabled: true,        
+        name: pak.info.name,
+        data: pak.info,
+        locked: pak.info.isListed as LockedState        
+      })      
+    });   
+
+    newLoadOrder.sort((a, b) => (+b.locked - +a.locked));
+
+    console.log('processLsxFile newLoadOrder=', newLoadOrder);
+
+    // get load order
+    let loadOrder:types.LoadOrder = util.getSafe(api.getState(), ['persistent', 'loadOrder', profileId], []);
+    console.log('processLsxFile loadOrder=', loadOrder);
+
+    // manualy set load order?
+    api.store.dispatch(actions.setLoadOrder(profileId, newLoadOrder));
+
+    //util.setSafe(api.getState(), ['persistent', 'loadOrder', profileId], newLoadOrder);
+
+    // get load order again?
+    loadOrder = util.getSafe(api.getState(), ['persistent', 'loadOrder', profileId], []);
+    console.log('processLsxFile loadOrder=', loadOrder);
+
+    api.sendNotification({
+      type: 'success',
+      id: 'bg3-loadorder-imported',
+      title: 'Load Order Imported',
+      message: lsxPath,
+      displayMS: 3000
     });
-    
+
     console.log('processLsxFile finished');
 
   } catch (err) {
@@ -218,9 +308,8 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
     });
   }
 }
-  
-export async function writeLoadOrder(api: types.IExtensionApi): Promise<boolean | void> {
 
+async function exportTo(api: types.IExtensionApi, filepath: string) {
 
   const state = api.getState();
   const profileId = selectors.activeProfile(state)?.id;
@@ -228,24 +317,10 @@ export async function writeLoadOrder(api: types.IExtensionApi): Promise<boolean 
   // get load order from state
   const loadOrder:types.LoadOrder = util.getSafe(api.getState(), ['persistent', 'loadOrder', profileId], []);
 
-  console.log('writeLoadOrder loadOrder=', loadOrder);
-
-  /*
-  const bg3profile: string = await getActivePlayerProfile(api);
-  const playerProfiles = (bg3profile === 'global') ? getPlayerProfiles() : [bg3profile];
-  if (playerProfiles.length === 0) {
-    api.sendNotification({
-      id: 'bg3-no-profiles',
-      type: 'warning',
-      title: 'No player profiles',
-      message: 'Please run the game at least once and create a profile in-game',
-    });
-    return;
-  }
-  api.dismissNotification('bg3-no-profiles');*/
+  console.log('exportTo loadOrder=', loadOrder);
 
   try {
-    // read bg3 modsettings.lsx
+    // read the game bg3 modsettings.lsx so that we get the default game gustav thing?
     const modSettings = await readModSettings(api);
 
     // buildup object from xml
@@ -264,12 +339,15 @@ export async function writeLoadOrder(api: types.IExtensionApi): Promise<boolean 
     const descriptionNodes = modsNode?.children?.[0]?.node?.filter?.(iter =>
       iter.attribute.find(attr => (attr.$.id === 'Name') && (attr.$.value === 'GustavDev'))) ?? [];
 
+    
+
+
     // 
     const filteredPaks = loadOrder.filter(entry => !!entry.data?.uuid
                     && entry.enabled
                     && !entry.data?.isListed);
 
-    console.log('writeLoadOrder filteredPaks=', filteredPaks);
+    console.log('exportTo filteredPaks=', filteredPaks);
 
     // add new nodes for the enabled mods
     for (const entry of filteredPaks) {
@@ -299,25 +377,56 @@ export async function writeLoadOrder(api: types.IExtensionApi): Promise<boolean 
     modsNode.children[0].node = descriptionNodes;
     loNode.children[0].node = loadOrderNodes;
 
-    writeModSettings(api, modSettings);
-    //api.store.dispatch(settingsWritten(profile, Date.now(), enabledPaks.length));
+    writeModSettings(api, modSettings, filepath);
+    
+    api.sendNotification({
+      type: 'success',
+      id: 'bg3-loadorder-exported',
+      title: 'Load Order Exported',
+      message: filepath,
+      displayMS: 3000
+    });
 
-    /*
-    if (bg3profile === 'global') {
-      writeModSettings(api, modSettings, bg3profile);
-    }
-    for (const profile of playerProfiles) {
-      writeModSettings(api, modSettings, profile);
-      api.store.dispatch(settingsWritten(profile, Date.now(), enabledPaks.length));
-    }*/
   } catch (err) {
     api.showErrorNotification('Failed to write load order', err, {
       allowReport: false,
       message: 'Please run the game at least once and create a profile in-game',
     });
-  }
-  
+  }  
+
 }
+
+export async function exportToFile(api: types.IExtensionApi): Promise<boolean | void> {
+
+  const options: IOpenOptions = {
+    title: api.translate('Please choose a BG3 .lsx file to export to'),
+    filters: [{ name: 'BG3 Load Order', extensions: ['lsx'] }],
+    create: true
+  };
+
+  const selectedPath:string = await api.selectFile(options);
+
+  console.log(`exportToFile ${selectedPath}`);
+
+  // if no path selected, then cancel probably pressed
+  if(selectedPath === undefined)
+    return;
+
+  exportTo(api, selectedPath);
+}
+  
+export async function exportToGame(api: types.IExtensionApi): Promise<boolean | void> {
+
+  const settingsPath = path.join(profilesPath(), 'Public', 'modsettings.lsx');
+
+  console.log(`exportToGame ${settingsPath}`);
+
+  exportTo(api, settingsPath);
+}
+
+
+
+
 
 async function readModSettings(api: types.IExtensionApi): Promise<IModSettings> {
   
@@ -335,15 +444,13 @@ async function readLsxFile(lsxPath: string): Promise<IModSettings> {
   return parseStringPromise(dat);
 }
 
-async function writeModSettings(api: types.IExtensionApi, data: IModSettings): Promise<void> {
- 
-  const settingsPath = path.join(profilesPath(), 'Public', 'modsettings.lsx');
-
+async function writeModSettings(api: types.IExtensionApi, data: IModSettings, filepath: string): Promise<void> {
+  
   const builder = new Builder();
   const xml = builder.buildObject(data);
   try {
-    await fs.ensureDirWritableAsync(path.dirname(settingsPath));
-    await fs.writeFileAsync(settingsPath, xml);
+    await fs.ensureDirWritableAsync(path.dirname(filepath));
+    await fs.writeFileAsync(filepath, xml);
   } catch (err) {
     api.showErrorNotification('Failed to write mod settings', err);
     return;

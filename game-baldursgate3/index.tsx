@@ -19,7 +19,10 @@ import * as gitHubDownloader from './githubDownloader';
 import { IMod, IModTable } from 'vortex-api/lib/types/IState';
 import { reinterpretUntilZeros } from 'ref';
 import { ensureFileAsync } from 'vortex-api/lib/util/fs';
-import { deserialize, importModSettingsFile, importModSettingsGame, serialize, writeLoadOrder } from './loadOrder';
+import { deserialize, importModSettingsFile, importModSettingsGame, serialize, exportToGame, exportToFile } from './loadOrder';
+import Settings from './Settings';
+import { setPlayerProfile, settingsWritten } from './actions';
+import reducer from './reducers';
 
 const STOP_PATTERNS = ['[^/]*\\.pak$'];
 
@@ -29,26 +32,6 @@ const STEAM_ID = '1086940';
 function toWordExp(input) {
   return '(^|/)' + input + '(/|$)';
 }
-
-// actions
-const setPlayerProfile = createAction('BG3_SET_PLAYERPROFILE', name => name);
-const settingsWritten = createAction('BG3_SETTINGS_WRITTEN',
-  (profile: string, time: number, count: number) => ({ profile, time, count }));
-
-// reducer
-const reducer: types.IReducerSpec = {
-  reducers: {
-    [setPlayerProfile as any]: (state, payload) => util.setSafe(state, ['playerProfile'], payload),
-    [settingsWritten as any]: (state, payload) => {
-      const { profile, time, count } = payload;
-      return util.setSafe(state, ['settingsWritten', profile], { time, count });
-    },
-  },
-  defaults: {
-    playerProfile: 'global',
-    settingsWritten: {},
-  },
-};
 
 function documentsPath() {
   return path.join(util.getVortexPath('localAppData'), 'Larian Studios', 'Baldur\'s Gate 3');
@@ -1451,23 +1434,34 @@ function main(context: types.IExtensionContext) {
     usageInstructions: (() => (<InfoPanelWrap api={context.api} refresh={nop} />)) as any,
   });
 
-  context.registerAction('fb-load-order-icons', 150, 'changelog', {}, 'Export to Game', () => {writeLoadOrder(context.api);}, () => {
+  context.registerAction('fb-load-order-icons', 150, 'changelog', {}, 'Export to Game', () => { exportToGame(context.api); }, () => {
     const state = context.api.getState();
     const activeGame = selectors.activeGameId(state);
     return activeGame === GAME_ID;
   });
 
-  context.registerAction('fb-load-order-icons', 150, 'import', {}, 'Import from File...', () => { importModSettingsFile(context.api);}, () => {
+  context.registerAction('fb-load-order-icons', 151, 'changelog', {}, 'Export to File...', () => { exportToFile(context.api); }, () => {
     const state = context.api.getState();
     const activeGame = selectors.activeGameId(state);
     return activeGame === GAME_ID;
   });
 
-  context.registerAction('fb-load-order-icons', 150, 'import', {}, 'Import from Game', () => { importModSettingsGame(context.api);}, () => {
+  context.registerAction('fb-load-order-icons', 160, 'import', {}, 'Import from Game', () => { importModSettingsGame(context.api); }, () => {
     const state = context.api.getState();
     const activeGame = selectors.activeGameId(state);
     return activeGame === GAME_ID;
   });
+
+  context.registerAction('fb-load-order-icons', 161, 'import', {}, 'Import from File...', () => { 
+    importModSettingsFile(context.api); 
+  }, () => {
+    const state = context.api.getState();
+    const activeGame = selectors.activeGameId(state);
+    return activeGame === GAME_ID;
+  });
+
+  context.registerSettings('Mods', Settings, undefined, () =>
+    selectors.activeGameId(context.api.getState()) === GAME_ID, 150);
 
 
     context.once(() => {
