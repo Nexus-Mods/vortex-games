@@ -21,7 +21,7 @@ function modsPath() {
   return path.join(documentsPath(), 'Mods');
 }
 
-function profilesPath() {
+export function profilesPath() {
   return path.join(documentsPath(), 'PlayerProfiles');
 }
 

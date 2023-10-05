@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+## [1.3.3] - UNRELEASED
+
+- Backup of `modsettings.lsx` is created on initial managing of BG3
+- Initial import of `modsettings.lsx` happens when a backup isn't found (should solve migration issues) 
+
 ## [1.3.2] - UNRELEASED
 
 - Mods containing multiple PAK files can load order each individual pak

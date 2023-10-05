@@ -23,6 +23,7 @@ import { deserialize, importModSettingsFile, importModSettingsGame, serialize, e
 import Settings from './Settings';
 import { setPlayerProfile, settingsWritten } from './actions';
 import reducer from './reducers';
+import { migrate, migrate13 } from './migrations';
 
 const STOP_PATTERNS = ['[^/]*\\.pak$'];
 
@@ -72,10 +73,13 @@ async function ensureGlobalProfile(api: types.IExtensionApi, discovery: types.ID
 }
 
 function prepareForModding(api: types.IExtensionApi, discovery): any {
+
   const mp = modsPath();  
 
   checkForScriptExtender(api);
   showFullReleaseModFixerRecommendation(api); 
+  
+  console.log(`current extension version = `)
 
   api.sendNotification({
     id: 'bg3-uses-lslib',
@@ -753,11 +757,14 @@ async function listPackage(api: types.IExtensionApi, pakPath: string): Promise<s
 }
 
 async function isLOListed(api: types.IExtensionApi, pakPath: string): Promise<boolean> {
+  
   if (listCache[pakPath] === undefined) {
     listCache[pakPath] = listPackage(api, pakPath);
   }
+
   const lines = await listCache[pakPath];
   // const nonGUI = lines.find(line => !line.toLowerCase().startsWith('public/game/gui'));
+  
   const metaLSX = lines.find(line =>
     path.basename(line.split('\t')[0]).toLowerCase() === 'meta.lsx');
   
@@ -1170,6 +1177,16 @@ async function onGameModeActivated(api: types.IExtensionApi, gameId: string) {
   }
 
   try {
+    await migrate(api);
+  } catch (err) {
+    api.showErrorNotification(
+      'Failed to migrate', err, {
+        //message: 'Please run the game before you start modding',
+        allowReport: false,
+    });
+  }
+
+  try {
     await readStoredLO(api);
   } catch (err) {
     api.showErrorNotification(
@@ -1182,7 +1199,8 @@ async function onGameModeActivated(api: types.IExtensionApi, gameId: string) {
   const latestVer: string = getLatestInstalledLSLibVer(api);
   if (latestVer === '0.0.0') {
     await gitHubDownloader.downloadDivine(api);
-  }  
+  }
+
 }
 
 function testModFixer(files: string[], gameId: string): Bluebird<types.ISupportedResult> {
@@ -1419,11 +1437,10 @@ function main(context: types.IExtensionContext) {
     instructions => isReplacer(context.api, instructions),
     { name: 'BG3 Replacer' } as any);
 
-    context.registerModType('bg3-loose', 20, (gameId) => gameId === GAME_ID,
+  context.registerModType('bg3-loose', 20, (gameId) => gameId === GAME_ID,
     () => getGameDataPath(context.api), 
     instructions => isLoose(context.api, instructions),
     { name: 'BG3 Loose' } as any);
-
 
   context.registerLoadOrder({
     gameId: GAME_ID,
@@ -1463,8 +1480,9 @@ function main(context: types.IExtensionContext) {
   context.registerSettings('Mods', Settings, undefined, () =>
     selectors.activeGameId(context.api.getState()) === GAME_ID, 150);
 
+  //context.registerMigration((oldVersion) => Bluebird.resolve(migrate13(context.api, oldVersion)));
 
-    context.once(() => {
+  context.once(() => {
     context.api.onStateChange(['session', 'base', 'toolsRunning'],
       async (prev: any, current: any) => {
         // when a tool exits, re-read the load order from disk as it may have been

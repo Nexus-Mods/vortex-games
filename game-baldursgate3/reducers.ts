@@ -4,6 +4,7 @@ import { types, util } from 'vortex-api';
 // reducer
 const reducer: types.IReducerSpec = {
   reducers: {
+    [actions.setMigration as any]: (state, payload) => util.setSafe(state, ['migration'], payload),
     [actions.setAutoExportLoadOrder as any]: (state, payload) => util.setSafe(state, ['autoExportLoadOrder'], payload),
     [actions.setPlayerProfile as any]: (state, payload) => util.setSafe(state, ['playerProfile'], payload),
     [actions.settingsWritten as any]: (state, payload) => {
@@ -12,6 +13,7 @@ const reducer: types.IReducerSpec = {
     },
   },
   defaults: {
+    migration: true,
     autoExportLoadOrder: true,
     playerProfile: 'global',
     settingsWritten: {},
