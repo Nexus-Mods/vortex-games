@@ -8,18 +8,19 @@ export async function migrate(api: types.IExtensionApi): Promise<void> {
   const settingsPath = path.join(profilesPath(), 'Public', 'modsettings.lsx');
   const backupPath = settingsPath + '.backup';
 
-  console.log(`new migration ${settingsPath} ${backupPath}`);
 
   try {
     await fs.statAsync(backupPath); // if it doesn't exist, make a backup
   } 
   catch (err) {
 
-    console.log(`${backupPath} doesn't exist`);
+    console.log(`${backupPath} doesn't exist.`);
 
     try {
       await fs.statAsync(settingsPath); 
       await fs.copyAsync(settingsPath, backupPath, { overwrite: true } );
+      
+      console.log(`backup created`);
       
       // import
       await importModSettingsGame(api);
@@ -32,7 +33,6 @@ export async function migrate(api: types.IExtensionApi): Promise<void> {
   }
 
   // back up made just in case
-
 }
 
 export async function migrate13(api: types.IExtensionApi, oldVersion: string): Promise<void> {

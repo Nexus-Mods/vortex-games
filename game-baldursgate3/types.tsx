@@ -90,6 +90,7 @@ export type DivineAction = 'create-package' | 'list-package' | 'extract-single-f
   source: string;
   destination?: string;
   expression?: string;
+  loglevel?: 'off' | 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'all'
 }
 
 export interface IDivineOutput {

@@ -19,7 +19,7 @@ import * as gitHubDownloader from './githubDownloader';
 import { IMod, IModTable } from 'vortex-api/lib/types/IState';
 import { reinterpretUntilZeros } from 'ref';
 import { ensureFileAsync } from 'vortex-api/lib/util/fs';
-import { deserialize, importModSettingsFile, importModSettingsGame, serialize, exportToGame, exportToFile } from './loadOrder';
+import { deserialize, importModSettingsFile, importModSettingsGame, serialize, exportToGame, exportToFile, deepRefresh } from './loadOrder';
 import Settings from './Settings';
 import { setPlayerProfile, settingsWritten } from './actions';
 import reducer from './reducers';
@@ -1450,6 +1450,13 @@ function main(context: types.IExtensionContext) {
     toggleableEntries: false,
     usageInstructions: (() => (<InfoPanelWrap api={context.api} refresh={nop} />)) as any,
   });
+
+  /*
+  context.registerAction('fb-load-order-icons', 145, 'refresh', {}, 'Deep Refresh', () => { deepRefresh(context.api); }, () => {
+    const state = context.api.getState();
+    const activeGame = selectors.activeGameId(state);
+    return activeGame === GAME_ID;
+  });*/
 
   context.registerAction('fb-load-order-icons', 150, 'changelog', {}, 'Export to Game', () => { exportToGame(context.api); }, () => {
     const state = context.api.getState();

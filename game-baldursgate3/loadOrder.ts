@@ -195,6 +195,14 @@ export async function importModSettingsGame(api: types.IExtensionApi): Promise<b
   processLsxFile(api, gameSettingsPath);
 }
 
+function checkIfDuplicateExists(arr) {
+  return new Set(arr).size !== arr.length
+}
+
+function getAttribute(node: IModNode, name: string, fallback?: string):string {
+  return findNode(node?.attribute, name)?.$?.value ?? fallback;
+}
+
 async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {  
 
   const state = api.getState();
@@ -218,12 +226,36 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
     }
 
     // get nice string array, in order, of mods from the load order section
-    const uuidArray:string[] = loNode.children[0].node.map((loEntry) => loEntry.attribute.find(attr => (attr.$.id === 'UUID')).$.value);
+    let uuidArray:string[] = loNode.children[0].node.map((loEntry) => loEntry.attribute.find(attr => (attr.$.id === 'UUID')).$.value);
+
+
+    
     console.log(`processLsxFile uuidArray=`, uuidArray);
 
+    // are there any duplicates? if so...
+    if(checkIfDuplicateExists(uuidArray)) {
+      api.sendNotification({
+        type: 'warning',
+        id: 'bg3-loadorder-imported-duplicate',
+        title: 'Duplicate Entries',
+        message: 'Duplicate UUIDs found in the ModOrder section of the .lsx file being imported. This sometimes can cause issues with the load order.',
+        
+        //displayMS: 3000
+      }); 
+      
+      // remove these duplicates after the first one
+      //uuidArray = Array.from(new Set(uuidArray));
+    }   
+
+    const lsxModNodes:IModNode[] = modsNode.children[0].node;
+
+    /*
     // get mods, in the above order, from the mods section of the file 
-    const lsxMods:IModNode[] = uuidArray.map((uuid) => modsNode.children[0].node.find(modNode => modNode.attribute.find(attr => (attr.$.id === 'UUID') && (attr.$.value === uuid))));
-    console.log(`processLsxFile lsxMods=`, lsxMods);
+    const lsxMods:IModNode[] = uuidArray.map((uuid) => {
+      return lsxModNodes.find(modNode => modNode.attribute.find(attr => (attr.$.id === 'UUID') && (attr.$.value === uuid)));
+    });*/
+
+    console.log(`processLsxFile lsxModNodes=`, lsxModNodes);
 
     // we now have all the information from file that we need
 
@@ -232,7 +264,7 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
 
     // are there any pak files not in the lsx file?
     const missing = paks.reduce((acc, curr) => {      
-      if(lsxMods.find(lsxEntry => lsxEntry.attribute.find(attr => (attr.$.id === 'UUID') && (attr.$.value === curr.info.uuid))) === undefined) 
+      if(lsxModNodes.find(lsxEntry => lsxEntry.attribute.find(attr => (attr.$.id === 'Folder') && (attr.$.value === curr.info.name))) === undefined) 
         acc.push(curr);
       return acc;
     }, []);
@@ -242,9 +274,12 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
 
     //let newLoadOrder: types.ILoadOrderEntry[] = [];
 
-    let newLoadOrder: types.ILoadOrderEntry[] = lsxMods.reduce((acc, curr) => {
+
+    // loop through lsx mod nodes and find the pak they are associated with
+
+    let newLoadOrder: types.ILoadOrderEntry[] = lsxModNodes.reduce((acc, curr) => {
       // find the bg3Pak this is refering too as it's easier to get all the information
-      const pak = paks.find((entry) => entry.info.uuid === curr.attribute.find(attr => (attr.$.id === 'UUID')).$.value);
+      const pak = paks.find((pak) => pak.info.name === curr.attribute.find(attr => (attr.$.id === 'Folder')).$.value);
 
       // if the pak is found, then we add a load order entry. if it isn't, then its prob been deleted in vortex and lsx has an extra entry
       if (pak !== undefined) {
@@ -424,7 +459,16 @@ export async function exportToGame(api: types.IExtensionApi): Promise<boolean | 
   exportTo(api, settingsPath);
 }
 
+export async function deepRefresh(api: types.IExtensionApi): Promise<boolean | void> {
 
+  const state = api.getState();
+  const profileId = selectors.activeProfile(state)?.id;
+
+  // get load order from state
+  const loadOrder:types.LoadOrder = util.getSafe(api.getState(), ['persistent', 'loadOrder', profileId], []);
+
+  console.log('deepRefresh', loadOrder);
+}
 
 
 
@@ -533,22 +577,40 @@ async function readPAKs(api: types.IExtensionApi) : Promise<Array<BG3Pak>> {
 const listCache: { [path: string]: Promise<string[]> } = {};
 
 async function listPackage(api: types.IExtensionApi, pakPath: string): Promise<string[]> {
-  const res = await divine(api, 'list-package', { source: pakPath });
+  const res = await divine(api, 'list-package', { source: pakPath, loglevel: 'all'} );
+  
+  console.log(`listPackage res=`, res);
+  
   const lines = res.stdout.split('\n').map(line => line.trim()).filter(line => line.length !== 0);
+
+  console.log(`listPackage lines=`, lines);
+
   return lines;
 }
 
 async function isLOListed(api: types.IExtensionApi, pakPath: string): Promise<boolean> {
+  
+  /*
   if (listCache[pakPath] === undefined) {
     listCache[pakPath] = listPackage(api, pakPath);
-  }
-  const lines = await listCache[pakPath];
+  }  
+  const lines = await listCache[pakPath];*/
+
+  const lines = await listPackage(api, pakPath);
+
+  console.log(`lines ${pakPath}`, lines);
+
   // const nonGUI = lines.find(line => !line.toLowerCase().startsWith('public/game/gui'));
   const metaLSX = lines.find(line =>
     path.basename(line.split('\t')[0]).toLowerCase() === 'meta.lsx');
   
+    console.log('isLOListed metaLSX=', metaLSX);
+
     return metaLSX === undefined;
 }
+
+
+
 
 async function extractPakInfoImpl(api: types.IExtensionApi, pakPath: string, mod: types.IMod): Promise<IPakInfo> {
   const meta = await extractMeta(api, pakPath, mod);
@@ -562,6 +624,8 @@ async function extractPakInfoImpl(api: types.IExtensionApi, pakPath: string, mod
   const genName = path.basename(pakPath, path.extname(pakPath));
 
   let isListed = await isLOListed(api, pakPath);
+
+  console.log('extractPakInfoImpl()', meta);
 
   return {
     author: attr('Author', () => 'Unknown'),
@@ -603,9 +667,14 @@ function divine(api: types.IExtensionApi,
     const args = [
       '--action', action,
       '--source', options.source,
-      '--loglevel', 'off',
       '--game', 'bg3',
     ];
+
+    if (options.loglevel !== undefined) {
+      args.push('--loglevel', options.loglevel);
+    } else {
+      args.push('--loglevel', 'off');
+    }
 
     if (options.destination !== undefined) {
       args.push('--destination', options.destination);
