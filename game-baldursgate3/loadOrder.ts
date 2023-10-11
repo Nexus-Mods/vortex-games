@@ -140,13 +140,14 @@ export async function deserialize(context: types.IExtensionContext): Promise<typ
 
     console.log('deserialize paks=', paks);
 
+
     // Add any newly added mods to the bottom of the loadOrder.
     addedMods.forEach(pak => {
       filteredLoadOrder.push({
         id: pak.fileName,
         modId: pak.mod.id,
         enabled: true,  // not using load order for enabling/disabling      
-        name: pak.info.name,
+        name: path.basename(pak.fileName, '.pak'),
         data: pak.info,
         locked: pak.info.isListed as LockedState        
       })      
@@ -278,8 +279,9 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
     // loop through lsx mod nodes and find the pak they are associated with
 
     let newLoadOrder: types.ILoadOrderEntry[] = lsxModNodes.reduce((acc, curr) => {
+      
       // find the bg3Pak this is refering too as it's easier to get all the information
-      const pak = paks.find((pak) => pak.info.name === curr.attribute.find(attr => (attr.$.id === 'Folder')).$.value);
+      const pak = paks.find((pak) => pak.info.name === curr.attribute.find(attr => (attr.$.id === 'Name')).$.value);
 
       // if the pak is found, then we add a load order entry. if it isn't, then its prob been deleted in vortex and lsx has an extra entry
       if (pak !== undefined) {
@@ -287,7 +289,7 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
           id: pak.fileName,
           modId: pak.mod.id,
           enabled: true,        
-          name: pak.info.name,
+          name: path.basename(pak.fileName, '.pak'),
           data: pak.info,
           locked: pak.info.isListed as LockedState        
         });
@@ -304,7 +306,7 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
         id: pak.fileName,
         modId: pak.mod.id,
         enabled: true,        
-        name: pak.info.name,
+        name: path.basename(pak.fileName, '.pak'),
         data: pak.info,
         locked: pak.info.isListed as LockedState        
       })      
