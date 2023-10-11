@@ -145,7 +145,7 @@ export async function deserialize(context: types.IExtensionContext): Promise<typ
       filteredLoadOrder.push({
         id: pak.fileName,
         modId: pak.mod.id,
-        enabled: true,        
+        enabled: true,  // not using load order for enabling/disabling      
         name: pak.info.name,
         data: pak.info,
         locked: pak.info.isListed as LockedState        
@@ -577,7 +577,14 @@ async function readPAKs(api: types.IExtensionApi) : Promise<Array<BG3Pak>> {
 const listCache: { [path: string]: Promise<string[]> } = {};
 
 async function listPackage(api: types.IExtensionApi, pakPath: string): Promise<string[]> {
-  const res = await divine(api, 'list-package', { source: pakPath, loglevel: 'all'} );
+
+  let res;
+
+  try {
+        res = await divine(api, 'list-package', { source: pakPath, loglevel: 'off'} );
+  } catch(error) {    
+    console.error(`listPackage caught error: `, error);
+  }
   
   console.log(`listPackage res=`, res);
   
@@ -596,17 +603,48 @@ async function isLOListed(api: types.IExtensionApi, pakPath: string): Promise<bo
   }  
   const lines = await listCache[pakPath];*/
 
-  const lines = await listPackage(api, pakPath);
+  const maxRetries = 3;
+  let retryCounter = 0; 
+  let lines:string[];
 
-  console.log(`lines ${pakPath}`, lines);
+  while (retryCounter < maxRetries) {
+
+    lines = await listPackage(api, pakPath);
+    console.log(`isLOListed ${path.basename(pakPath)} retries=${retryCounter}/${maxRetries} lines`, lines);
+
+    // got a response so lets break out of this loop
+    if(lines.length > 0) {
+      break;
+    }
+
+    // add to the counter and try again
+    retryCounter++;
+
+    if(retryCounter === maxRetries) {
+
+      api.sendNotification({
+        type: 'error',
+        message: `${path.basename(pakPath)} couldn't be read correctly. This mod be incorrectly locked/unlocked but will default to unlocked.`,
+      });
+      
+      // return false so we default to unlocked
+      return false;
+    }
+
+    console.warn(`isLOListed ${path.basename(pakPath)}: lines shouldn't be 0. need to retry.`);
+  }
 
   // const nonGUI = lines.find(line => !line.toLowerCase().startsWith('public/game/gui'));
-  const metaLSX = lines.find(line =>
-    path.basename(line.split('\t')[0]).toLowerCase() === 'meta.lsx');
-  
-    console.log('isLOListed metaLSX=', metaLSX);
 
-    return metaLSX === undefined;
+  // example 'Mods/Safe Edition/meta.lsx\t1759\t0'
+
+  // look at the end of the first bit of data to see if it has a meta.lsx file
+  const containsMetaFile = lines.find(line => path.basename(line.split('\t')[0]).toLowerCase() === 'meta.lsx') !== undefined ? true : false;
+
+  console.log(`isLOListed ${path.basename(pakPath)} containsMetaFile=`, containsMetaFile);
+
+  // invert result as 'listed' means it doesn't contain a meta file.
+  return !containsMetaFile;
 }
 
 
@@ -623,9 +661,14 @@ async function extractPakInfoImpl(api: types.IExtensionApi, pakPath: string, mod
 
   const genName = path.basename(pakPath, path.extname(pakPath));
 
-  let isListed = await isLOListed(api, pakPath);
+  let isListed:boolean;
 
-  console.log('extractPakInfoImpl()', meta);
+  try{
+    isListed = await isLOListed(api, pakPath);
+  } catch(error) {
+    console.log('extractPakInfoImpl caught error:', error);
+  }
+  
 
   return {
     author: attr('Author', () => 'Unknown'),
