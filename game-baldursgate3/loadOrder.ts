@@ -209,6 +209,15 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
   const state = api.getState();
   const profileId = selectors.activeProfile(state)?.id;
 
+  api.sendNotification({
+    id: 'bg3-loadorder-import-activity',
+    title: 'Importing LSX File',
+    message: lsxPath,
+    type: 'activity',
+    noDismiss: true,
+    allowSuppress: false,
+  });
+
   try {
 
     const lsxLoadOrder:IModSettings = await readLsxFile(lsxPath);
@@ -228,8 +237,6 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
 
     // get nice string array, in order, of mods from the load order section
     let uuidArray:string[] = loNode.children[0].node.map((loEntry) => loEntry.attribute.find(attr => (attr.$.id === 'UUID')).$.value);
-
-
     
     console.log(`processLsxFile uuidArray=`, uuidArray);
 
@@ -265,10 +272,11 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
 
     // are there any pak files not in the lsx file?
     const missing = paks.reduce((acc, curr) => {      
-      if(lsxModNodes.find(lsxEntry => lsxEntry.attribute.find(attr => (attr.$.id === 'Folder') && (attr.$.value === curr.info.name))) === undefined) 
+      if(lsxModNodes.find(lsxEntry => lsxEntry.attribute.find(attr => (attr.$.id === 'Name') && (attr.$.value === curr.info.name))) === undefined) 
         acc.push(curr);
       return acc;
     }, []);
+
     console.log('processLsxFile missing=', missing);
 
     // build a load order from the lsx file and add any missing paks at the end?
@@ -298,7 +306,7 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
       return acc;
     }, []);   
 
-    console.log('processLsxFile newLoadOrder=', newLoadOrder);
+    console.log('processLsxFile (before adding missing) newLoadOrder=', newLoadOrder);
 
     // Add any newly added mods to the bottom of the loadOrder.
     missing.forEach(pak => {
@@ -312,13 +320,15 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
       })      
     });   
 
+    console.log('processLsxFile (after adding missing) newLoadOrder=', newLoadOrder);
+
     newLoadOrder.sort((a, b) => (+b.locked - +a.locked));
 
-    console.log('processLsxFile newLoadOrder=', newLoadOrder);
+    console.log('processLsxFile (after sorting) newLoadOrder=', newLoadOrder);
 
     // get load order
-    let loadOrder:types.LoadOrder = util.getSafe(api.getState(), ['persistent', 'loadOrder', profileId], []);
-    console.log('processLsxFile loadOrder=', loadOrder);
+    //let loadOrder:types.LoadOrder = util.getSafe(api.getState(), ['persistent', 'loadOrder', profileId], []);
+    //console.log('processLsxFile loadOrder=', loadOrder);
 
     // manualy set load order?
     api.store.dispatch(actions.setLoadOrder(profileId, newLoadOrder));
@@ -326,8 +336,10 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
     //util.setSafe(api.getState(), ['persistent', 'loadOrder', profileId], newLoadOrder);
 
     // get load order again?
-    loadOrder = util.getSafe(api.getState(), ['persistent', 'loadOrder', profileId], []);
-    console.log('processLsxFile loadOrder=', loadOrder);
+    //loadOrder = util.getSafe(api.getState(), ['persistent', 'loadOrder', profileId], []);
+    //console.log('processLsxFile loadOrder=', loadOrder);
+
+    api.dismissNotification('bg3-loadorder-import-activity');
 
     api.sendNotification({
       type: 'success',
@@ -340,10 +352,14 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
     console.log('processLsxFile finished');
 
   } catch (err) {
+    
+    api.dismissNotification('bg3-loadorder-import-activity');
+
     api.showErrorNotification('Failed to import load order', err, {
       allowReport: false
     });
   }
+
 }
 
 async function exportTo(api: types.IExtensionApi, filepath: string) {
@@ -521,7 +537,7 @@ async function readPAKs(api: types.IExtensionApi) : Promise<Array<BG3Pak>> {
   
   const paks = await readPAKList(api);
 
-  console.log('paks', { paks: paks });
+  console.log('paks', paks);
 
   let manifest;
   try {
@@ -588,11 +604,11 @@ async function listPackage(api: types.IExtensionApi, pakPath: string): Promise<s
     console.error(`listPackage caught error: `, error);
   }
   
-  console.log(`listPackage res=`, res);
+  //console.log(`listPackage res=`, res);
   
   const lines = res.stdout.split('\n').map(line => line.trim()).filter(line => line.length !== 0);
 
-  console.log(`listPackage lines=`, lines);
+  //console.log(`listPackage lines=`, lines);
 
   return lines;
 }
@@ -612,7 +628,7 @@ async function isLOListed(api: types.IExtensionApi, pakPath: string): Promise<bo
   while (retryCounter < maxRetries) {
 
     lines = await listPackage(api, pakPath);
-    console.log(`isLOListed ${path.basename(pakPath)} retries=${retryCounter}/${maxRetries} lines`, lines);
+    //console.log(`isLOListed ${path.basename(pakPath)} retries=${retryCounter}/${maxRetries} lines`, lines);
 
     // got a response so lets break out of this loop
     if(lines.length > 0) {
@@ -623,6 +639,8 @@ async function isLOListed(api: types.IExtensionApi, pakPath: string): Promise<bo
     retryCounter++;
 
     if(retryCounter === maxRetries) {
+      
+      console.error(`isLOListed ${path.basename(pakPath)} retries=${retryCounter}/${maxRetries}: lines shouldn't be 0 and we've run out of retries.`);
 
       api.sendNotification({
         type: 'error',
@@ -633,7 +651,7 @@ async function isLOListed(api: types.IExtensionApi, pakPath: string): Promise<bo
       return false;
     }
 
-    console.warn(`isLOListed ${path.basename(pakPath)}: lines shouldn't be 0. need to retry.`);
+    console.warn(`isLOListed ${path.basename(pakPath)} retries=${retryCounter}/${maxRetries}: lines shouldn't be 0. need to retry.`);
   }
 
   // const nonGUI = lines.find(line => !line.toLowerCase().startsWith('public/game/gui'));
@@ -643,7 +661,7 @@ async function isLOListed(api: types.IExtensionApi, pakPath: string): Promise<bo
   // look at the end of the first bit of data to see if it has a meta.lsx file
   const containsMetaFile = lines.find(line => path.basename(line.split('\t')[0]).toLowerCase() === 'meta.lsx') !== undefined ? true : false;
 
-  console.log(`isLOListed ${path.basename(pakPath)} containsMetaFile=`, containsMetaFile);
+  //console.log(`isLOListed ${path.basename(pakPath)} containsMetaFile=`, containsMetaFile);
 
   // invert result as 'listed' means it doesn't contain a meta file.
   return !containsMetaFile;
