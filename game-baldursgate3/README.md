@@ -81,3 +81,7 @@ The below instructions should reset the game files and allow you to continue you
 * [Mod Compatibility List (Nexus Forums) ](https://forums.nexusmods.com/index.php?/topic/13287213-baldurs-gate-3-mod-compatibility-megathread/)
 * [Vortex Support (Nexus Forums) ](https://forums.nexusmods.com/index.php?/forum/4306-vortex-support/)
 * [Vortex Support (Discord)](https://discord.com/channels/215154001799413770/408252140533055499)
+
+# Thanks!
+
+Thank you to all members of the #vortex-baldursgate3 discord channel that have spent time and effort to help test this extension before we send out into the wild. It's a pretty big update and their input has been invaluable when trying to find those niche issues and to just have more eyes on. We have plenty of plans to further Baldur's Gate 3 support and hopefully everyone will be just as willing to test and help make decisions around the best way to tackle it.
