@@ -437,14 +437,16 @@ function InfoPanel(props) {
   }, [onSetPlayerProfile]);
 
   return isLsLibInstalled() ? (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>      
-      <Alert bsStyle='warning'>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginRight: '16px' }}>      
+      <Alert bsStyle='warning' style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      <div>
         {t(`Version 0.3 of the extension is almost a complete rewrite of load order and migration from previous versions may cause issues.
-        A Purge then a Deploy will normally solve all issues but please make a backup first using Export... as the load order will be reset.
-        \r\n
-        A backup is made of the game's modsettings.lsx file before anything is changed.
-        This can be found at %APPDATA%\\Local\\Larian Studios\\Baldur's Gate 3\\PlayerProfiles\\Public\\modsettings.lsx.backup
-        `)}
+        A Purge then a Deploy will normally solve all issues but please make a backup first using Export... as the load order will be reset.`)}
+        </div>
+        <div>
+        {t(`A backup is made of the game's modsettings.lsx file before anything is changed.
+        This can be found at %APPDATA%\\Local\\Larian Studios\\Baldur's Gate 3\\PlayerProfiles\\Public\\modsettings.lsx.backup`)}
+        </div>
       </Alert>    
       <div>
         {t(`Drag and Drop PAK files to reorder how the game loads them. Please note, some mods contain multiple PAK files.`)}

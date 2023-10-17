@@ -8,6 +8,8 @@ Please see: [Getting Started with Vortex](/en/vortex/users/getting-started)
 
 Open up Vortex and navigate to the Games page. Use the 'Manage' button on the game tile to add it to your managed games. If you can’t see Baldur's Gate 3, you can scan for it or define it manually.
 
+On first load, you will be prompted to install LSLib and the recommended, but optional, 'Mod Fixer' mod (see below Dependencies). 
+
 ### Migration
 
 If migrating from an existing version (older than 0.3), there are some extra things to be aware of.
@@ -19,6 +21,10 @@ If migrating from an existing version (older than 0.3), there are some extra thi
 * Vortex defaults to keeping the game's `modsettings.lsx` file in sync with it's own load order as this is what the majority of users will expect. If you don't want this to be the case, see the Settings section below to turn it off and use the backup made above to put your original game load order back. Please note: when this setting is off, the game's load order is never set.
 
 # Dependencies
+
+### Mod Fixer
+
+As Baldur's Gate 3 doesn't have official mod support ([yet](https://larian.com/support/faqs/mod-information_77)), a fix is needed so that certain mod types work. Some mods already include this fix as part of what they are doing anyway and there is no harm in having this fix multiple times. Vortex will notify you of 'Recommended Mods' and will link to [Baldur's Gate 3 Mod Fixer](https://www.nexusmods.com/baldursgate3/mods/141?tab=description) on Nexus Mods to download it.
 
 ### LSLib
 
