@@ -29,11 +29,12 @@ function Settings() {
               checked={autoExportLoadOrder}
               onToggle={setUseAutoExportLoadOrderToGame}
             >
-              {t('Auto export load order to game on deploy')}
+              {t('Auto export load order')}
             </Toggle>
             <HelpBlock>
-              {t('If checked, when Vortex deploys mods to the game it will also export the load order. ' +
-              'If it\s not checked and you wish the game to use your load order, then this will need to be completed manually using the buttons on the load order screen')}
+              {t(`If enabled, when Vortex saves it's load order, it will also update the games load order. 
+              If disabled, and you wish the game to use your load order, then this will need to be completed 
+              manually using the Export to Game button on the load order screen`)}
             </HelpBlock>
           </Panel.Body>
         </Panel>

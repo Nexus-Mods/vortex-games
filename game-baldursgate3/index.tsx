@@ -437,53 +437,51 @@ function InfoPanel(props) {
   }, [onSetPlayerProfile]);
 
   return isLsLibInstalled() ? (
-    <div style={{ display: 'flex', flexDirection: 'column', padding: '16px' }}>
-      <div style={{ display: 'flex', whiteSpace: 'nowrap', alignItems: 'center' }}>
-        {t('Ingame Profile: ')}
-        {supportsProfiles ? (
-          <FormControl
-            componentClass='select'
-            name='userProfile'
-            className='form-control'
-            value={currentProfile}
-            onChange={onSelect}
-          >
-            <option key='global' value='global'>{t('All Profiles')}</option>
-            {getPlayerProfiles().map(prof => (<option key={prof} value={prof}>{prof}</option>))}
-          </FormControl>
-        ) : null}
-      </div>
-      {supportsProfiles ? null : (
-        <div>
-          <Alert bsStyle='info'>
-            {t('Patch 9 removed the feature of switching profiles inside the game, savegames are '
-              + 'now tied to the character.\n It is currently unknown if these profiles will '
-              + 'return but of course you can continue to use Vortex profiles.')}
-          </Alert>
-        </div>
-      )}
-      <hr/>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>      
+      <Alert bsStyle='warning'>
+        {t(`Version 0.3 of the extension is almost a complete rewrite of load order and migration from previous versions may cause issues.
+        A Purge then a Deploy will normally solve all issues but please make a backup first using Export... as the load order will be reset.
+        \r\n
+        A backup is made of the game's modsettings.lsx file before anything is changed.
+        This can be found at %APPDATA%\\Local\\Larian Studios\\Baldur's Gate 3\\PlayerProfiles\\Public\\modsettings.lsx.backup
+        `)}
+      </Alert>    
       <div>
-        {t('Please refer to mod descriptions from mod authors to determine the right order. '
-          + 'If you can\'t find any suggestions for a mod, it probably doesn\'t matter.')}
-        <hr/>
-        {t('Some mods may be locked in this list because they are loaded differently by the engine '
-          + 'and can therefore not be load-ordered by mod managers. If you want to disable '
-          + 'such a mod, please do so on the "Mods" screen.')}
+        {t(`Drag and Drop PAK files to reorder how the game loads them. Please note, some mods contain multiple PAK files.`)}
+      </div>  
+      <div>
+        {t(`Mod descriptions from mod authors may have information to determine the best order.`)}
       </div>
+      <div>
+        {t(`Some mods may be locked in this list because they are loaded differently by the game and can therefore not be load-ordered by mod managers. 
+        If you need to disable such a mod, please do so in Vortex\'s Mods page.`)}
+      </div>
+      <h4 style={{ margin: 0 }}>
+        {t('Import and Export')}
+      </h4>
+      <div>
+        {t(`Import is an experimental tool to help migration from a game load order (.lsx file) to Vortex. It works by importing the game's modsettings file
+        and attempts to match up mods that have been installed by Vortex.`)}
+      </div>
+      <div>
+        {t(`Export can be used to manually update the game's modsettings.lsx file if 'Settings > Mods > Auto export load order' isn't set to do this automatically. 
+        It can also be used to export to a different file as a backup.`)}
+      </div>
+  
     </div>
   ) : (
-    <div style={{ display: 'flex', flexDirection: 'column', padding: '16px' }}>
-      <div style={{ display: 'flex', whiteSpace: 'nowrap', alignItems: 'center' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <h4 style={{ margin: 0 }}>
         {t('LSLib is not installed')}
-      </div>
-      <hr/>
+      </h4>
       <div>
-        {t('To take full advantage of Vortex\'s BG3 modding capabilities such as managing the '
-         + 'order in which mods are loaded into the game; Vortex requires a 3rd party tool "LSLib", '
-         + 'please install the library using the buttons below to manage your load order.')}
+        {t('To take full advantage of Vortex\'s Baldur\s Gate 3 modding capabilities such as managing the '
+         + 'order in which mods are loaded into the game; Vortex requires a 3rd party tool called LSLib.')}
       </div>
-      <tooltip.Button
+      <div>
+        {t('Please install the library using the buttons below to manage your load order.')}
+      </div>
+        <tooltip.Button
         tooltip={'Install LSLib'}
         onClick={onInstallLSLib}
       >
