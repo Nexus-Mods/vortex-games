@@ -1,8 +1,10 @@
 # Requirements
 
-Before we get started, this guide assumes that you have installed Baldur's Gate 3 and Vortex at their default locations. You will also need to be logged in to your Nexus Mods account in Vortex.
+Before we get started, this guide assumes that you have installed Baldur's Gate 3 and Vortex at their default locations. You will also need to be logged in to your Nexus Mods account in Vortex. For more information, please see [Getting Started with Vortex](/en/vortex/users/getting-started).
 
-Please see: [Getting Started with Vortex](/en/vortex/users/getting-started)
+The [Steam](https://store.steampowered.com/agecheck/app/1086940/) and [GOG](https://www.gog.com/en/game/baldurs_gate_iii) versions of Baldur's Gate 3 are both supported.
+
+
 
 # Getting Set Up
 

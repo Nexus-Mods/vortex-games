@@ -129,8 +129,27 @@ export async function deserialize(context: types.IExtensionContext): Promise<typ
 
     console.log('deserialize filteredLoadOrder=', filteredLoadOrder);
 
+    // filter out pak files that don't have a corresponding mod (which means Vortex didn't install it/isn't aware of it)
+    //const paksWithMods:BG3Pak[] = paks.filter(pak => pak.mod !== undefined);
+
+      // go through each pak file in the Mods folder...
+    const processedPaks = paks.reduce((acc, curr) => {      
+
+      // if pak file doesn't have an associated mod, then we don't want to deal with it
+      if(curr.mod === undefined) {
+        acc.invalid.push(curr); 
+        return acc;
+      }
+      
+      acc.valid.push(curr);
+      return acc;
+
+    }, { valid: [], invalid: [] });
+
+    console.log('deserialize processedPaks=', processedPaks);
+
     // get any pak files that aren't in the filteredLoadOrder
-    const addedMods:BG3Pak[] = paks.filter(pak => filteredLoadOrder.find(entry => entry.id === pak.fileName) === undefined);
+    const addedMods:BG3Pak[] = processedPaks.valid.filter(pak => filteredLoadOrder.find(entry => entry.id === pak.fileName) === undefined);
 
     console.log('deserialize addedMods=', addedMods);
     
