@@ -4,7 +4,7 @@ function main(context) {
     executable: null,
     mergeMods: false,
     name: 'Starfield',
-    queryModPath: () => '',
+    queryModPath: () => '.',
     requiredFiles: [],
   }, {
     name: 'Game: Starfield',
