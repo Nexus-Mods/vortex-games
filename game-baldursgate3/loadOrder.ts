@@ -129,8 +129,27 @@ export async function deserialize(context: types.IExtensionContext): Promise<typ
 
     console.log('deserialize filteredLoadOrder=', filteredLoadOrder);
 
+    // filter out pak files that don't have a corresponding mod (which means Vortex didn't install it/isn't aware of it)
+    //const paksWithMods:BG3Pak[] = paks.filter(pak => pak.mod !== undefined);
+
+      // go through each pak file in the Mods folder...
+    const processedPaks = paks.reduce((acc, curr) => {      
+
+      // if pak file doesn't have an associated mod, then we don't want to deal with it
+      if(curr.mod === undefined) {
+        acc.invalid.push(curr); 
+        return acc;
+      }
+      
+      acc.valid.push(curr);
+      return acc;
+
+    }, { valid: [], invalid: [] });
+
+    console.log('deserialize processedPaks=', processedPaks);
+
     // get any pak files that aren't in the filteredLoadOrder
-    const addedMods:BG3Pak[] = paks.filter(pak => filteredLoadOrder.find(entry => entry.id === pak.fileName) === undefined);
+    const addedMods:BG3Pak[] = processedPaks.valid.filter(pak => filteredLoadOrder.find(entry => entry.id === pak.fileName) === undefined);
 
     console.log('deserialize addedMods=', addedMods);
     
@@ -271,18 +290,26 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
     const paks = await readPAKs(api);
 
     // are there any pak files not in the lsx file?
-    const missing = paks.reduce((acc, curr) => {      
+    const missing = paks.reduce((acc, curr) => {  
+
+      // if current pak has no associated pak, then we skip. we defintely aren't adding this pak if vortex hasn't managed it.
+      if(curr.mod === undefined) {
+        return acc;
+      }
+
+      // if current pak, which vortex has definately managed, isn't already in the lsx file, then this is missing and we need to load order
       if(lsxModNodes.find(lsxEntry => lsxEntry.attribute.find(attr => (attr.$.id === 'Name') && (attr.$.value === curr.info.name))) === undefined) 
         acc.push(curr);
+
+      // skip this 
       return acc;
     }, []);
 
-    console.log('processLsxFile missing=', missing);
+    console.log('processLsxFile - missing pak files that have associated mods =', missing);
 
     // build a load order from the lsx file and add any missing paks at the end?
 
     //let newLoadOrder: types.ILoadOrderEntry[] = [];
-
 
     // loop through lsx mod nodes and find the pak they are associated with
 
