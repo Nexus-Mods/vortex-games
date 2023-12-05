@@ -30,42 +30,7 @@ const spec = {
 
 
 const tools = [
-  /*
-  {
-    // unique id
-    id: 'skse',
-    // display name of the tool
-    name: 'Skyrim Script Extender',
-    // optional short name for cases where the UI has limited space
-    shortName: 'SKSE',
-    // the executable to to run
-    executable: () => 'skse_loader.exe',
-    // list of command line parameters to pass to the tool
-    parameters: [
-      // '--foobar', '--fullscreen'
-    ],
-    // files that need to exist in the tool directory. This is used
-    // for the automatic detection of the tool
-    requiredFiles: [
-      'skse_loader.exe',
-    ],
-    // if true, the tool is run in a shell. Some applications written to be run
-    // from the command line/prompt will not work correctly otherwise
-    shell: false,
-    // if true, the tool will be a detached process, meaning that if Vortex is closed,
-    // the tool is not terminated.
-    detach: false,
-    // set this to true if the tool is installed in the same directory as the
-    // game. This helps automatic discovery of the tool
-    relative: true,
-    // if set, Vortex will not start other tools or the game while this one is running.
-    // set this to true if the tools may interfere with each other or if you're unsure
-    exclusive: true,
-    // if this is true and the tool is detected, whenever the user starts the game,
-    // this tool is run instead.
-    defaultPrimary: true,
-  },
-  */
+
 ];
 
 
