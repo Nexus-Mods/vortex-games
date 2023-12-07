@@ -19,7 +19,7 @@ export function isModInCollection(collectionMod: types.IMod, mod: types.IMod) {
 export function genCollectionLoadOrder(loadOrder: string[],
                                        mods: { [modId: string]: types.IMod },
                                        collection?: types.IMod): string[] {
-  const sortedMods = loadOrder.filter(loId => {
+  const sortedMods = (loadOrder || []).filter(loId => {
     const modId = getModId(mods, loId);
     return (collection !== undefined)
       ? isValidMod(mods[modId]) && (isModInCollection(collection, mods[modId]))
