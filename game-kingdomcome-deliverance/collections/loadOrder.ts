@@ -12,14 +12,12 @@ export async function exportLoadOrder(state: types.IState,
     return Promise.reject(new util.ProcessCanceled('Invalid profile id'));
   }
 
-  const loadOrder: string[] = util.getSafe(state,
-    ['persistent', 'loadOrder', profileId], undefined);
-  if (loadOrder === undefined) {
+  const loadOrder: string[] = util.getSafe(state, ['persistent', 'loadOrder', profileId], []);
+  if (!loadOrder) {
     return Promise.resolve(undefined);
   }
 
-  const filteredLO: string[] = loadOrder.filter(lo =>
-    modIds.find(id => transformId(id) === lo) !== undefined);
+  const filteredLO: string[] = loadOrder.filter(lo => modIds.some(id => transformId(id) === lo));
   return Promise.resolve(filteredLO);
 }
 
