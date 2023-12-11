@@ -10,7 +10,7 @@ import { GAME_ID, INVALID_LO_MOD_TYPES, LO_FILE_NAME } from './common';
 import { BG3Pak, DivineAction, IDivineOptions, IDivineOutput, IModNode, IModSettings, IPakInfo, IProps, IXmlNode } from './types';
 import { Builder, parseStringPromise } from 'xml2js';
 import { LockedState } from 'vortex-api/lib/extensions/file_based_loadorder/types/types';
-import { IOpenOptions } from 'vortex-api/lib/types/IExtensionContext';
+import { IOpenOptions, ISaveOptions } from 'vortex-api/lib/types/IExtensionContext';
 
 
 function documentsPath() {
@@ -478,13 +478,30 @@ async function exportTo(api: types.IExtensionApi, filepath: string) {
 
 export async function exportToFile(api: types.IExtensionApi): Promise<boolean | void> {
 
-  const options: IOpenOptions = {
-    title: api.translate('Please choose a BG3 .lsx file to export to'),
-    filters: [{ name: 'BG3 Load Order', extensions: ['lsx'] }],
-    create: true
-  };
+  let selectedPath:string;
 
-  const selectedPath:string = await api.selectFile(options);
+  // an older version of Vortex might not have the updated api.saveFile function so will fallback
+  // to the previous hack job of selectFile but actually writes
+  
+  if(api.saveFile !== undefined) {
+
+    const options: ISaveOptions = {
+      title: api.translate('Please choose a BG3 .lsx file to export to'),
+      filters: [{ name: 'BG3 Load Order', extensions: ['lsx'] }],      
+    };
+
+    selectedPath = await api.saveFile(options);    
+
+  } else {
+
+    const options: IOpenOptions = {
+      title: api.translate('Please choose a BG3 .lsx file to export to'),
+      filters: [{ name: 'BG3 Load Order', extensions: ['lsx'] }],
+      create: true
+    };
+
+    selectedPath = await api.selectFile(options);
+  }
 
   console.log(`exportToFile ${selectedPath}`);
 
