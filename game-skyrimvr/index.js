@@ -6,6 +6,7 @@ const winapi = require('winapi-bindings');
 
 const GAME_ID = 'skyrimvr';
 const ESL_ENABLER_LIB = 'skyrimvresl.dll';
+const ESL_NOTIF_ID = 'skyvr-esl-enabler-notif';
 
 function findGame() {
   try {
@@ -80,7 +81,57 @@ function isESLSupported(api) {
   const isEnabled = (modId) => util.getSafe(modState, [modId, 'enabled'], false);
   const mods = util.getSafe (state, ['persistent', 'mods', GAME_ID], {});
   const hasESLEnabler = Object.keys(mods).some(modId => isEnabled(modId) && mods[modId].attributes.eslEnabler === true);
+  if (hasESLEnabler) {
+    api.dismissNotification(ESL_NOTIF_ID);
+  }
   return hasESLEnabler;
+}
+
+function testEslEnabler(files, gameId) {
+  const isSkyrimVR = gameId === GAME_ID;
+  const isESLEnabler = files.some(file => file.toLowerCase().endsWith(ESL_ENABLER_LIB));
+  return Promise.resolve({
+    supported: isSkyrimVR && isESLEnabler,
+    requiredFiles: [],
+  });
+}
+
+function installEslEnabler(files, destinationPath) {
+  const filtered = files.filter(file => path.extname(file) !== '');
+  const instructions = filtered.map(file => {
+    const segments = file.split(path.sep);
+    segments.splice(0, 1, 'Data');
+    return {
+      type: 'copy',
+      source: file,
+      destination: segments.join(path.sep),
+    };
+  });
+
+  // Remove this once the mod type conflict issue is resolved
+  instructions.push({ type: 'setmodtype', value: 'dinput' });
+  instructions.push({ type: 'attribute', key: 'eslEnabler', value: true });
+
+  return Promise.resolve({ instructions });
+}
+
+function prepare(api, discovery) {
+  if (isESLSupported(api)) {
+    return Promise.resolve();
+  }
+
+  api.sendNotification({
+    id: ESL_NOTIF_ID,
+    type: 'info',
+    title: 'ESL Support',
+    message: 'Skyrim VR requires a mod to enable ESL support. Mod must be installed through Vortex for ESL support to work.',
+    actions: [
+      {
+        title: 'Download',
+        action: () => util.opn('https://www.nexusmods.com/skyrimspecialedition/mods/106712?tab=files').catch(() => {}),
+      },
+    ],
+  });
 }
 
 function main(context) {
@@ -94,6 +145,7 @@ function main(context) {
     logo: 'gameart.jpg',
     executable: () => 'SkyrimVR.exe',
     getGameVersion,
+    setup: (discovery) => prepare(context.api, discovery),
     requiredFiles: [
       'SkyrimVR.exe',
     ],
@@ -107,7 +159,14 @@ function main(context) {
     }
   });
 
+  context.registerInstaller('skyvr-esl-enabler', 10, testEslEnabler, installEslEnabler);
+
   context.once(() => {
+    context.api.events.on('gamemode-activated', (gameId) => {
+      if (gameId !== GAME_ID) {
+        context.api.dismissNotification(ESL_NOTIF_ID);
+      }
+    });
     context.api.onAsync('did-deploy', (profileId, newDeployment) => {
       const state = context.api.getState();
       const profile = selectors.profileById(state, profileId);
