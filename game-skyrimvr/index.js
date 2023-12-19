@@ -134,6 +134,11 @@ function prepare(api, discovery) {
   });
 }
 
+const sortAndResolve = (api) => {
+  api.events.emit('autosort-plugins', false);
+  return Promise.resolve();
+}
+
 function main(context) {
   context.registerGame({
     id: GAME_ID,
@@ -182,22 +187,21 @@ function main(context) {
       const deployedFiles = newDeployment[''];
       const modESLEnabler = deployedFiles.find(file => file.relPath.toLowerCase().endsWith(ESL_ENABLER_LIB));
       if (modESLEnabler === undefined) {
-        return Promise.resolve();
+        return sortAndResolve(context.api);
       }
 
       const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
       const mod = Object.values(mods).find(mod => mod.installationPath === modESLEnabler.source);
       if (mod === undefined || mod.attributes.eslEnabler === true) {
-        return Promise.resolve();
+        return sortAndResolve(context.api);
       }
 
       const modAttributes = {
         ...mod.attributes,
         eslEnabler: true,
       };
-
       context.api.store.dispatch(actions.setModAttributes(GAME_ID, mod.id, modAttributes));
-      return Promise.resolve();
+      return sortAndResolve(context.api);
     });
   });
 
