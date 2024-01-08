@@ -123,11 +123,12 @@ function showFullReleaseModFixerRecommendation(api: types.IExtensionApi) {
     }
   }
 
-  // no mounds found
+  // no mods found
   api.sendNotification({
     type: 'warning',
     title: 'Recommended Mod',
     message: 'Most mods require this mod.',
+    id: 'bg3-recommended-mod',
     allowSuppress: true,
     actions: [
       {

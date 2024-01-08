@@ -1,3 +1,4 @@
+/* eslint-disable */
 const { app, remote } = require('electron');
 const Big = require('big.js');
 const Promise = require('bluebird');
@@ -124,6 +125,7 @@ async function installContent(files,
         return parsed?.content?.$?.[key];
       } catch (err) {
         log('info', 'attribute missing in content.xml',  { key });
+        return undefined;
       }
     }
 
@@ -146,10 +148,11 @@ async function installContent(files,
             .then(res => !!res ? res : contentModId)
         : contentModId; // Last resort.
 
+    const name = getAttr('name') || contentModId;
     attrInstructions.push({
       type: 'attribute',
       key: 'customFileName',
-      value: getAttr('name').trim(),
+      value: name.trim(),
     });
 
     // Avoid setting the description for the mod on installation as the content
