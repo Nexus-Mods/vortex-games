@@ -80,7 +80,7 @@ function isESLSupported(api) {
   const modState = util.getSafe(state, ['persistent', 'profiles', profileId, 'modState'], {});
   const isEnabled = (modId) => util.getSafe(modState, [modId, 'enabled'], false);
   const mods = util.getSafe (state, ['persistent', 'mods', GAME_ID], {});
-  const hasESLEnabler = Object.keys(mods).some(modId => isEnabled(modId) && mods[modId].attributes.eslEnabler === true);
+  const hasESLEnabler = Object.keys(mods).some(modId => isEnabled(modId) && mods[modId]?.attributes?.eslEnabler === true);
   if (hasESLEnabler) {
     api.dismissNotification(ESL_NOTIF_ID);
   }
