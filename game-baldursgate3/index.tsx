@@ -1,29 +1,27 @@
+/* eslint-disable */
+
 import Bluebird from 'bluebird';
 import { spawn } from 'child_process';
 import getVersion from 'exe-version';
 import * as _ from 'lodash';
 import * as path from 'path';
 import * as React from 'react';
-import { Alert, FormControl } from 'react-bootstrap';
+import { Alert } from 'react-bootstrap';
 import { useSelector } from 'react-redux';
-import { createAction } from 'redux-act';
 import * as semver from 'semver';
 import { generate as shortid } from 'shortid';
-import walk, { IEntry } from 'turbowalk';
+import walk from 'turbowalk';
 import { actions, fs, log, selectors, tooltip, types, util } from 'vortex-api';
 import { Builder, parseStringPromise } from 'xml2js';
 import { DivineAction, IDivineOptions, IDivineOutput, IModNode, IModSettings, IPakInfo, IXmlNode } from './types';
 
-import { DEFAULT_MOD_SETTINGS, GAME_ID, INVALID_LO_MOD_TYPES, LO_FILE_NAME, LSLIB_URL } from './common';
+import { DEFAULT_MOD_SETTINGS, GAME_ID, IGNORE_PATTERNS, LSLIB_URL } from './common';
 import * as gitHubDownloader from './githubDownloader';
-import { IMod, IModTable } from 'vortex-api/lib/types/IState';
-import { reinterpretUntilZeros } from 'ref';
-import { ensureFileAsync } from 'vortex-api/lib/util/fs';
-import { deserialize, importModSettingsFile, importModSettingsGame, serialize, exportToGame, exportToFile, deepRefresh } from './loadOrder';
+import { deserialize, importModSettingsFile, importModSettingsGame, serialize, exportToGame, exportToFile } from './loadOrder';
 import Settings from './Settings';
 import { setPlayerProfile, settingsWritten } from './actions';
 import reducer from './reducers';
-import { migrate, migrate13 } from './migrations';
+import { migrate  } from './migrations';
 
 const STOP_PATTERNS = ['[^/]*\\.pak$'];
 
@@ -1350,7 +1348,6 @@ function installEngineInjector(files: string[],
   return Bluebird.resolve({ instructions });
 }
 
-
 function main(context: types.IExtensionContext) {
   context.registerReducer(['settings', 'baldursgate3'], reducer);
 
@@ -1383,12 +1380,8 @@ function main(context: types.IExtensionContext) {
     details: {
       steamAppId: +STEAM_ID,
       stopPatterns: STOP_PATTERNS.map(toWordExp),
-      ignoreConflicts: [
-        'info.json',
-      ],
-      ignoreDeploy: [
-        'info.json',
-      ],
+      ignoreConflicts: IGNORE_PATTERNS,
+      ignoreDeploy: IGNORE_PATTERNS,
     },
   });
 
