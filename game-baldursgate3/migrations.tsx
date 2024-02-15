@@ -1,7 +1,9 @@
 import * as semver from 'semver';
 import { fs, types } from 'vortex-api';
-import { importModSettingsGame, profilesPath } from './loadOrder';
+import { importModSettingsGame } from './loadOrder';
 import path from 'path';
+
+import { profilesPath } from './util';
 
 export async function migrate(api: types.IExtensionApi): Promise<void> {
   

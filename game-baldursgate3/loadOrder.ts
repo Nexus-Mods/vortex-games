@@ -1,33 +1,21 @@
+/* eslint-disable */
 import { actions, fs, log, selectors, types, util } from 'vortex-api';
 import path from 'path';
 import * as semver from 'semver';
 import { generate as shortid } from 'shortid';
-import walk, { IEntry } from 'turbowalk';
+import walk from 'turbowalk';
 import Bluebird from 'bluebird';
-import { spawn } from 'child_process';
 
-import { GAME_ID, INVALID_LO_MOD_TYPES, LO_FILE_NAME } from './common';
-import { BG3Pak, DivineAction, IDivineOptions, IDivineOutput, IModNode, IModSettings, IPakInfo, IProps, IXmlNode } from './types';
+import { GAME_ID, LO_FILE_NAME } from './common';
+import {
+  BG3Pak, IModNode, IModSettings, IPakInfo, IProps, IXmlNode
+} from './types';
 import { Builder, parseStringPromise } from 'xml2js';
 import { LockedState } from 'vortex-api/lib/extensions/file_based_loadorder/types/types';
 import { IOpenOptions, ISaveOptions } from 'vortex-api/lib/types/IExtensionContext';
 
-
-function documentsPath() {
-  return path.join(util.getVortexPath('localAppData'), 'Larian Studios', 'Baldur\'s Gate 3');
-}
-
-function modsPath() {
-  return path.join(documentsPath(), 'Mods');
-}
-
-export function profilesPath() {
-  return path.join(documentsPath(), 'PlayerProfiles');
-}
-
-function globalProfilePath() {
-  return path.join(documentsPath(), 'global');
-}
+import { DivineExecMissing, listPackage, extractPak } from './divineWrapper';
+import { logDebug, logError, modsPath, profilesPath } from './util';
 
 export async function serialize(context: types.IExtensionContext,
                                 loadOrder: types.LoadOrder,
@@ -43,7 +31,7 @@ export async function serialize(context: types.IExtensionContext,
   const loFilePath = await ensureLOFile(context, profileId, props);
   //const filteredLO = loadOrder.filter(lo => (!INVALID_LO_MOD_TYPES.includes(props.mods?.[lo?.modId]?.type)));
 
-  console.log('serialize loadOrder=', loadOrder);
+  logDebug('serialize loadOrder=', loadOrder);
 
   // Write the prefixed LO to file.
   await fs.removeAsync(loFilePath).catch({ code: 'ENOENT' }, () => Promise.resolve());
@@ -54,7 +42,7 @@ export async function serialize(context: types.IExtensionContext,
 
   const autoExportToGame:boolean = state.settings['baldursgate3'].autoExportLoadOrder ?? false;
 
-  console.log('serialize autoExportToGame=', autoExportToGame);
+  logDebug('serialize autoExportToGame=', autoExportToGame);
 
   if(autoExportToGame) 
     await exportToGame(context.api);
@@ -122,12 +110,12 @@ export async function deserialize(context: types.IExtensionContext): Promise<typ
     }
 
     
-    console.log('deserialize loadOrder=', loadOrder);
+    logDebug('deserialize loadOrder=', loadOrder);
 
     // filter out any pak files that no longer exist
     const filteredLoadOrder:types.LoadOrder = loadOrder.filter(entry => paks.find(pak => pak.fileName === entry.id));
 
-    console.log('deserialize filteredLoadOrder=', filteredLoadOrder);
+    logDebug('deserialize filteredLoadOrder=', filteredLoadOrder);
 
     // filter out pak files that don't have a corresponding mod (which means Vortex didn't install it/isn't aware of it)
     //const paksWithMods:BG3Pak[] = paks.filter(pak => pak.mod !== undefined);
@@ -146,18 +134,18 @@ export async function deserialize(context: types.IExtensionContext): Promise<typ
 
     }, { valid: [], invalid: [] });
 
-    console.log('deserialize processedPaks=', processedPaks);
+    logDebug('deserialize processedPaks=', processedPaks);
 
     // get any pak files that aren't in the filteredLoadOrder
     const addedMods:BG3Pak[] = processedPaks.valid.filter(pak => filteredLoadOrder.find(entry => entry.id === pak.fileName) === undefined);
 
-    console.log('deserialize addedMods=', addedMods);
+    logDebug('deserialize addedMods=', addedMods);
     
     // Check if the user added any new mods.
     //const diff = enabledModIds.filter(id => (!INVALID_LO_MOD_TYPES.includes(mods[id]?.type))
     //  && (filteredData.find(loEntry => loEntry.id === id) === undefined));
 
-    console.log('deserialize paks=', paks);
+    logDebug('deserialize paks=', paks);
 
 
     // Add any newly added mods to the bottom of the loadOrder.
@@ -172,7 +160,7 @@ export async function deserialize(context: types.IExtensionContext): Promise<typ
       })      
     });       
 
-    //console.log('deserialize filteredData=', filteredData);
+    //logDebug('deserialize filteredData=', filteredData);
 
     // sorted so that any mods that are locked appear at the top
     //const sortedAndFilteredData = 
@@ -197,7 +185,7 @@ export async function importModSettingsFile(api: types.IExtensionApi): Promise<b
 
   const selectedPath:string = await api.selectFile(options);
 
-  console.log('importModSettingsFile selectedPath=', selectedPath);
+  logDebug('importModSettingsFile selectedPath=', selectedPath);
   
   // if no path selected, then cancel probably pressed
   if(selectedPath === undefined)
@@ -210,7 +198,7 @@ export async function importModSettingsGame(api: types.IExtensionApi): Promise<b
 
   const gameSettingsPath:string = path.join(profilesPath(), 'Public', 'modsettings.lsx');
 
-  console.log('importModSettingsGame gameSettingsPath=', gameSettingsPath);
+  logDebug('importModSettingsGame gameSettingsPath=', gameSettingsPath);
 
   processLsxFile(api, gameSettingsPath);
 }
@@ -240,7 +228,7 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
   try {
 
     const lsxLoadOrder:IModSettings = await readLsxFile(lsxPath);
-    console.log('processLsxFile lsxPath=', lsxPath);
+    logDebug('processLsxFile lsxPath=', lsxPath);
 
     // buildup object from xml
     const region = findNode(lsxLoadOrder?.save?.region, 'ModuleSettings');
@@ -257,7 +245,7 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
     // get nice string array, in order, of mods from the load order section
     let uuidArray:string[] = loNode.children[0].node.map((loEntry) => loEntry.attribute.find(attr => (attr.$.id === 'UUID')).$.value);
     
-    console.log(`processLsxFile uuidArray=`, uuidArray);
+    logDebug(`processLsxFile uuidArray=`, uuidArray);
 
     // are there any duplicates? if so...
     if(checkIfDuplicateExists(uuidArray)) {
@@ -282,7 +270,7 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
       return lsxModNodes.find(modNode => modNode.attribute.find(attr => (attr.$.id === 'UUID') && (attr.$.value === uuid)));
     });*/
 
-    console.log(`processLsxFile lsxModNodes=`, lsxModNodes);
+    logDebug(`processLsxFile lsxModNodes=`, lsxModNodes);
 
     // we now have all the information from file that we need
 
@@ -305,7 +293,7 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
       return acc;
     }, []);
 
-    console.log('processLsxFile - missing pak files that have associated mods =', missing);
+    logDebug('processLsxFile - missing pak files that have associated mods =', missing);
 
     // build a load order from the lsx file and add any missing paks at the end?
 
@@ -333,7 +321,7 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
       return acc;
     }, []);   
 
-    console.log('processLsxFile (before adding missing) newLoadOrder=', newLoadOrder);
+    logDebug('processLsxFile (before adding missing) newLoadOrder=', newLoadOrder);
 
     // Add any newly added mods to the bottom of the loadOrder.
     missing.forEach(pak => {
@@ -347,15 +335,15 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
       })      
     });   
 
-    console.log('processLsxFile (after adding missing) newLoadOrder=', newLoadOrder);
+    logDebug('processLsxFile (after adding missing) newLoadOrder=', newLoadOrder);
 
     newLoadOrder.sort((a, b) => (+b.locked - +a.locked));
 
-    console.log('processLsxFile (after sorting) newLoadOrder=', newLoadOrder);
+    logDebug('processLsxFile (after sorting) newLoadOrder=', newLoadOrder);
 
     // get load order
     //let loadOrder:types.LoadOrder = util.getSafe(api.getState(), ['persistent', 'loadOrder', profileId], []);
-    //console.log('processLsxFile loadOrder=', loadOrder);
+    //logDebug('processLsxFile loadOrder=', loadOrder);
 
     // manualy set load order?
     api.store.dispatch(actions.setLoadOrder(profileId, newLoadOrder));
@@ -364,7 +352,7 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
 
     // get load order again?
     //loadOrder = util.getSafe(api.getState(), ['persistent', 'loadOrder', profileId], []);
-    //console.log('processLsxFile loadOrder=', loadOrder);
+    //logDebug('processLsxFile loadOrder=', loadOrder);
 
     api.dismissNotification('bg3-loadorder-import-activity');
 
@@ -376,7 +364,7 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
       displayMS: 3000
     });
 
-    console.log('processLsxFile finished');
+    logDebug('processLsxFile finished');
 
   } catch (err) {
     
@@ -397,7 +385,7 @@ async function exportTo(api: types.IExtensionApi, filepath: string) {
   // get load order from state
   const loadOrder:types.LoadOrder = util.getSafe(api.getState(), ['persistent', 'loadOrder', profileId], []);
 
-  console.log('exportTo loadOrder=', loadOrder);
+  logDebug('exportTo loadOrder=', loadOrder);
 
   try {
     // read the game bg3 modsettings.lsx so that we get the default game gustav thing?
@@ -427,7 +415,7 @@ async function exportTo(api: types.IExtensionApi, filepath: string) {
                     && entry.enabled
                     && !entry.data?.isListed);
 
-    console.log('exportTo filteredPaks=', filteredPaks);
+    logDebug('exportTo filteredPaks=', filteredPaks);
 
     // add new nodes for the enabled mods
     for (const entry of filteredPaks) {
@@ -503,7 +491,7 @@ export async function exportToFile(api: types.IExtensionApi): Promise<boolean | 
     selectedPath = await api.selectFile(options);
   }
 
-  console.log(`exportToFile ${selectedPath}`);
+  logDebug(`exportToFile ${selectedPath}`);
 
   // if no path selected, then cancel probably pressed
   if(selectedPath === undefined)
@@ -516,7 +504,7 @@ export async function exportToGame(api: types.IExtensionApi): Promise<boolean | 
 
   const settingsPath = path.join(profilesPath(), 'Public', 'modsettings.lsx');
 
-  console.log(`exportToGame ${settingsPath}`);
+  logDebug(`exportToGame ${settingsPath}`);
 
   exportTo(api, settingsPath);
 }
@@ -529,7 +517,7 @@ export async function deepRefresh(api: types.IExtensionApi): Promise<boolean | v
   // get load order from state
   const loadOrder:types.LoadOrder = util.getSafe(api.getState(), ['persistent', 'loadOrder', profileId], []);
 
-  console.log('deepRefresh', loadOrder);
+  logDebug('deepRefresh', loadOrder);
 }
 
 
@@ -538,7 +526,7 @@ async function readModSettings(api: types.IExtensionApi): Promise<IModSettings> 
   
   const settingsPath = path.join(profilesPath(), 'Public', 'modsettings.lsx');
   const dat = await fs.readFileAsync(settingsPath);
-  console.log('readModSettings', dat);
+  logDebug('readModSettings', dat);
   return parseStringPromise(dat);
 }
 
@@ -546,12 +534,11 @@ async function readLsxFile(lsxPath: string): Promise<IModSettings> {
   
   //const settingsPath = path.join(profilesPath(), 'Public', 'modsettings.lsx');
   const dat = await fs.readFileAsync(lsxPath);
-  console.log('lsxPath', dat);
+  logDebug('lsxPath', dat);
   return parseStringPromise(dat);
 }
 
 async function writeModSettings(api: types.IExtensionApi, data: IModSettings, filepath: string): Promise<void> {
-  
   const builder = new Builder();
   const xml = builder.buildObject(data);
   try {
@@ -571,17 +558,16 @@ export async function validate(prev: types.LoadOrder,
   return undefined;
 }
 
-
 async function readPAKs(api: types.IExtensionApi) : Promise<Array<BG3Pak>> {
   const state = api.getState();
   const lsLib = getLatestLSLibMod(api);
   if (lsLib === undefined) {
     return [];
   }
-  
+
   const paks = await readPAKList(api);
 
-  console.log('paks', paks);
+  logDebug('paks', paks);
 
   let manifest;
   try {
@@ -637,78 +623,29 @@ async function readPAKs(api: types.IExtensionApi) : Promise<Array<BG3Pak>> {
 }
 
 const listCache: { [path: string]: Promise<string[]> } = {};
-
-async function listPackage(api: types.IExtensionApi, pakPath: string): Promise<string[]> {
-
-  let res;
-
-  try {
-        res = await divine(api, 'list-package', { source: pakPath, loglevel: 'off'} );
-  } catch(error) {    
-    console.error(`listPackage caught error: `, error);
-  }
-  
-  //console.log(`listPackage res=`, res);
-  
-  const lines = res.stdout.split('\n').map(line => line.trim()).filter(line => line.length !== 0);
-
-  //console.log(`listPackage lines=`, lines);
-
-  return lines;
-}
-
 async function isLOListed(api: types.IExtensionApi, pakPath: string): Promise<boolean> {
-  
-  /*
+
   if (listCache[pakPath] === undefined) {
     listCache[pakPath] = listPackage(api, pakPath);
   }  
-  const lines = await listCache[pakPath];*/
 
-  const maxRetries = 3;
-  let retryCounter = 0; 
   let lines:string[];
 
-  while (retryCounter < maxRetries) {
+  try {
+    lines = await listCache[pakPath];
+    // look at the end of the first bit of data to see if it has a meta.lsx file
+    // example 'Mods/Safe Edition/meta.lsx\t1759\t0'
+    const containsMetaFile = lines.find(line => path.basename(line.split('\t')[0]).toLowerCase() === 'meta.lsx') !== undefined ? true : false;
 
-    lines = await listPackage(api, pakPath);
-    //console.log(`isLOListed ${path.basename(pakPath)} retries=${retryCounter}/${maxRetries} lines`, lines);
-
-    // got a response so lets break out of this loop
-    if(lines.length > 0) {
-      break;
-    }
-
-    // add to the counter and try again
-    retryCounter++;
-
-    if(retryCounter === maxRetries) {
-      
-      console.error(`isLOListed ${path.basename(pakPath)} retries=${retryCounter}/${maxRetries}: lines shouldn't be 0 and we've run out of retries.`);
-
-      api.sendNotification({
-        type: 'error',
-        message: `${path.basename(pakPath)} couldn't be read correctly. This mod be incorrectly locked/unlocked but will default to unlocked.`,
-      });
-      
-      // return false so we default to unlocked
-      return false;
-    }
-
-    console.warn(`isLOListed ${path.basename(pakPath)} retries=${retryCounter}/${maxRetries}: lines shouldn't be 0. need to retry.`);
+    // invert result as 'listed' means it doesn't contain a meta file.
+    return !containsMetaFile;
+  } catch (err) {
+    api.sendNotification({
+      type: 'error',
+      message: `${path.basename(pakPath)} couldn't be read correctly. This mod be incorrectly locked/unlocked but will default to unlocked.`,
+    });
+    return false;    
   }
-
-  // const nonGUI = lines.find(line => !line.toLowerCase().startsWith('public/game/gui'));
-
-  // example 'Mods/Safe Edition/meta.lsx\t1759\t0'
-
-  // look at the end of the first bit of data to see if it has a meta.lsx file
-  const containsMetaFile = lines.find(line => path.basename(line.split('\t')[0]).toLowerCase() === 'meta.lsx') !== undefined ? true : false;
-
-  //console.log(`isLOListed ${path.basename(pakPath)} containsMetaFile=`, containsMetaFile);
-
-  // invert result as 'listed' means it doesn't contain a meta file.
-  return !containsMetaFile;
 }
 
 
@@ -730,9 +667,8 @@ async function extractPakInfoImpl(api: types.IExtensionApi, pakPath: string, mod
   try{
     isListed = await isLOListed(api, pakPath);
   } catch(error) {
-    console.log('extractPakInfoImpl caught error:', error);
+    logDebug('extractPakInfoImpl caught error:', error);
   }
-  
 
   return {
     author: attr('Author', () => 'Unknown'),
@@ -745,86 +681,6 @@ async function extractPakInfoImpl(api: types.IExtensionApi, pakPath: string, mod
     version: attr('Version', () => '1'),
     isListed: isListed
   };
-}
-
-
-class DivineExecMissing extends Error {
-  constructor() {
-    super('Divine executable is missing');
-    this.name = 'DivineExecMissing';
-  }
-}
-
-function divine(api: types.IExtensionApi,
-  action: DivineAction,
-  options: IDivineOptions): Promise<IDivineOutput> {
-  return new Promise<IDivineOutput>((resolve, reject) => {
-    let returned: boolean = false;
-    let stdout: string = '';
-
-    const state = api.getState();
-    const stagingFolder = selectors.installPathForGame(state, GAME_ID);
-    const lsLib: types.IMod = getLatestLSLibMod(api);
-    if (lsLib === undefined) {
-      const err = new Error('LSLib/Divine tool is missing');
-      err['attachLogOnReport'] = false;
-      return reject(err);
-    }
-    const exe = path.join(stagingFolder, lsLib.installationPath, 'tools', 'divine.exe');
-    const args = [
-      '--action', action,
-      '--source', options.source,
-      '--game', 'bg3',
-    ];
-
-    if (options.loglevel !== undefined) {
-      args.push('--loglevel', options.loglevel);
-    } else {
-      args.push('--loglevel', 'off');
-    }
-
-    if (options.destination !== undefined) {
-      args.push('--destination', options.destination);
-    }
-    if (options.expression !== undefined) {
-      args.push('--expression', options.expression);
-    }
-
-    const proc = spawn(exe, args);
-
-    proc.stdout.on('data', data => stdout += data);
-    proc.stderr.on('data', data => log('warn', data));
-
-    proc.on('error', (errIn: Error) => {
-      if (!returned) {
-        if (errIn['code'] === 'ENOENT') {
-          reject(new DivineExecMissing());
-        }
-        returned = true;
-        const err = new Error('divine.exe failed: ' + errIn.message);
-        err['attachLogOnReport'] = true;
-        reject(err);
-      }
-    });
-    proc.on('exit', (code: number) => {
-      if (!returned) {
-        returned = true;
-        if (code === 0) {
-          return resolve({ stdout, returnCode: 0 });
-        } else if ([2, 102].includes(code)) {
-          return resolve({ stdout: '', returnCode: 2 });
-        } else {
-          // divine.exe returns the actual error code + 100 if a fatal error occured
-          if (code > 100) {
-            code -= 100;
-          }
-          const err = new Error(`divine.exe failed: ${code}`);
-          err['attachLogOnReport'] = true;
-          return reject(err);
-        }
-      }
-    });
-  });
 }
 
 async function readPAKList(api: types.IExtensionApi) {
@@ -849,11 +705,6 @@ async function readPAKList(api: types.IExtensionApi) {
   }
 
   return paks;
-}
-
-async function extractPak(api: types.IExtensionApi, pakPath, destPath, pattern) {
-  return divine(api, 'extract-package',
-    { source: pakPath, destination: destPath, expression: pattern });
 }
 
 async function extractMeta(api: types.IExtensionApi, pakPath: string, mod: types.IMod): Promise<IModSettings> {
