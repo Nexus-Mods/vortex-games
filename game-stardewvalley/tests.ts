@@ -1,4 +1,4 @@
-import { types } from 'vortex-api';
+import { types, selectors } from 'vortex-api';
 
 import DependencyManager from './DependencyManager';
 
@@ -9,6 +9,12 @@ import { downloadSMAPI, findSMAPIMod } from './SMAPI';
 export async function testSMAPIOutdated(api: types.IExtensionApi,
                                         depManager: DependencyManager)
                                         : Promise<types.ITestResult> {
+  const state = api.getState();
+  const activeGameId = selectors.activeGameId(state);
+  if (activeGameId !== GAME_ID) {
+    return Promise.resolve(undefined);
+  }
+
   let currentSMAPIVersion = findSMAPIMod(api)?.attributes?.version;
   if (currentSMAPIVersion === undefined) {
     // SMAPI isn't installed or enabled.
