@@ -6,6 +6,8 @@ import { coerce, gte } from 'semver';
 
 import { downloadSMAPI, findSMAPIMod } from './SMAPI';
 
+import { GAME_ID } from './common';
+
 export async function testSMAPIOutdated(api: types.IExtensionApi,
                                         depManager: DependencyManager)
                                         : Promise<types.ITestResult> {
