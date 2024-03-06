@@ -11,7 +11,7 @@ import { LockedState } from 'vortex-api/lib/extensions/file_based_loadorder/type
 import { IOpenOptions, ISaveOptions } from 'vortex-api/lib/types/IExtensionContext';
 
 import { DivineExecMissing } from './divineWrapper';
-import { findNode, logDebug, modsPath, profilesPath, extractPakInfoImpl } from './util';
+import { findNode, logDebug, modsPath, profilesPath } from './util';
 
 import PakInfoCache, { ICacheEntry } from './cache';
 
@@ -58,28 +58,10 @@ export async function deserialize(context: types.IExtensionContext): Promise<typ
     // Why are we deserializing when the profile is invalid or belongs to another game ?
     return [];
   }
-
-
-/*
-
-
-  // The deserialization function should be used to filter and insert wanted data into Vortex's
-  //  loadOrder application state, once that's done, Vortex will trigger a serialization event
-  //  which will ensure that the data is written to the LO file.
-  const currentModsState = util.getSafe(props.profile, ['modState'], {});
-
-  // we only want to insert enabled mods.
-  const enabledModIds = Object.keys(currentModsState)
-    .filter(modId => util.getSafe(currentModsState, [modId, 'enabled'], false));*/
-
   
   const paks = await readPAKs(context.api);
 
-  const mods: { [modId: string]: types.IMod } = util.getSafe(props.state, ['persistent', 'mods', GAME_ID], {});
-
-
-  // create if necessary, but load the load order from file
-    
+  // create if necessary, but load the load order from file    
   const loFilePath = await ensureLOFile(context);
   const fileData = await fs.readFileAsync(loFilePath, { encoding: 'utf8' });
 
@@ -575,9 +557,13 @@ async function readPAKs(api: types.IExtensionApi) : Promise<Array<ICacheEntry>> 
     api.showErrorNotification('Failed to read deployment manifest', err, { allowReport });
     return [];
   }
-
+  api.sendNotification({
+    type: 'activity',
+    id: 'bg3-reading-paks-activity',
+    message: 'Reading PAK files. This might take a while...',
+  })
   const cache: PakInfoCache = PakInfoCache.getInstance();
-  const res = await Promise.all(paks.map(async fileName => {
+  const res = await Promise.all(paks.map(async (fileName, idx) => {
     return util.withErrorContext('reading pak', fileName, () => {
       const func = async () => {
         try {
@@ -612,6 +598,7 @@ async function readPAKs(api: types.IExtensionApi) : Promise<Array<ICacheEntry>> 
       return Bluebird.resolve(func());
     });
   }));
+  api.dismissNotification('bg3-reading-paks-activity');
 
   return res.filter(iter => iter !== undefined);
 }

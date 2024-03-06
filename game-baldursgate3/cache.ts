@@ -95,7 +95,9 @@ export default class PakInfoCache {
       const data = await fs.readFileAsync(cachePath, { encoding: 'utf8' });
       return JSON.parse(data);
     } catch (err) {
-      log('error', 'failed to load cache', err);
+      if (!['ENOENT'].includes(err.code)) {
+        log('error', 'failed to load cache', err);
+      }
       return {};
     }
   }
