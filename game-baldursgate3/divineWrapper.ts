@@ -88,15 +88,16 @@ async function divine(api: types.IExtensionApi,
       const { stdout, stderr } = await exec(command, execOpts);
       if (!!stderr) {
         return reject(new Error(`divine.exe failed: ${stderr}`));
-        // return resolve({ stdout: '', returnCode: 2 });
       }
-      if (stdout.toLowerCase().indexOf('fatal') !== -1) {
+      if (!stdout) {
+        return resolve({ stdout: '', returnCode: 2 })
+      }
+      if (['error', 'fatal'].some(x => stdout.toLowerCase().indexOf(x) !== -1)) {
         // Really?
         return reject(new Error(`divine.exe failed: ${stdout}`));
-      } else if (!stdout && action === 'extract-package') {
-        return resolve({ stdout: '', returnCode: 0 });
+      } else  {
+        return resolve({ stdout, returnCode: 0 });
       }
-      return resolve({ stdout, returnCode: 0 });
     } catch (err) {
       if (err.code === 'ENOENT') {
         return reject(new DivineExecMissing());
@@ -122,8 +123,7 @@ export async function listPackage(api: types.IExtensionApi, pakPath: string): Pr
   }
 
   //logDebug(`listPackage res=`, res);
-
-  const lines = res.stdout.split('\n').map(line => line.trim()).filter(line => line.length !== 0);
+  const lines = (res?.stdout || '').split('\n').map(line => line.trim()).filter(line => line.length !== 0);
 
   //logDebug(`listPackage lines=`, lines);
 

@@ -12,10 +12,7 @@ import Bluebird from 'bluebird';
 import * as _ from 'lodash';
 import * as path from 'path';
 import * as React from 'react';
-import * as semver from 'semver';
 import { fs, selectors, types, util } from 'vortex-api';
-import { Builder, parseStringPromise } from 'xml2js';
-import { IModNode, IModSettings, IXmlNode } from './types';
 
 import {
   DEFAULT_MOD_SETTINGS, GAME_ID, LSLIB_URL, IGNORE_PATTERNS,
@@ -29,7 +26,7 @@ import { migrate } from './migrations';
 import {
   logDebug, forceRefresh, getLatestInstalledLSLibVer,
   getGameDataPath, getGamePath, globalProfilePath, modsPath,
-  profilesPath, getLatestLSLibMod,
+  getLatestLSLibMod, getOwnGameVersion, readStoredLO,
 } from './util';
 
 import {
@@ -47,6 +44,7 @@ import {
 } from './loadOrder';
 
 import { InfoPanelWrap } from './InfoPanel'
+import PakInfoCache from './cache';
 
 const STOP_PATTERNS = ['[^/]*\\.pak$'];
 
@@ -148,127 +146,6 @@ function showFullReleaseModFixerRecommendation(api: types.IExtensionApi) {
   });
 }
 
-
-const getPlayerProfiles = (() => {
-  let cached = [];
-  try {
-    cached = (fs as any).readdirSync(profilesPath())
-        .filter(name => (path.extname(name) === '') && (name !== 'Default'));
-  } catch (err) {
-    if (err.code !== 'ENOENT') {
-      throw err;
-    }
-  }
-  return () => cached;
-})();
-
-function gameSupportsProfile(gameVersion: string) {
-  return semver.lt(semver.coerce(gameVersion), '4.1.206');
-}
-
-async function getOwnGameVersion(state: types.IState): Promise<string> {
-  const discovery = selectors.discoveryByGame(state, GAME_ID);
-  return await util.getGame(GAME_ID).getInstalledVersion(discovery);
-}
-
-async function getActivePlayerProfile(api: types.IExtensionApi) {
-  return gameSupportsProfile(await getOwnGameVersion(api.getState()))
-    ? api.store.getState().settings.baldursgate3?.playerProfile || 'global'
-    : 'Public';
-}
-
-function findNode<T extends IXmlNode<{ id: string }>, U>(nodes: T[], id: string): T {
-  return nodes?.find(iter => iter.$.id === id) ?? undefined;
-}
-
-function parseModNode(node: IModNode) {
-  const name = findNode(node.attribute, 'Name').$.value;
-  return {
-    id: name,
-    name,
-    data: findNode(node.attribute, 'UUID').$.value,
-  };
-}
-
-let storedLO: any[];
-async function readModSettings(api: types.IExtensionApi): Promise<IModSettings> {
-  const bg3profile: string = await getActivePlayerProfile(api);
-  const playerProfiles = getPlayerProfiles();
-  if (playerProfiles.length === 0) {
-    storedLO = [];
-    return;
-  }
-
-  const settingsPath = (bg3profile !== 'global')
-    ? path.join(profilesPath(), bg3profile, 'modsettings.lsx')
-    : path.join(globalProfilePath(), 'modsettings.lsx');
-  const dat = await fs.readFileAsync(settingsPath);
-  return parseStringPromise(dat);
-}
-
-async function writeModSettings(api: types.IExtensionApi, data: IModSettings, bg3profile: string): Promise<void> {
-  if (!bg3profile) {
-    return;
-  }
-
-  const settingsPath = (bg3profile !== 'global') 
-    ? path.join(profilesPath(), bg3profile, 'modsettings.lsx')
-    : path.join(globalProfilePath(), 'modsettings.lsx');
-
-  const builder = new Builder();
-  const xml = builder.buildObject(data);
-  try {
-    await fs.ensureDirWritableAsync(path.dirname(settingsPath));
-    await fs.writeFileAsync(settingsPath, xml);
-  } catch (err) {
-    storedLO = [];
-    const allowReport = ['ENOENT', 'EPERM'].includes(err.code);
-    api.showErrorNotification('Failed to write mod settings', err, { allowReport });
-    return;
-  }
-}
-
-async function readStoredLO(api: types.IExtensionApi) {
-  const modSettings = await readModSettings(api);
-  const config = findNode(modSettings?.save?.region, 'ModuleSettings');
-  const configRoot = findNode(config?.node, 'root');
-  const modOrderRoot = findNode(configRoot?.children?.[0]?.node, 'ModOrder');
-  const modsRoot = findNode(configRoot?.children?.[0]?.node, 'Mods');
-  const modOrderNodes = modOrderRoot?.children?.[0]?.node ?? [];
-  const modNodes = modsRoot?.children?.[0]?.node ?? [];
-
-  const modOrder = modOrderNodes.map(node => findNode(node.attribute, 'UUID').$?.value);
-
-  // return util.setSafe(state, ['settingsWritten', profile], { time, count });
-  const state = api.store.getState();
-  const vProfile = selectors.activeProfile(state);
-  const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
-  const enabled = Object.keys(mods).filter(id =>
-    util.getSafe(vProfile, ['modState', id, 'enabled'], false));
-  const bg3profile: string = state.settings.baldursgate3?.playerProfile;
-  if (enabled.length > 0 && modNodes.length === 1) {
-    const lastWrite = state.settings.baldursgate3?.settingsWritten?.[bg3profile];
-    if ((lastWrite !== undefined) && (lastWrite.count > 1)) {
-      api.showDialog('info', '"modsettings.lsx" file was reset', {
-        text: 'The game reset the list of active mods and ran without them.\n'
-            + 'This happens when an invalid or incompatible mod is installed. '
-            + 'The game will not load any mods if one of them is incompatible, unfortunately '
-            + 'there is no easy way to find out which one caused the problem.',
-      }, [
-        { label: 'Continue' },
-      ]);
-    }
-  }
-
-  storedLO = modNodes
-    .map(node => parseModNode(node))
-    // Gustav is the core game
-    .filter(entry => entry.id === 'Gustav')
-    // sort by the index of each mod in the modOrder list
-    .sort((lhs, rhs) => modOrder
-      .findIndex(i => i === lhs.data) - modOrder.findIndex(i => i === rhs.data));
-}
-
 async function onCheckModVersion(api: types.IExtensionApi, gameId: string, mods: types.IMod[]) {
   const profile = selectors.activeProfile(api.getState());
   if (profile.gameId !== GAME_ID || gameId !== GAME_ID) {
@@ -290,6 +167,7 @@ async function onCheckModVersion(api: types.IExtensionApi, gameId: string, mods:
 
 async function onGameModeActivated(api: types.IExtensionApi, gameId: string) {
   if (gameId !== GAME_ID) {
+    PakInfoCache.getInstance().save(api);
     return;
   }
   try {
@@ -424,26 +302,15 @@ function main(context: types.IExtensionContext) {
     const activeGame = selectors.activeGameId(state);
     return activeGame === GAME_ID;
   };
-  /*
-  context.registerAction('fb-load-order-icons', 145, 'refresh', {}, 'Deep Refresh', () => { deepRefresh(context.api); }, () => {
-    const state = context.api.getState();
-    const activeGame = selectors.activeGameId(state);
-    return activeGame === GAME_ID;
-  });*/
 
   context.registerAction('fb-load-order-icons', 150, 'changelog', {}, 'Export to Game', () => { exportToGame(context.api); }, isBG3);
-
   context.registerAction('fb-load-order-icons', 151, 'changelog', {}, 'Export to File...', () => { exportToFile(context.api); }, isBG3);
-
   context.registerAction('fb-load-order-icons', 160, 'import', {}, 'Import from Game', () => { importModSettingsGame(context.api); }, isBG3);
-
   context.registerAction('fb-load-order-icons', 161, 'import', {}, 'Import from File...', () => { 
     importModSettingsFile(context.api); 
   }, isBG3);
 
   context.registerSettings('Mods', Settings, undefined, isBG3, 150);
-
-  //context.registerMigration((oldVersion) => Bluebird.resolve(migrate13(context.api, oldVersion)));
 
   context.once(() => {
     context.api.onStateChange(['session', 'base', 'toolsRunning'],
@@ -463,11 +330,12 @@ function main(context: types.IExtensionContext) {
         }
       });
 
-    context.api.onAsync('did-deploy', (profileId: string, deployment) => {
+    context.api.onAsync('did-deploy', async (profileId: string, deployment) => {
       const profile = selectors.profileById(context.api.getState(), profileId);
       if (profile?.gameId === GAME_ID) {
         forceRefresh(context.api);
       }
+      await PakInfoCache.getInstance().save(context.api);
       return Promise.resolve();
     });
 

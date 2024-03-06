@@ -10,6 +10,7 @@ import { forceRefresh } from './util';
 import { ThunkDispatch } from 'redux-thunk';
 
 import { setPlayerProfile } from './actions';
+import { GAME_ID } from './common';
 
 interface IBaseProps {
   api: types.IExtensionApi;

@@ -2,20 +2,18 @@
 import { actions, fs, log, selectors, types, util } from 'vortex-api';
 import path from 'path';
 import * as semver from 'semver';
-import { generate as shortid } from 'shortid';
-import walk from 'turbowalk';
 import Bluebird from 'bluebird';
 
 import { GAME_ID, LO_FILE_NAME } from './common';
-import {
-  BG3Pak, IModNode, IModSettings, IPakInfo, IProps, IXmlNode
-} from './types';
+import { BG3Pak, IModNode, IModSettings, IProps } from './types';
 import { Builder, parseStringPromise } from 'xml2js';
 import { LockedState } from 'vortex-api/lib/extensions/file_based_loadorder/types/types';
 import { IOpenOptions, ISaveOptions } from 'vortex-api/lib/types/IExtensionContext';
 
-import { DivineExecMissing, listPackage, extractPak } from './divineWrapper';
-import { logDebug, logError, modsPath, profilesPath } from './util';
+import { DivineExecMissing } from './divineWrapper';
+import { findNode, logDebug, modsPath, profilesPath, extractPakInfoImpl } from './util';
+
+import PakInfoCache, { ICacheEntry } from './cache';
 
 export async function serialize(context: types.IExtensionContext,
                                 loadOrder: types.LoadOrder,
@@ -558,7 +556,7 @@ export async function validate(prev: types.LoadOrder,
   return undefined;
 }
 
-async function readPAKs(api: types.IExtensionApi) : Promise<Array<BG3Pak>> {
+async function readPAKs(api: types.IExtensionApi) : Promise<Array<ICacheEntry>> {
   const state = api.getState();
   const lsLib = getLatestLSLibMod(api);
   if (lsLib === undefined) {
@@ -578,6 +576,7 @@ async function readPAKs(api: types.IExtensionApi) : Promise<Array<BG3Pak>> {
     return [];
   }
 
+  const cache: PakInfoCache = PakInfoCache.getInstance();
   const res = await Promise.all(paks.map(async fileName => {
     return util.withErrorContext('reading pak', fileName, () => {
       const func = async () => {
@@ -588,12 +587,7 @@ async function readPAKs(api: types.IExtensionApi) : Promise<Array<BG3Pak>> {
             : undefined;
 
           const pakPath = path.join(modsPath(), fileName);
-
-          return {
-            fileName,
-            mod,
-            info: await extractPakInfoImpl(api, pakPath, mod),
-          };
+          return cache.getCacheEntry(api, pakPath, mod);
         } catch (err) {
           if (err instanceof DivineExecMissing) {
             const message = 'The installed copy of LSLib/Divine is corrupted - please '
@@ -622,67 +616,6 @@ async function readPAKs(api: types.IExtensionApi) : Promise<Array<BG3Pak>> {
   return res.filter(iter => iter !== undefined);
 }
 
-const listCache: { [path: string]: Promise<string[]> } = {};
-async function isLOListed(api: types.IExtensionApi, pakPath: string): Promise<boolean> {
-
-  if (listCache[pakPath] === undefined) {
-    listCache[pakPath] = listPackage(api, pakPath);
-  }  
-
-  let lines:string[];
-
-  try {
-    lines = await listCache[pakPath];
-    // look at the end of the first bit of data to see if it has a meta.lsx file
-    // example 'Mods/Safe Edition/meta.lsx\t1759\t0'
-    const containsMetaFile = lines.find(line => path.basename(line.split('\t')[0]).toLowerCase() === 'meta.lsx') !== undefined ? true : false;
-
-    // invert result as 'listed' means it doesn't contain a meta file.
-    return !containsMetaFile;
-  } catch (err) {
-    api.sendNotification({
-      type: 'error',
-      message: `${path.basename(pakPath)} couldn't be read correctly. This mod be incorrectly locked/unlocked but will default to unlocked.`,
-    });
-    return false;    
-  }
-}
-
-
-
-
-async function extractPakInfoImpl(api: types.IExtensionApi, pakPath: string, mod: types.IMod): Promise<IPakInfo> {
-  const meta = await extractMeta(api, pakPath, mod);
-  const config = findNode(meta?.save?.region, 'Config');
-  const configRoot = findNode(config?.node, 'root');
-  const moduleInfo = findNode(configRoot?.children?.[0]?.node, 'ModuleInfo');
-
-  const attr = (name: string, fallback: () => any) =>
-    findNode(moduleInfo?.attribute, name)?.$?.value ?? fallback();
-
-  const genName = path.basename(pakPath, path.extname(pakPath));
-
-  let isListed:boolean;
-
-  try{
-    isListed = await isLOListed(api, pakPath);
-  } catch(error) {
-    logDebug('extractPakInfoImpl caught error:', error);
-  }
-
-  return {
-    author: attr('Author', () => 'Unknown'),
-    description: attr('Description', () => 'Missing'),
-    folder: attr('Folder', () => genName),
-    md5: attr('MD5', () => ''),
-    name: attr('Name', () => genName),
-    type: attr('Type', () => 'Adventure'),
-    uuid: attr('UUID', () => require('uuid').v4()),
-    version: attr('Version', () => '1'),
-    isListed: isListed
-  };
-}
-
 async function readPAKList(api: types.IExtensionApi) {
   let paks: string[];
   try {
@@ -705,56 +638,6 @@ async function readPAKList(api: types.IExtensionApi) {
   }
 
   return paks;
-}
-
-async function extractMeta(api: types.IExtensionApi, pakPath: string, mod: types.IMod): Promise<IModSettings> {
-  const metaPath = path.join(util.getVortexPath('temp'), 'lsmeta', shortid());
-  await fs.ensureDirAsync(metaPath);
-  await extractPak(api, pakPath, metaPath, '*/meta.lsx');
-  try {
-    // the meta.lsx may be in a subdirectory. There is probably a pattern here
-    // but we'll just use it from wherever
-    let metaLSXPath: string = path.join(metaPath, 'meta.lsx');
-    await walk(metaPath, entries => {
-      const temp = entries.find(e => path.basename(e.filePath).toLowerCase() === 'meta.lsx');
-      if (temp !== undefined) {
-        metaLSXPath = temp.filePath;
-      }
-    });
-    const dat = await fs.readFileAsync(metaLSXPath);
-    const meta = await parseStringPromise(dat);
-    await fs.removeAsync(metaPath);
-    return meta;
-  } catch (err) {
-    await fs.removeAsync(metaPath);
-    if (err.code === 'ENOENT') {
-      return Promise.resolve(undefined);
-    } else if (err.message.includes('Column') && (err.message.includes('Line'))) {
-      // an error message specifying column and row indicate a problem parsing the xml file
-      api.sendNotification({
-        type: 'warning',
-        message: 'The meta.lsx file in "{{modName}}" is invalid, please report this to the author',
-        actions: [{
-          title: 'More',
-          action: () => {
-            api.showDialog('error', 'Invalid meta.lsx file', {
-              message: err.message,
-            }, [{ label: 'Close' }])
-          }
-        }],
-        replace: {
-          modName: util.renderModName(mod),
-        }
-      })
-      return Promise.resolve(undefined);
-    } else {
-      throw err;
-    }
-  }
-}
-
-function findNode<T extends IXmlNode<{ id: string }>, U>(nodes: T[], id: string): T {
-  return nodes?.find(iter => iter.$.id === id) ?? undefined;
 }
 
 function getLatestLSLibMod(api: types.IExtensionApi) {
