@@ -89,10 +89,10 @@ async function divine(api: types.IExtensionApi,
       if (!!stderr) {
         return reject(new Error(`divine.exe failed: ${stderr}`));
       }
-      if (!stdout) {
+      if (!stdout && action !== 'list-package') {
         return resolve({ stdout: '', returnCode: 2 })
       }
-      if (['error', 'fatal'].some(x => stdout.toLowerCase().indexOf(x) !== -1)) {
+      if (['error', 'fatal'].some(x => stdout.toLowerCase().startsWith(x))) {
         // Really?
         return reject(new Error(`divine.exe failed: ${stdout}`));
       } else  {

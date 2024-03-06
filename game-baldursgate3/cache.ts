@@ -47,7 +47,8 @@ export default class PakInfoCache {
       mtime = Date.now();
     }
     if ((this.mCache[id] === undefined)
-        || (mtime !== this.mCache[id].lastModified)) {
+        || (mtime !== this.mCache[id].lastModified
+        || (this.mCache[id].packageList.length === 0))) {
       const packageList = await listPackage(api, filePath);
       const isListed = this.isLOListed(api, filePath, packageList);
       const info = await extractPakInfoImpl(api, filePath, mod, isListed);
