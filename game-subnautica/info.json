@@ -1,6 +1,6 @@
 {
   "name": "Stub: Subnautica",
   "author": "toebean, MrPurple6411, PrimeSonic & Pickysaurus",
-  "version": "2.0.0",
-  "description": "Please ignore this extension, it will disappear in a future version of Vortex"
+  "version": "0.1.0",
+  "description": "This is a stub of the Subnautica extension. It will be downloaded the first time it's managed."
 }
