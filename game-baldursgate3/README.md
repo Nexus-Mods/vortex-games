@@ -87,3 +87,5 @@ The below instructions should reset the game files and allow you to continue you
 # Thanks!
 
 Thank you to all members of the #vortex-baldursgate3 discord channel that have spent time and effort to help test this extension before we send out into the wild. It's a pretty big update and their input has been invaluable when trying to find those niche issues and to just have more eyes on. We have plenty of plans to further Baldur's Gate 3 support and hopefully everyone will be just as willing to test and help make decisions around the best way to tackle it.
+
+[Norbyte and LSLib](https://github.com/Norbyte/lslib) for allowing us to peek inside PAK files, it's a great tool.
