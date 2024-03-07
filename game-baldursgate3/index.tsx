@@ -82,6 +82,7 @@ function prepareForModding(api: types.IExtensionApi, discovery): any {
 
   showFullReleaseModFixerRecommendation(api); 
 
+  /*
   api.sendNotification({
     id: 'bg3-uses-lslib',
     type: 'info',
@@ -91,7 +92,8 @@ function prepareForModding(api: types.IExtensionApi, discovery): any {
     actions: [
       { title: 'Visit Page', action: () => util.opn(LSLIB_URL).catch(() => null) },
     ],
-  });
+  });*/
+  
   return fs.statAsync(mp)
     .catch(() => fs.ensureDirWritableAsync(mp, () => Bluebird.resolve() as any))
     .finally(() => ensureGlobalProfile(api, discovery));
