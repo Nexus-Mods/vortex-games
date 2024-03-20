@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Performance improvements when using LSLib
 - Added caching to PAK reading
 - Optimizations when installing collections 
+- Fixed loose mod installer (Now prioritizing 'Public'/'Generated' folders over 'Data')
 - Code cleanup
 
 ## [1.3.12] - 2024-01-30
