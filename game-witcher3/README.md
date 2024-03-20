@@ -6,31 +6,21 @@ The [Steam](https://store.steampowered.com/sub/124923/), [Epic](https://store.ep
 
 ## Features
 
-- Check (and ask to fix) bare minimum setup of StarfieldCustom.ini
-- Can support both /Data folders through the use of a folder junction. Defaults to off but is asked to enable with necessary warnings. Please read this page on modding.wiki for more information.
-- Supports SFSE, BethINI and SFEdit
+- 
 
 ## Installation
 
-This extension requires Vortex 1.9.10 or greater.
-
-To install, click the Vortex button at the top of the Starfield Extension page on Nexus Mods, and then click Install.
-
-You can also manually install it by click the Manual button at the top of the page and dragging it into the drop target labelled Drop File(s) in the Extensions page at the bottom right.
-
-Afterwards, restart Vortex and you can begin installing supported Starfield mods with Vortex.
-
-If you've already got a previous version, the extension should auto update on a Vortex restart.
+As the Witcher 3 extension is bundled with Vortex, you just need to open up Vortex and navigate to the Games page. Use the 'Manage' button on the Witcher 3 game tile to add it to your managed games.
 
 ## Game detection
 
-The Witcher 3 game extension enables Vortex to automatically locate installs from the Steam and Xbox apps.
+The Witcher 3 game extension enables Vortex to automatically locate installs from the Steam, Epic and GOG apps.
 
-It is also possible to manually set the game folder if the auto detection doesn't find the correct installation. A valid Starfield game folder contains:
+It is also possible to manually set the game folder if the auto detection doesn't find the correct installation. A valid Witcher 3 game folder contains:
 
-Starfield.exe
+- `files go here`
 
-If your game lacks this file then it is likely that your installation has become corrupted somehow.
+If your game lacks this file then it is likely that your installation has become corrupted somehow. 
 
 ## Mod Management
 
@@ -50,19 +40,14 @@ See below for known problems and fixes to common modding problems
 
 ### Known Issues
 
-* This extension has been tested with all of the most popular mods, installers, script extenders, mod fixers etc. Please see this [Mod Compatibility List](https://forums.nexusmods.com/index.php?/topic/13287213-baldurs-gate-3-mod-compatibility-megathread/) forum post for details. 
-
-* When installing mods in previous versions of the extension, some workarounds were necessary that are no longer needed. Fox example, Mod types being manually set as an Engine Injector was common. This shouldn't break a working setup but when mods are updated or reinstalled they will be installed correctly. If mods do seem to be in a wrong folder, then reinstalling that mod should fix this. This is easily done by finding the mod
-
-* Rarely, during mod updating or purging, Vortex spams errors saying about failure to read PAK files. This is nothing to worry about, they can be dismissed and will be fixed in next version.
+* Mod management isn't an exact science so please report any mods that don't install correctly so we can continue to increase our compatibility and coverage.
 
 ### Load Orders
 
-Most load order issues can be fixed with a Purge and then Deploy. This removes PAK files from the Mods folder and then Deploy re-writes them with a fresh load order. Please note: the load order will be reset and so will require a reordering.
+Most load order issues can be fixed with a Purge and then Deploy.
 
 ### Further Support
 
-* [Mod Compatibility List (Nexus Forums) ](https://forums.nexusmods.com/index.php?/topic/13287213-baldurs-gate-3-mod-compatibility-megathread/)
 * [Vortex Support (Nexus Forums) ](https://forums.nexusmods.com/index.php?/forum/4306-vortex-support/)
 * [Vortex Support (Discord)](https://discord.com/channels/215154001799413770/408252140533055499)
 
