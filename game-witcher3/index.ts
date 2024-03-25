@@ -44,6 +44,7 @@ const GOG_WH_ID = '1207664643';
 const GOG_WH_GOTY = '1640424747';
 const STEAM_ID = '499450';
 const STEAM_ID_WH = '292030';
+const EPIC_ID = '725a22e15ed74735bb0d6a19f3cc82d0';
 
 const CONFIG_MATRIX_REL_PATH = path.join('bin', 'config', 'r4game', 'user_config_matrix', 'pc');
 
@@ -222,7 +223,7 @@ function findGame(): Bluebird<string> {
   } catch (err) {
     return util.GameStoreHelper.findByAppId([
       GOG_ID_GOTY, GOG_ID, GOG_WH_ID, GOG_WH_GOTY,
-      STEAM_ID, STEAM_ID_WH,
+      STEAM_ID, STEAM_ID_WH, EPIC_ID
     ])
       .then(game => game.gamePath);
   }
