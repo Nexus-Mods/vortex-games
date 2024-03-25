@@ -1,6 +1,6 @@
 /* eslint-disable */
 import * as path from 'path';
-import { selectors, types, util } from 'vortex-api';
+import { log, selectors, types, util } from 'vortex-api';
 
 import { GAME_ID } from './common';
 import { DivineAction, IDivineOptions, IDivineOutput } from './types';
@@ -22,6 +22,13 @@ export class DivineExecMissing extends Error {
   constructor() {
     super('Divine executable is missing');
     this.name = 'DivineExecMissing';
+  }
+}
+
+export class DivineMissingDotNet extends Error {
+  constructor() {
+    super('LSLib requires .NET 8 Desktop Runtime to be installed.');
+    this.name = 'DivineMissingDotNet';
   }
 }
 
@@ -91,7 +98,7 @@ async function divine(api: types.IExtensionApi,
       }
       if (!stdout && action !== 'list-package') {
         return resolve({ stdout: '', returnCode: 2 })
-      }
+      }      
       if (['error', 'fatal'].some(x => stdout.toLowerCase().startsWith(x))) {
         // Really?
         return reject(new Error(`divine.exe failed: ${stdout}`));
@@ -102,6 +109,11 @@ async function divine(api: types.IExtensionApi,
       if (err.code === 'ENOENT') {
         return reject(new DivineExecMissing());
       }
+
+      if(err.message.includes('You must install or update .NET')) {
+        return reject(new DivineMissingDotNet());
+      }
+
       const error = new Error(`divine.exe failed: ${err.message}`);
       error['attachLogOnReport'] = true;
       return reject(error);
@@ -118,8 +130,22 @@ export async function listPackage(api: types.IExtensionApi, pakPath: string): Pr
   let res;
   try {
     res = await runDivine(api, 'list-package', { source: pakPath, loglevel: 'off' });
-  } catch (error) {
-    logError(`listPackage caught error: `, error);
+  } catch (error) {    
+    logError(`listPackage caught error: `, { error });
+    //log('debug', 'listPackage error', error.message);
+
+    if(error instanceof DivineMissingDotNet) {  
+      log('error', 'Missing .NET', error.message);
+      api.dismissNotification('bg3-reading-paks-activity');
+      api.showErrorNotification('LSLib requires .NET 8', 
+      'LSLib requires .NET 8 Desktop Runtime to be installed.' +
+      '[br][/br][br][/br]' +
+      '[list=1][*]Download and Install [url=https://dotnet.microsoft.com/en-us/download/dotnet/thank-you/runtime-desktop-8.0.3-windows-x64-installer].NET 8.0 Desktop Runtime from Microsoft[/url]'  + 
+      '[*]Close Vortex' + 
+      '[*]Restart Computer' + 
+      '[*]Open Vortex[/list]',
+       { id: 'bg3-dotnet-error', allowReport: false, isBBCode: true });
+    }
   }
 
   //logDebug(`listPackage res=`, res);
