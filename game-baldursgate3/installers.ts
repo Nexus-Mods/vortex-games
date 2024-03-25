@@ -208,22 +208,26 @@ export function testReplacer(files: string[], gameId: string): Promise<types.ISu
     return Promise.resolve({ supported: false, requiredFiles: [] });
   }
   const paks = files.filter(file => path.extname(file).toLowerCase() === '.pak');
+  // do we have a public or generated folder?
+  const hasGenOrPublicFolder: boolean = ['generated', 'public'].some(segment =>
+    files.find(file => file.toLowerCase().indexOf(segment + path.sep) !== -1) !== undefined);
 
   return Promise.resolve({
-    supported: paks.length === 0,
+    supported: hasGenOrPublicFolder || paks.length === 0,
     requiredFiles: [],
   });
 }
 
 export async function installReplacer(files: string[]): Promise<types.IInstallResult> {
   const directories = Array.from(new Set(files.map(file => path.dirname(file).toUpperCase())));
-  let dataPath: string = directories.find(dir => path.basename(dir) === 'DATA');
+  let dataPath = undefined;
+  const genOrPublic = directories
+    .find(dir => ['PUBLIC', 'GENERATED'].includes(path.basename(dir)));
+  if (genOrPublic !== undefined) {
+    dataPath = path.dirname(genOrPublic);
+  }
   if (dataPath === undefined) {
-    const genOrPublic = directories
-      .find(dir => ['PUBLIC', 'GENERATED'].includes(path.basename(dir)));
-    if (genOrPublic !== undefined) {
-      dataPath = path.dirname(genOrPublic);
-    }
+    dataPath = directories.find(dir => path.basename(dir) === 'DATA');
   }
 
   const instructions: types.IInstruction[] = (dataPath !== undefined)
