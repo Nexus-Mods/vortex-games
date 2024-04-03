@@ -169,7 +169,7 @@ async function onCheckModVersion(api: types.IExtensionApi, gameId: string, mods:
 
 async function onGameModeActivated(api: types.IExtensionApi, gameId: string) {
   if (gameId !== GAME_ID) {
-    PakInfoCache.getInstance().save(api);
+    PakInfoCache.getInstance(api).save();
     return;
   }
   try {
@@ -184,6 +184,7 @@ async function onGameModeActivated(api: types.IExtensionApi, gameId: string) {
 
   try {
     await readStoredLO(api);
+    PakInfoCache.getInstance(api);
   } catch (err) {
     api.showErrorNotification(
       'Failed to read load order', err, {
@@ -337,7 +338,7 @@ function main(context: types.IExtensionContext) {
       if (profile?.gameId === GAME_ID) {
         forceRefresh(context.api);
       }
-      await PakInfoCache.getInstance().save(context.api);
+      await PakInfoCache.getInstance(context.api).save();
       return Promise.resolve();
     });
 

@@ -547,7 +547,7 @@ async function readPAKs(api: types.IExtensionApi) : Promise<Array<ICacheEntry>> 
 
   const paks = await readPAKList(api);
 
-  logDebug('paks', paks);
+  // logDebug('paks', paks);
 
   let manifest;
   try {
@@ -562,7 +562,7 @@ async function readPAKs(api: types.IExtensionApi) : Promise<Array<ICacheEntry>> 
     id: 'bg3-reading-paks-activity',
     message: 'Reading PAK files. This might take a while...',
   })
-  const cache: PakInfoCache = PakInfoCache.getInstance();
+  const cache: PakInfoCache = PakInfoCache.getInstance(api);
   const res = await Promise.all(paks.map(async (fileName, idx) => {
     return util.withErrorContext('reading pak', fileName, () => {
       const func = async () => {
