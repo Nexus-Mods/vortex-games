@@ -15,7 +15,7 @@ import * as React from 'react';
 import { fs, selectors, types, util } from 'vortex-api';
 
 import {
-  DEFAULT_MOD_SETTINGS, GAME_ID, LSLIB_URL, IGNORE_PATTERNS,
+  DEFAULT_MOD_SETTINGS, GAME_ID, IGNORE_PATTERNS,
   MOD_TYPE_BG3SE, MOD_TYPE_LOOSE, MOD_TYPE_LSLIB, MOD_TYPE_REPLACER,
 } from './common';
 import * as gitHubDownloader from './githubDownloader';
@@ -40,7 +40,7 @@ import {
 
 import {
   deserialize, importModSettingsFile, importModSettingsGame,
-  serialize, exportToGame, exportToFile, validate,
+  importFromBG3MM, serialize, exportToGame, exportToFile, validate,
 } from './loadOrder';
 
 import { InfoPanelWrap } from './InfoPanel'
@@ -311,6 +311,7 @@ function main(context: types.IExtensionContext) {
   context.registerAction('fb-load-order-icons', 161, 'import', {}, 'Import from File...', () => { 
     importModSettingsFile(context.api); 
   }, isBG3);
+  context.registerAction('fb-load-order-icons', 170, 'import', {}, 'Import from BG3MM...', () => { importFromBG3MM(context); }, isBG3);
 
   context.registerSettings('Mods', Settings, undefined, isBG3, 150);
 

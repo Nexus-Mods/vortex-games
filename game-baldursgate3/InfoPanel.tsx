@@ -117,6 +117,15 @@ function InfoPanel(props: any) {
         {t(`Export can be used to manually update the game's modsettings.lsx file if 'Settings > Mods > Auto export load order' isn't set to do this automatically. 
         It can also be used to export to a different file as a backup.`)}
       </div>
+      <h4 style={{ margin: 0 }}>
+        {t('Import from Baldur\'s Gate 3 Mod Manager')}
+      </h4>
+      <div>
+        {t('Vortex can sort your load order based on a BG3MM .json load order file. Any mods that are not installed through Vortex will be ignored.')}
+      </div>
+      <div>
+        {t('Please note that any mods that are not present in the BG3MM load order file will be placed at the bottom of the load order.')}
+      </div>
 
     </div>
   ) : (
