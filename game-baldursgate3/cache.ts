@@ -5,7 +5,10 @@ import { fs, log, selectors, types, util } from 'vortex-api';
 import { GAME_ID } from './common';
 import { listPackage } from './divineWrapper';
 import { IPakInfo } from './types';
-import { extractPakInfoImpl } from './util';
+import { extractPakInfoImpl, logDebug } from './util';
+
+import LRU from 'lru-cache';
+import { setTimeout } from 'timers/promises';
 
 export interface ICacheEntry {
   lastModified: number;
@@ -16,77 +19,80 @@ export interface ICacheEntry {
   mod?: types.IMod;
 }
 
-type IPakMap = { [filePath: string]: ICacheEntry };
+type IPakMap = LRU<string, ICacheEntry>;
 export default class PakInfoCache {
   private static instance: PakInfoCache = null;
-  public static getInstance(): PakInfoCache {
+  public static getInstance(api: types.IExtensionApi): PakInfoCache {
     if (!PakInfoCache.instance) {
-      PakInfoCache.instance = new PakInfoCache();
+      PakInfoCache.instance = new PakInfoCache(api);
     }
 
     return PakInfoCache.instance;
   }
 
   private mCache: IPakMap;
-  constructor() {
-    this.mCache = null;
+  private mApi: types.IExtensionApi;
+
+  constructor(api: types.IExtensionApi) {
+    // 700 should be enough for everyone I hope.
+    this.mApi = api;
+    this.mCache = new LRU<string, ICacheEntry>({ max: 700 });
+    this.load(api);
   }
 
   public async getCacheEntry(api: types.IExtensionApi,
                              filePath: string,
                              mod?: types.IMod): Promise<ICacheEntry> {
-    if (!this.mCache) { 
-      this.mCache = await this.load(api);
-    }
     const id = this.fileId(filePath);
-    let mtime: number;
-    try {
-      const stat = fs.statSync(filePath);
-      mtime = Number(stat.mtimeMs);
-    } catch (err) {
-      mtime = Date.now();
-    }
-    if ((this.mCache[id] === undefined)
-        || (mtime !== this.mCache[id].lastModified
-        || (this.mCache[id].packageList.length === 0))) {
+    const stat = await fs.statAsync(filePath);
+    const ctime = stat.ctimeMs;
+    const hasChanged = (entry: ICacheEntry) => {
+      return (!!mod && !!entry.mod)
+        ? mod.attributes?.fileId !== entry.mod.attributes?.fileId
+        : ctime !== entry?.lastModified;
+    };
+
+    const cacheEntry = await this.mCache.get(id);
+    const packageNotListed = (cacheEntry?.packageList || []).length === 0;
+    if (!cacheEntry || hasChanged(cacheEntry) || packageNotListed) {
       const packageList = await listPackage(api, filePath);
       const isListed = this.isLOListed(api, filePath, packageList);
       const info = await extractPakInfoImpl(api, filePath, mod, isListed);
-      this.mCache[id] = {
+      this.mCache.set(id, {
         fileName: path.basename(filePath),
-        lastModified: mtime,
+        lastModified: ctime,
         info,
         packageList,
         mod,
         isListed,
-      };
+      });
     }
-    return this.mCache[id];
+    return this.mCache.get(id);
   }
 
   public reset() {
-    this.mCache = null;
+    this.mCache = new LRU<string, ICacheEntry>({ max: 700 });
   }
 
-  public async save(api: types.IExtensionApi) {
+  public async save() {
     if (!this.mCache) {
       // Nothing to save.
       return;
     }
-    const state = api.getState();
+    const state = this.mApi.getState();
     const profileId = selectors.lastActiveProfileForGame(state, GAME_ID);
     const staging = selectors.installPathForGame(state, GAME_ID);
     const cachePath = path.join(path.dirname(staging), 'cache', profileId + '.json');
     try {
       await fs.ensureDirWritableAsync(path.dirname(cachePath));
-      await util.writeFileAtomic(cachePath, JSON.stringify(this.mCache));
+      await util.writeFileAtomic(cachePath, JSON.stringify(this.mCache.dump()));
     } catch (err) {
       log('error', 'failed to save cache', err);
       return;
     }
   }
 
-  private async load(api: types.IExtensionApi): Promise<IPakMap> {
+  private async load(api: types.IExtensionApi): Promise<void> {
     const state = api.getState();
     const profileId = selectors.lastActiveProfileForGame(state, GAME_ID);
     const staging = selectors.installPathForGame(state, GAME_ID);
@@ -94,12 +100,11 @@ export default class PakInfoCache {
     try {
       await fs.ensureDirWritableAsync(path.dirname(cachePath));
       const data = await fs.readFileAsync(cachePath, { encoding: 'utf8' });
-      return JSON.parse(data);
+      this.mCache.load(JSON.parse(data));
     } catch (err) {
       if (!['ENOENT'].includes(err.code)) {
         log('error', 'failed to load cache', err);
       }
-      return {};
     }
   }
 
