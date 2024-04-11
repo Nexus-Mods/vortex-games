@@ -138,3 +138,6 @@ export const LOCKED_PREFIX = 'mod0000_';
 
 export const DO_NOT_DISPLAY = ['communitypatch-base'];
 export const DO_NOT_DEPLOY = ['readme.txt'];
+export const SCRIPT_MERGER_FILES = ['WitcherScriptMerger.exe'];
+
+export const NON_SORTABLE = ['witcher3menumoddocuments', 'collection'];

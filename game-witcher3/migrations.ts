@@ -1,8 +1,10 @@
+/* eslint-disable */
 import path from 'path';
 import semver from 'semver';
 import { actions, fs, selectors, types, util } from 'vortex-api';
 
 import { GAME_ID } from './common';
+import { prefix } from 'react-bootstrap/lib/utils/bootstrapUtils';
 
 export async function migrate148(context: types.IExtensionContext,
                                  oldVersion: string): Promise<void> {
@@ -47,4 +49,37 @@ export async function migrate148(context: types.IExtensionContext,
   });
 
   return Promise.resolve();
+}
+
+export function getPersistentLoadOrder(api: types.IExtensionApi): types.ILoadOrderEntry[] {
+  // We migrated away from the regular mod load order extension
+  //  to the file based load ordering
+  const state = api.getState();
+  const profile: types.IProfile = selectors.activeProfile(state);
+  if (profile?.gameId !== GAME_ID) {
+    return [];
+  }
+  const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], undefined);
+  if (loadOrder === undefined) {
+    return [];
+  }
+  if (Array.isArray(loadOrder)) {
+    return loadOrder;
+  }
+  if (typeof loadOrder === 'object') {
+    return Object.values(loadOrder).map(convertDisplayItem);
+  }
+  return [];
+}
+
+function convertDisplayItem(item: types.ILoadOrderDisplayItem): types.ILoadOrderEntry {
+  return {
+    id: item.id,
+    name: item.name,
+    locked: item.locked,
+    enabled: true,
+    data: {
+      prefix: item.prefix,
+    }
+  }
 }

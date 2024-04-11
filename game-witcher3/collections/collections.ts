@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { selectors, types, util } from 'vortex-api';
 
 import { GAME_ID, SCRIPT_MERGER_ID } from '../common';
@@ -29,7 +30,7 @@ export async function genCollectionsData(context: types.IExtensionContext,
       ['settings', 'gameMode', 'discovered', GAME_ID, 'tools', SCRIPT_MERGER_ID], undefined);
     let scriptMergesData;
     if (scriptMergerTool !== undefined) {
-      scriptMergesData = await exportScriptMerges(context, profile.id, includedMods, collection);
+      scriptMergesData = await exportScriptMerges(context.api, profile.id, includedMods, collection);
     }
     const mergedData: IW3MergedData = {
       menuModSettingsData: (menuModData !== undefined)
@@ -73,9 +74,9 @@ export async function parseCollectionsData(context: types.IExtensionContext,
       const scriptMergerTool = util.getSafe(state,
         ['settings', 'gameMode', 'discovered', GAME_ID, 'tools', SCRIPT_MERGER_ID], undefined);
       if (scriptMergerTool === undefined) {
-        await downloadScriptMerger(context);
+        await downloadScriptMerger(api);
       }
-      await importScriptMerges(context, profile.id, hex2Buffer(scriptMergedData));
+      await importScriptMerges(context.api, profile.id, hex2Buffer(scriptMergedData));
     }
   } catch (err) {
     return Promise.reject(err);
