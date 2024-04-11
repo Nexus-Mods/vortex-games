@@ -2,7 +2,7 @@
 import React from 'react';
 import { selectors, types } from 'vortex-api';
 
-import { GAME_ID, LOCKED_PREFIX, getLoadOrderFilePath } from './common';
+import { GAME_ID, LOCKED_PREFIX, UNI_PATCH } from './common';
 import InfoComponent from './views/InfoComponent';
 import IniStructure from './iniParser';
 import { PriorityManager } from './priorityManager';
@@ -41,12 +41,14 @@ class TW3LoadOrder implements types.ILoadOrderGameInfo {
     return IniStructure.getInstance(this.mApi, this.mPriorityManager).writeToModSettings();
   }
 
+  private readableNames = {[UNI_PATCH]: 'Unification/Community Patch'};
   public async deserializeLoadOrder(): Promise<types.LoadOrder> {
     const state = this.mApi.getState();
     const activeProfile = selectors.activeProfile(state);
     if (activeProfile?.id === undefined) {
       return Promise.resolve([]);
     }
+    const findName = (val: string) => this.readableNames?.[val] || val;
     try {
       const ini = await IniStructure.getInstance(this.mApi, this.mPriorityManager).readStructure();
       const entries = Object.keys(ini.data)
@@ -54,16 +56,16 @@ class TW3LoadOrder implements types.ILoadOrderGameInfo {
           const entry = ini.data[iter];
           return {
             id: iter,
-            name: entry.Name,
+            name: findName(iter),
             enabled: entry.Enabled === 1,
             modId: entry?.VK ?? iter,
             locked: iter.startsWith(LOCKED_PREFIX),
             data: {
-              prefix: ini.data[idx].Priority,
+              prefix: ini.data?.[idx]?.Priority !== undefined ? +ini.data[idx].Priority : idx + 1,
             }
           }
         });
-      return Promise.resolve(entries.sort((a,b) => a.data.prefix - b.data.prefix));
+      return Promise.resolve(entries.sort((a,b) => b.data.prefix - a.data.prefix));
     } catch (err) {
       return 
     }
