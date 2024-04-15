@@ -24,7 +24,7 @@ export async function genCollectionsData(context: types.IExtensionContext,
   const mods: { [modId: string]: types.IMod } = util.getSafe(state,
     ['persistent', 'mods', gameId], {});
   try {
-    const loadOrder: ILoadOrder = await exportLoadOrder(api.getState(), includedMods, mods);
+    const loadOrder: types.LoadOrder = await exportLoadOrder(api, includedMods, mods);
     const menuModData = await exportMenuMod(api, profile, includedMods);
     const scriptMergerTool = util.getSafe(state,
       ['settings', 'gameMode', 'discovered', GAME_ID, 'tools', SCRIPT_MERGER_ID], undefined);
@@ -41,7 +41,7 @@ export async function genCollectionsData(context: types.IExtensionContext,
         : undefined,
     };
     const collectionData: IW3CollectionsData = {
-      loadOrder,
+      loadOrder: loadOrder as any,
       mergedData,
     };
     return Promise.resolve(collectionData);

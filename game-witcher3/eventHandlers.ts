@@ -73,8 +73,6 @@ export const onDidDeploy = (api: types.IExtensionApi, priorityManager: PriorityM
         + 'remove the existing merge and re-apply it.');
     }
     const loadOrder = getPersistentLoadOrder(api);
-    if (loadOrder === undefined) {
-    }
     const docFiles = (deployment['witcher3menumodroot'] ?? [])
       .filter(file => file.relPath.endsWith(PART_SUFFIX)
                       && (file.relPath.indexOf(INPUT_XML_FILENAME) === -1));

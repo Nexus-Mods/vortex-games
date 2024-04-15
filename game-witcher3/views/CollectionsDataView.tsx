@@ -13,20 +13,17 @@ import { genCollectionLoadOrder } from '../collections/util';
 const NAMESPACE: string = 'generic-load-order-extension';
 
 interface IBaseState {
-  sortedMods: ILoadOrder;
+  sortedMods: types.LoadOrder;
 }
 
 interface IConnectedProps {
   gameId: string;
   mods: { [modId: string]: types.IMod };
-  loadOrder: ILoadOrder;
+  loadOrder: types.LoadOrder;
   profile: types.IProfile;
 }
 
-interface IActionProps {
-}
-
-type IProps = IActionProps & IExtendedInterfaceProps & IConnectedProps;
+type IProps = IExtendedInterfaceProps & IConnectedProps;
 type IComponentState = IBaseState;
 
 class CollectionsDataView extends ComponentEx<IProps, IComponentState> {
@@ -40,7 +37,7 @@ class CollectionsDataView extends ComponentEx<IProps, IComponentState> {
     super(props);
     const { loadOrder, mods, collection } = props;
     this.initState({
-      sortedMods: genCollectionLoadOrder(loadOrder, mods, collection) || {},
+      sortedMods: genCollectionLoadOrder(loadOrder, mods, collection) || [],
     });
   }
 
@@ -152,12 +149,11 @@ class CollectionsDataView extends ComponentEx<IProps, IComponentState> {
   }
 }
 
-const empty = {};
 function mapStateToProps(state: types.IState, ownProps: IProps): IConnectedProps {
   const profile = selectors.activeProfile(state) || undefined;
-  let loadOrder: ILoadOrder = {};
+  let loadOrder: types.LoadOrder = [];
   if (!!profile?.gameId) {
-    loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], empty);
+    loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], []);
   }
 
   return {
@@ -168,10 +164,6 @@ function mapStateToProps(state: types.IState, ownProps: IProps): IConnectedProps
   };
 }
 
-function mapDispatchToProps(dispatch: any): IActionProps {
-  return {};
-}
-
 export default withTranslation(['common', NAMESPACE])(
-  connect(mapStateToProps, mapDispatchToProps)(
+  connect(mapStateToProps)(
     CollectionsDataView) as any) as React.ComponentClass<IExtendedInterfaceProps>;

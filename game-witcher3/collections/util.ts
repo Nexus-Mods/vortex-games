@@ -1,8 +1,8 @@
+/** eslint-disable */
 import path from 'path';
 import { generate } from 'shortid';
 import turbowalk, { IEntry } from 'turbowalk';
 import { fs, log, types, util } from 'vortex-api';
-import { ILoadOrder, ILoadOrderEntry } from './types';
 
 import { LOCKED_PREFIX, W3_TEMP_DATA_DIR } from '../common';
 
@@ -33,24 +33,20 @@ export function isModInCollection(collectionMod: types.IMod, mod: types.IMod) {
     util.testModReference(mod, rule.reference)) !== undefined;
 }
 
-export function genCollectionLoadOrder(loadOrder: { [modId: string]: ILoadOrderEntry },
+export function genCollectionLoadOrder(loadOrder: types.LoadOrder,
                                        mods: { [modId: string]: types.IMod },
-                                       collection?: types.IMod): ILoadOrder {
-  const sortedMods = Object.keys(loadOrder)
-    .filter(id => {
-      const isLocked = id.toLowerCase().includes(LOCKED_PREFIX);
+                                       collection?: types.IMod): types.LoadOrder {
+  const sortedMods = loadOrder.filter(entry => {
+      const isLocked = entry.modId.includes(LOCKED_PREFIX);
       return isLocked || ((collection !== undefined)
-        ? isValidMod(mods[id]) && (isModInCollection(collection, mods[id]))
-        : isValidMod(mods[id]));
+        ? isValidMod(mods[entry.modId]) && (isModInCollection(collection, mods[entry.modId]))
+        : isValidMod(mods[entry.modId]));
     })
-    .sort((lhs, rhs) => loadOrder[lhs].pos - loadOrder[rhs].pos)
+    .sort((lhs, rhs) => lhs.data.prefix - rhs.data.prefix)
     .reduce((accum, iter, idx) => {
-      accum[iter] = {
-        ...loadOrder[iter],
-        pos: idx,
-      };
+      accum.push(iter);
       return accum;
-    }, {});
+    }, []);
   return sortedMods;
 }
 

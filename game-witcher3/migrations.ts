@@ -4,7 +4,7 @@ import semver from 'semver';
 import { actions, fs, selectors, types, util } from 'vortex-api';
 
 import { GAME_ID } from './common';
-import { prefix } from 'react-bootstrap/lib/utils/bootstrapUtils';
+import { ILoadOrder, ILoadOrderEntry } from './collections/types';
 
 export async function migrate148(context: types.IExtensionContext,
                                  oldVersion: string): Promise<void> {
@@ -51,7 +51,7 @@ export async function migrate148(context: types.IExtensionContext,
   return Promise.resolve();
 }
 
-export function getPersistentLoadOrder(api: types.IExtensionApi): types.ILoadOrderEntry[] {
+export function getPersistentLoadOrder(api: types.IExtensionApi, loadOrder?: ILoadOrder): types.LoadOrder {
   // We migrated away from the regular mod load order extension
   //  to the file based load ordering
   const state = api.getState();
@@ -59,7 +59,7 @@ export function getPersistentLoadOrder(api: types.IExtensionApi): types.ILoadOrd
   if (profile?.gameId !== GAME_ID) {
     return [];
   }
-  const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', profile.id], undefined);
+  loadOrder = loadOrder ?? util.getSafe(state, ['persistent', 'loadOrder', profile.id], undefined);
   if (loadOrder === undefined) {
     return [];
   }
@@ -67,15 +67,15 @@ export function getPersistentLoadOrder(api: types.IExtensionApi): types.ILoadOrd
     return loadOrder;
   }
   if (typeof loadOrder === 'object') {
-    return Object.values(loadOrder).map(convertDisplayItem);
+    return Object.entries(loadOrder).map(([key, item]) => convertDisplayItem(key, item));
   }
   return [];
 }
 
-function convertDisplayItem(item: types.ILoadOrderDisplayItem): types.ILoadOrderEntry {
+function convertDisplayItem(key: string, item: ILoadOrderEntry): types.ILoadOrderEntry {
   return {
-    id: item.id,
-    name: item.name,
+    id: key,
+    name: key,
     locked: item.locked,
     enabled: true,
     data: {

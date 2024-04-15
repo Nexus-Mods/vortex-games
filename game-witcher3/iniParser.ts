@@ -54,8 +54,8 @@ export default class IniStructure {
         key = mod;
       }
 
-      const LOEntry = loadOrder.find(iter => iter.modId === key);
-      const idxOfEntry = loadOrder.findIndex(iter => iter.modId === key);
+      const LOEntry = (loadOrder || []).find(iter => iter.modId === key);
+      const idxOfEntry = (loadOrder || []).findIndex(iter => iter.modId === key);
       if (idx === 0) {
         priorityManager?.resetMaxPriority(totalLocked.length);
       }
