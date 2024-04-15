@@ -1,4 +1,5 @@
 /* eslint-disable */
+import path from 'path';
 import IniParser, { WinapiFormat } from 'vortex-parse-ini';
 import { fs, selectors, types, util } from 'vortex-api';
 
@@ -7,7 +8,7 @@ import { PriorityManager } from './priorityManager';
 
 import { getPersistentLoadOrder } from './migrations';
 
-import { DO_NOT_DISPLAY, ResourceInaccessibleError, getLoadOrderFilePath, UNI_PATCH } from './common';
+import { ResourceInaccessibleError, getLoadOrderFilePath } from './common';
 
 export default class IniStructure {
   private static instance: IniStructure = null;

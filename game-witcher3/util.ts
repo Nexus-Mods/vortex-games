@@ -192,10 +192,10 @@ export async function getManuallyAddedMods(api: types.IExtensionApi) {
   const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
   const modKeys = Object.keys(mods);
   const iniEntries = Object.keys(ini.data);
-  const manualCandidates = [].concat(iniEntries, [UNI_PATCH]).filter(entry => {
+  const manualCandidates = [].concat(iniEntries).filter(entry => {
     const hasVortexKey = util.getSafe(ini.data[entry], ['VK'], undefined) !== undefined;
     return ((!hasVortexKey) || (ini.data[entry].VK === entry) && !modKeys.includes(entry));
-  }) || [UNI_PATCH];
+  });
   const uniqueCandidates = new Set(new Set(manualCandidates));
   const modsPath = path.join(discovery.path, 'Mods');
   const candidates = Array.from(uniqueCandidates);
