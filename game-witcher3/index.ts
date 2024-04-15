@@ -23,7 +23,7 @@ import { testDLC, testTL } from './modTypes';
 
 import { testModLimitBreach } from './tests';
 
-import { ModLimitPatcher } from './modLimitPatch';
+// import { ModLimitPatcher } from './modLimitPatch';
 
 import { registerActions } from './iconbarActions';
 import { PriorityManager } from './priorityManager';
@@ -242,7 +242,7 @@ function merge(filePath, mergeDir, context) {
 
 let loadOrder: TW3LoadOrder;
 let priorityManager: PriorityManager;
-let modLimitPatcher: ModLimitPatcher;
+// let modLimitPatcher: ModLimitPatcher;
 
 function main(context: types.IExtensionContext) {
   context.registerReducer(['settings', 'witcher3'], W3Reducer);
@@ -292,7 +292,7 @@ function main(context: types.IExtensionContext) {
   registerActions({
     context,
     getPriorityManager: () => priorityManager,
-    getModLimitPatcher: () => modLimitPatcher,
+    // getModLimitPatcher: () => modLimitPatcher,
   });
 
   context.optional.registerCollectionFeature(
@@ -341,15 +341,15 @@ function main(context: types.IExtensionContext) {
     priorityManager,
   }
   context.registerLoadOrder(new TW3LoadOrder(props));
-  context.registerTest('tw3-mod-limit-breach', 'gamemode-activated',
-    () => Bluebird.resolve(testModLimitBreach(context.api, modLimitPatcher)));
-  context.registerTest('tw3-mod-limit-breach', 'mod-activated',
-    () => Bluebird.resolve(testModLimitBreach(context.api, modLimitPatcher)));
+  // context.registerTest('tw3-mod-limit-breach', 'gamemode-activated',
+  //   () => Bluebird.resolve(testModLimitBreach(context.api, modLimitPatcher)));
+  // context.registerTest('tw3-mod-limit-breach', 'mod-activated',
+  //   () => Bluebird.resolve(testModLimitBreach(context.api, modLimitPatcher)));
 
   context.once(() => {
     priorityManager = new PriorityManager(context.api, 'prefix-based');
     IniStructure.getInstance(context.api, priorityManager);
-    modLimitPatcher = new ModLimitPatcher(context.api);
+    // modLimitPatcher = new ModLimitPatcher(context.api);
     loadOrder = new TW3LoadOrder({
       api: context.api,
       priorityManager,

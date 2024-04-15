@@ -14,11 +14,11 @@ import { getPersistentLoadOrder } from './migrations';
 interface IProps {
   context: types.IExtensionContext;
   getPriorityManager: () => PriorityManager;
-  getModLimitPatcher: () => ModLimitPatcher;
+  // getModLimitPatcher: () => ModLimitPatcher;
 }
 
 export const registerActions = (props: IProps) => {
-  const { context, getModLimitPatcher } = props;
+  const { context } = props;
   const openTW3DocPath = () => {
     const docPath = path.join(util.getVortexPath('documents'), 'The Witcher 3');
     util.opn(docPath).catch(() => null);
@@ -45,14 +45,14 @@ export const registerActions = (props: IProps) => {
       return activeGameId === GAME_ID;
     });
 
-  context.registerAction('mod-icons', 500, 'savegame', {}, 'Apply Mod Limit Patch', () => {
-    getModLimitPatcher().ensureModLimitPatch()
-      .catch(err => {
-        context.api.showErrorNotification('Failed to apply patch', err, {
-          allowReport: (err instanceof util.ProcessCanceled),
-        });
-      });
-  }, () => selectors.activeGameId(context.api.getState()) === GAME_ID);
+  // context.registerAction('mod-icons', 500, 'savegame', {}, 'Apply Mod Limit Patch', () => {
+  //   getModLimitPatcher().ensureModLimitPatch()
+  //     .catch(err => {
+  //       context.api.showErrorNotification('Failed to apply patch', err, {
+  //         allowReport: (err instanceof util.ProcessCanceled),
+  //       });
+  //     });
+  // }, () => selectors.activeGameId(context.api.getState()) === GAME_ID);
 
   context.registerAction('mod-icons', 300, 'open-ext', {},
                          'Open TW3 Documents Folder', openTW3DocPath, isTW3);
