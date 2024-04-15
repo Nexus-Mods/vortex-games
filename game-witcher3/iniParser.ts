@@ -54,16 +54,15 @@ export default class IniStructure {
         key = mod;
       }
 
-      const LOEntry = util.getSafe(loadOrder, [key], undefined);
+      const LOEntry = loadOrder.find(iter => iter.modId === key);
+      const idxOfEntry = loadOrder.findIndex(iter => iter.modId === key);
       if (idx === 0) {
         priorityManager?.resetMaxPriority(totalLocked.length);
       }
       accum[name] = {
         // The INI file's enabled attribute expects 1 or 0
         Enabled: (LOEntry !== undefined) ? LOEntry.enabled ? 1 : 0 : 1,
-        Priority: totalLocked.includes(name)
-          ? totalLocked.indexOf(name)
-          : priorityManager?.getPriority(key) ?? LOEntry?.data?.prefix ?? idx + 1,
+        Priority: totalLocked.includes(name) ? totalLocked.indexOf(name) + 1 : idxOfEntry + 1,
         VK: key,
       };
       return accum;
@@ -164,7 +163,7 @@ export default class IniStructure {
       await fs.removeAsync(filePath);
       await fs.writeFileAsync(filePath, '', { encoding: 'utf8' });
       const ini = await parser.read(filePath);
-      const struct = Object.keys(this.mIniStruct);
+      const struct = Object.keys(this.mIniStruct).sort((a, b) => this.mIniStruct[a].Priority - this.mIniStruct[b].Priority);
       for (const key of struct) {
         if (this.mIniStruct?.[key]?.Enabled === undefined) {
           // It's possible for the user to run multiple operations at once,

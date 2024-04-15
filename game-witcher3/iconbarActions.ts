@@ -19,20 +19,6 @@ interface IProps {
   getModLimitPatcher: () => ModLimitPatcher;
 }
 
-function resetPriorities(props: IProps) {
-  const { context } = props;
-  const state = context.api.getState();
-  const profile = selectors.activeProfile(state);
-  const loadOrder: types.LoadOrder = getPersistentLoadOrder(context.api);
-  const newLO = loadOrder.reduce((accum, loEntry, idx) => {
-    accum.push({ ...loEntry, data: { prefix: idx + 1 } });
-    return accum;
-  }, []);
-  context.api.store.dispatch(actions.setLoadOrder(profile.id, newLO as any));
-  forceRefresh(context.api);
-  return newLO;
-}
-
 export const registerActions = (props: IProps) => {
   const { context, getModLimitPatcher } = props;
   const openTW3DocPath = () => {
@@ -70,33 +56,16 @@ export const registerActions = (props: IProps) => {
       });
   }, () => selectors.activeGameId(context.api.getState()) === GAME_ID);
 
-  context.registerAction('generic-load-order-icons', 300, PriorityTypeButton, {},
+  context.registerAction('fb-load-order-icons', 300, PriorityTypeButton, {},
     undefined, isTW3);
 
   context.registerAction('mod-icons', 300, 'open-ext', {},
                          'Open TW3 Documents Folder', openTW3DocPath, isTW3);
 
-  context.registerAction('generic-load-order-icons', 300, 'open-ext', {},
+  context.registerAction('fb-load-order-icons', 300, 'open-ext', {},
                          'Open TW3 Documents Folder', openTW3DocPath, isTW3);
 
-  context.registerAction('generic-load-order-icons', 100, 'loot-sort', {}, 'Reset Priorities',
-    () => {
-      context.api.showDialog('info', 'Reset Priorities', {
-        bbcode: context.api.translate('This action will revert all manually set priorities and will re-instate priorities in an incremental '
-          + 'manner starting from 1. Are you sure you want to do this ?', { ns: I18N_NAMESPACE }),
-      }, [
-        { label: 'Cancel', action: () => {
-          return;
-        }},
-        { label: 'Reset Priorities', action: () => resetPriorities(props) },
-      ]);
-    }, () => {
-      const state = context.api.store.getState();
-      const gameMode = selectors.activeGameId(state);
-      return gameMode === GAME_ID;
-    });
-
-  context.registerAction('generic-load-order-icons', 100, 'loot-sort', {}, 'Sort by Deploy Order',
+  context.registerAction('fb-load-order-icons', 100, 'loot-sort', {}, 'Sort by Deploy Order',
     () => {
       context.api.showDialog('info', 'Sort by Deployment Order', {
         bbcode: context.api.translate('This action will set priorities using the deployment rules '
