@@ -21,10 +21,6 @@ import { DO_NOT_DEPLOY, GAME_ID, getLoadOrderFilePath, INPUT_XML_FILENAME,
 
 import { testDLC, testTL } from './modTypes';
 
-import { testModLimitBreach } from './tests';
-
-// import { ModLimitPatcher } from './modLimitPatch';
-
 import { registerActions } from './iconbarActions';
 import { PriorityManager } from './priorityManager';
 
@@ -39,7 +35,7 @@ import { getDLCPath, getAllMods, determineExecutable, getDocumentsPath,
 import TW3LoadOrder from './loadOrder';
 
 
-import { onDidDeploy, onGameModeActivation, onProfileWillChange, onSettingsChange, onWillDeploy } from './eventHandlers';
+import { onDidDeploy, onDidPurge, onGameModeActivation, onProfileWillChange, onSettingsChange, onWillDeploy } from './eventHandlers';
 import IniStructure from './iniParser';
 
 const GOG_ID = '1207664663';
@@ -359,6 +355,7 @@ function main(context: types.IExtensionContext) {
     context.api.events.on('gamemode-activated', onGameModeActivation(context.api));
     context.api.onAsync('will-deploy', onWillDeploy(context.api) as any);
     context.api.onAsync('did-deploy', onDidDeploy(context.api, priorityManager) as any);
+    context.api.onAsync('did-purge', onDidPurge(context.api, priorityManager) as any);
     context.api.events.on('profile-will-change', onProfileWillChange(context.api) as any);
     context.api.onStateChange(['settings', 'witcher3'], onSettingsChange(context.api, priorityManager) as any);
   });

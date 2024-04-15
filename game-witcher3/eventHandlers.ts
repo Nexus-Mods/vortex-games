@@ -55,6 +55,18 @@ export const onWillDeploy = (api: types.IExtensionApi) => {
   }
 }
 
+export const onDidPurge = (api: types.IExtensionApi, priorityManager: PriorityManager) => {
+  return async (profileId: string, deployment: Deployment) => {
+    const state = api.getState();
+    const activeProfile = validateProfile(profileId, state);
+    if (activeProfile === undefined) {
+      return Promise.resolve();
+    }
+
+    return IniStructure.getInstance(api, priorityManager).revertLOFile();
+  };
+}
+
 let prevDeployment: Deployment = {};
 export const onDidDeploy = (api: types.IExtensionApi, priorityManager: PriorityManager) => {
   return async (profileId: string, deployment: Deployment) => {

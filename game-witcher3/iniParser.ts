@@ -8,7 +8,7 @@ import { PriorityManager } from './priorityManager';
 
 import { getPersistentLoadOrder } from './migrations';
 
-import { ResourceInaccessibleError, getLoadOrderFilePath } from './common';
+import { GAME_ID, ResourceInaccessibleError, getLoadOrderFilePath } from './common';
 
 export default class IniStructure {
   private static instance: IniStructure = null;
@@ -75,15 +75,13 @@ export default class IniStructure {
     const state = this.mApi.getState();
     const profile = selectors.activeProfile(state);
     if (!!profile && (profile.gameId === GAME_ID)) {
-      const loadOrder = getPersistentLoadOrder(this.mApi);
       const manuallyAdded = await getManuallyAddedMods(this.mApi);
       if (manuallyAdded.length > 0) {
         const newStruct = {};
         manuallyAdded.forEach((mod, idx) => {
           newStruct[mod] = {
             Enabled: 1,
-            Priority: ((loadOrder !== undefined && !!loadOrder[mod])
-              ? parseInt(loadOrder[mod]?.data?.prefix, 10) : idx) + 1,
+            Priority: idx + 1,
           };
         });
 
@@ -96,10 +94,11 @@ export default class IniStructure {
           .catch(err => this.modSettingsErrorHandler(err, 'Failed to cleanup load order file'));
       } else {
         const filePath = getLoadOrderFilePath();
-        fs.removeAsync(filePath)
-          .catch(err => (err.code === 'ENOENT')
-            ? Promise.resolve()
-            : this.mApi.showErrorNotification('Failed to cleanup load order file', err));
+        await fs.removeAsync(filePath).catch(err => (err.code !== 'ENOENT')
+          ? this.mApi.showErrorNotification('Failed to cleanup load order file', err)
+          : null);
+        forceRefresh(this.mApi);
+        return Promise.resolve();
       }
     }
   }
