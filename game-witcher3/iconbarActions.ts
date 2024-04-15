@@ -5,8 +5,6 @@ import { actions, selectors, types, util } from 'vortex-api';
 import { GAME_ID, I18N_NAMESPACE, LOCKED_PREFIX } from './common';
 import { PriorityManager } from './priorityManager';
 
-import PriorityTypeButton from './views/PriorityTypeButton';
-
 import { makeOnContextImport } from './mergeBackup';
 import { ModLimitPatcher } from './modLimitPatch';
 
@@ -55,9 +53,6 @@ export const registerActions = (props: IProps) => {
         });
       });
   }, () => selectors.activeGameId(context.api.getState()) === GAME_ID);
-
-  context.registerAction('fb-load-order-icons', 300, PriorityTypeButton, {},
-    undefined, isTW3);
 
   context.registerAction('mod-icons', 300, 'open-ext', {},
                          'Open TW3 Documents Folder', openTW3DocPath, isTW3);
