@@ -82,9 +82,9 @@ function main(context) {
     queryModPath: () => path.join('tf', 'custom'),
     getGameVersion,
     logo: 'gameart.jpg',
-    executable: () => 'hl2.exe',
+    executable: () => 'tf_win64.exe',
     requiredFiles: [
-      'hl2.exe',
+      'tf_win64.exe',
       path.join('tf', 'gameinfo.txt'),
     ],
     environment: {
