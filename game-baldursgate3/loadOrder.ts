@@ -4,14 +4,14 @@ import path from 'path';
 import * as semver from 'semver';
 import Bluebird from 'bluebird';
 
-import { GAME_ID, LO_FILE_NAME } from './common';
+import { GAME_ID, LO_FILE_NAME, NOTIF_IMPORT_ACTIVITY } from './common';
 import { BG3Pak, IModNode, IModSettings, IProps } from './types';
 import { Builder, parseStringPromise } from 'xml2js';
 import { LockedState } from 'vortex-api/lib/extensions/file_based_loadorder/types/types';
 import { IOpenOptions, ISaveOptions } from 'vortex-api/lib/types/IExtensionContext';
 
 import { DivineExecMissing } from './divineWrapper';
-import { findNode, logDebug, modsPath, profilesPath } from './util';
+import { findNode, forceRefresh, logDebug, modsPath, profilesPath } from './util';
 
 import PakInfoCache, { ICacheEntry } from './cache';
 
@@ -152,6 +152,43 @@ export async function deserialize(context: types.IExtensionContext): Promise<typ
   }
 }
 
+export async function importFromBG3MM(context: types.IExtensionContext): Promise<void> {
+  const api = context.api;
+  const options: IOpenOptions = {
+    title: api.translate('Please choose a BG3MM .json load order file to import from'),
+    filters: [{ name: 'BG3MM Load Order', extensions: ['json'] }]
+  };
+
+  const selectedPath:string = await api.selectFile(options);
+
+  logDebug('importFromBG3MM selectedPath=', selectedPath);
+  
+  // if no path selected, then cancel probably pressed
+  if(selectedPath === undefined) {
+    return;
+  }
+
+  try {
+    const data = await fs.readFileAsync(selectedPath, { encoding: 'utf8' });
+    const loadOrder: any[] = JSON.parse(data);
+    logDebug('importFromBG3MM loadOrder=', loadOrder);
+
+    const getIndex = (uuid: string): number => {
+      const index = loadOrder.findIndex(entry => entry.UUID !== undefined && entry.UUID === uuid);
+      return index !== -1 ? index : Infinity; // If UUID not found, put it at the end
+    };
+
+    const state = api.getState();
+    const profileId = selectors.activeProfile(state)?.id;
+    const currentLoadOrder = util.getSafe(state, ['persistent', 'loadOrder', profileId], []);
+    const newLO = [...currentLoadOrder].sort((a, b) => getIndex(a.data?.uuid) - getIndex(b.data?.uuid));
+    await serialize(context, newLO, profileId);
+  } catch (err) {
+    api.showErrorNotification('Failed to import BG3MM load order file', err, { allowReport: false });
+  } finally {
+    forceRefresh(context.api);
+  }
+}
 
 export async function importModSettingsFile(api: types.IExtensionApi): Promise<boolean | void> {
 
@@ -191,13 +228,35 @@ function getAttribute(node: IModNode, name: string, fallback?: string):string {
   return findNode(node?.attribute, name)?.$?.value ?? fallback;
 }
 
+async function processBG3MMFile(api: types.IExtensionApi, jsonPath: string) {
+  const state = api.getState();
+  const profileId = selectors.activeProfile(state)?.id;
+
+  api.sendNotification({
+    id: NOTIF_IMPORT_ACTIVITY,
+    title: 'Importing JSON File',
+    message: jsonPath,
+    type: 'activity',
+    noDismiss: true,
+    allowSuppress: false,
+  });
+
+  try {
+
+  } catch (err) {
+
+  } finally {
+    api.dismissNotification(NOTIF_IMPORT_ACTIVITY);
+  }
+}
+
 async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {  
 
   const state = api.getState();
   const profileId = selectors.activeProfile(state)?.id;
 
   api.sendNotification({
-    id: 'bg3-loadorder-import-activity',
+    id: NOTIF_IMPORT_ACTIVITY,
     title: 'Importing LSX File',
     message: lsxPath,
     type: 'activity',
@@ -348,7 +407,7 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
 
   } catch (err) {
     
-    api.dismissNotification('bg3-loadorder-import-activity');
+    api.dismissNotification(NOTIF_IMPORT_ACTIVITY);
 
     api.showErrorNotification('Failed to import load order', err, {
       allowReport: false

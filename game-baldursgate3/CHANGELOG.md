@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added caching to PAK reading
 - Optimizations when installing collections 
 - Fixed loose mod installer (Now prioritizing 'Public'/'Generated' folders over 'Data')
+- Added ability to import load order from Baldur's Gate 3 Mod Manager .json files
 - Code cleanup
 
 ## [1.3.12] - 2024-01-30
