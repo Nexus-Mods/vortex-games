@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.6.0] - 2024-xx-xx
 
 - Added Epic Game Store discovery
+- Version information now displaying correctly
 - Removed mod limit patcher (no longer needed)
 - Migrated load ordering system to use new FBLO API
 - Bug fixes and code cleanup
