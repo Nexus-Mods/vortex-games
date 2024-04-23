@@ -117,14 +117,21 @@ export async function findModFolder(installationPath: string, mod: types.IMod): 
     const errMessage = !installationPath
       ? 'Game is not discovered'
       : 'Failed to resolve mod installation path';
-    return Bluebird.reject(new Error(errMessage));
+    return Promise.reject(new Error(errMessage));
   }
 
   const expectedModNameLocation = ['witcher3menumodroot', 'witcher3tl'].includes(mod.type)
     ? path.join(installationPath, mod.installationPath, 'Mods')
     : path.join(installationPath, mod.installationPath);
-  return fs.readdirAsync(expectedModNameLocation)
-    .then(entries => Promise.resolve(entries[0]));
+  const entries = await fs.readdirAsync(expectedModNameLocation);
+  for (const entry of entries) {
+    const stats = await fs.statAsync(path.join(expectedModNameLocation, entry)).catch(err => null);
+    if (stats?.isDirectory()) {
+      return Promise.resolve(entry);
+    }
+  }
+
+  return Promise.reject(new Error('Failed to find mod folder'));
 }
 
 export function getManagedModNames(api: types.IExtensionApi, mods: types.IMod[]) {
@@ -154,7 +161,7 @@ export function getManagedModNames(api: types.IExtensionApi, mods: types.IMod[])
 
 export async function getAllMods(api: types.IExtensionApi) {
   // Mod types we don't want to display in the LO page
-  const invalidModTypes = ['witcher3menumoddocuments'];
+  const invalidModTypes = ['witcher3menumoddocuments', 'collection'];
   const state = api.getState();
   const profile = selectors.activeProfile(state);
   if (profile?.id === undefined) {
