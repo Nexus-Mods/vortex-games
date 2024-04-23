@@ -11,6 +11,10 @@ const sdvReducers: types.IReducerSpec<IStateSDV> = {
     [actions.setRecommendations as any]: (state, payload) => {
       return util.setSafe(state, ['useRecommendations'], payload);
     },
+    [actions.setMergeConfigs as any]: (state, payload) => {
+      const { profileId, enabled } = payload;
+      return util.setSafe(state, ['mergeConfigs', profileId], enabled);
+    },
   },
   defaults: {
     useRecommendations: undefined,

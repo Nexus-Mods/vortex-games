@@ -1,3 +1,4 @@
+/* eslint-disable */
 import Bluebird from 'bluebird';
 import { IQuery } from 'modmeta-db';
 import React from 'react';
@@ -5,24 +6,24 @@ import * as semver from 'semver';
 import turbowalk from 'turbowalk';
 import { actions, fs, log, selectors, util, types } from 'vortex-api';
 import * as winapi from 'winapi-bindings';
-import { setRecommendations } from './actions';
 import CompatibilityIcon from './CompatibilityIcon';
 import { SMAPI_QUERY_FREQUENCY } from './constants';
 
 import DependencyManager from './DependencyManager';
 import sdvReducers from './reducers';
-import Settings from './Settings';
 import SMAPIProxy from './smapiProxy';
 import { testSMAPIOutdated } from './tests';
 import { compatibilityOptions, CompatibilityStatus, ISDVDependency, ISDVModManifest, ISMAPIResult } from './types';
 import { parseManifest } from './util';
+
+import { onAddedFiles } from './configMod';
 
 const path = require('path'),
   { clipboard } = require('electron'),
   rjson = require('relaxed-json'),
   { SevenZip } = util,
   { deploySMAPI, downloadSMAPI, findSMAPIMod } = require('./SMAPI'),
-  { GAME_ID } = require('./common');
+  { GAME_ID, _SMAPI_BUNDLED_MODS, getBundledMods } = require('./common');
 
 const MANIFEST_FILE = 'manifest.json';
 const PTRN_CONTENT = path.sep + 'Content' + path.sep;
@@ -30,10 +31,6 @@ const SMAPI_EXE = 'StardewModdingAPI.exe';
 const SMAPI_DLL = 'SMAPI.Installer.dll';
 const SMAPI_DATA = ['windows-install.dat', 'install.dat'];
 
-const _SMAPI_BUNDLED_MODS = ['ErrorHandler', 'ConsoleCommands', 'SaveBackup'];
-const getBundledMods = () => {
-  return Array.from(new Set(_SMAPI_BUNDLED_MODS.map(modName => modName.toLowerCase())));
-}
 
 function toBlue<T>(func: (...args: any[]) => Promise<T>): (...args: any[]) => Bluebird<T> {
   return (...args: any[]) => Bluebird.resolve(func(...args));
@@ -673,43 +670,6 @@ function init(context: types.IExtensionContext) {
     return discovery.path;
   };
 
-  const isModCandidateValid = (mod, entry) => {
-    if (mod?.id === undefined || mod.type === 'sdvrootfolder') {
-      // There is no reliable way to ascertain whether a new file entry
-      //  actually belongs to a root modType as some of these mods will act
-      //  as replacement mods. This obviously means that if the game has
-      //  a substantial update which introduces new files we could potentially
-      //  add a vanilla game file into the mod's staging folder causing constant
-      //  contention between the game itself (when it updates) and the mod.
-      //
-      // There is also a potential chance for root modTypes to conflict with regular
-      //  mods, which is why it's not safe to assume that any addition inside the
-      //  mods directory can be safely added to this mod's staging folder either.
-      return false;
-    }
-
-    if (mod.type !== 'SMAPI') {
-      // Other mod types do not require further validation - it should be fine
-      //  to add this entry.
-      return true;
-    }
-
-    const segments = entry.filePath.toLowerCase().split(path.sep).filter(seg => !!seg);
-    const modsSegIdx = segments.indexOf('mods');
-    const modFolderName = ((modsSegIdx !== -1) && (segments.length > modsSegIdx + 1))
-      ? segments[modsSegIdx + 1] : undefined;
-
-    let bundledMods = util.getSafe(mod, ['attributes', 'smapiBundledMods'], []);
-    bundledMods = bundledMods.length > 0 ? bundledMods : getBundledMods();
-    if (segments.includes('content')) {
-      // SMAPI is not supposed to overwrite the game's content directly.
-      //  this is clearly not a SMAPI file and should _not_ be added to it.
-      return false;
-    }
-
-    return (modFolderName !== undefined) && bundledMods.includes(modFolderName);
-  };
-
   const manifestExtractor = toBlue(
     async (modInfo: any, modPath?: string): Promise<{ [key: string]: any; }> => {
       if (selectors.activeGameId(context.api.getState()) !== GAME_ID) {
@@ -844,11 +804,6 @@ function init(context: types.IExtensionContext) {
   context.registerTest('sdv-incompatible-mods', 'gamemode-activated',
     () => Bluebird.resolve(testSMAPIOutdated(context.api, dependencyManager)));
 
-  interface IAddedFile {
-    filePath: string;
-    candidates: string[];
-  }
-
   context.once(() => {
     const proxy = new SMAPIProxy(context.api);
     context.api.setStylesheet('sdv', path.join(__dirname, 'sdvstyle.scss'));
@@ -866,53 +821,7 @@ function init(context: types.IExtensionContext) {
       priority: 25,
     });
     dependencyManager = new DependencyManager(context.api);
-    context.api.onAsync('added-files', async (profileId, files: IAddedFile[]) => {
-      const state = context.api.store.getState();
-      const profile = selectors.profileById(state, profileId);
-      if (profile?.gameId !== GAME_ID) {
-        // don't care about any other games
-        return;
-      }
-      const game = util.getGame(GAME_ID);
-      const discovery = selectors.discoveryByGame(state, GAME_ID);
-      const modPaths = game.getModPaths(discovery.path);
-      const installPath = selectors.installPathForGame(state, GAME_ID);
-
-      await Bluebird.map(files, async entry => {
-        // only act if we definitively know which mod owns the file
-        if (entry.candidates.length === 1) {
-          const mod = util.getSafe(state.persistent.mods,
-                                   [GAME_ID, entry.candidates[0]],
-                                   undefined);
-          if (!isModCandidateValid(mod, entry)) {
-            return Promise.resolve();
-          }
-          const from = modPaths[mod.type ?? ''];
-          if (from === undefined) {
-            // How is this even possible? regardless it's not this
-            //  function's job to report this.
-            log('error', 'failed to resolve mod path for mod type', mod.type);
-            return Promise.resolve();
-          }
-          const relPath = path.relative(from, entry.filePath);
-          const targetPath = path.join(installPath, mod.id, relPath);
-          // copy the new file back into the corresponding mod, then delete it. That way, vortex will
-          // create a link to it with the correct deployment method and not ask the user any questions
-          try {
-            await fs.ensureDirAsync(path.dirname(targetPath));
-            await fs.copyAsync(entry.filePath, targetPath);
-            await fs.removeAsync(entry.filePath);
-          } catch (err) {
-            if (!err.message.includes('are the same file')) {
-              // should we be reporting this to the user? This is a completely
-              // automated process and if it fails more often than not the
-              // user probably doesn't care
-              log('error', 'failed to re-import added file to mod', err.message);
-            }
-          }
-        }
-      });
-    });
+    context.api.onAsync('added-files', onAddedFiles(context.api) as any);
 
     context.api.onAsync('did-deploy', async (profileId) => {
       const state = context.api.getState();
