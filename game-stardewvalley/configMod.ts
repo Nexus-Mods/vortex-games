@@ -3,27 +3,65 @@ import path from 'path';
 import { fs, types, selectors, log, util } from 'vortex-api';
 import { GAME_ID, MOD_CONFIG, RGX_INVALID_CHARS_WINDOWS, MOD_TYPE_CONFIG, getBundledMods } from './common';
 import { IFileEntry } from './types';
-import { walkPath } from './util';
+import { walkPath, defaultModsRelPath } from './util';
 
-const isSDV = (api: types.IExtensionApi) => {
+export function registerConfigMod(context: types.IExtensionContext) {
+  context.registerAction('mod-icons', 999, 'swap', {}, 'Sync Mod Configurations',
+    () => syncWrapper(context.api),
+    () => {
+      const state = context.api.store.getState();
+      const gameMode = selectors.activeGameId(state);
+      return (gameMode === GAME_ID);
+    });
+}
+
+const syncWrapper = (api: types.IExtensionApi) => {
+  onSyncModConfigurations(api);
+}
+
+async function onSyncModConfigurations(api: types.IExtensionApi): Promise<void> {
   const state = api.getState();
-  const activeGameId = selectors.activeGameId(state);
-  return (activeGameId === GAME_ID)
-}
-
-function register(api: types.IExtensionApi) {
-}
-
-function once(api: types.IExtensionApi) {
-  if (!isSDV(api)) {
+  const profile = selectors.activeProfile(state);
+  if (profile?.gameId !== GAME_ID) {
     return;
   }
-}
+  const mergeConfigs = util.getSafe(state, ['settings', 'SDV', 'mergeConfigs', profile.id], false);
+  if (!mergeConfigs) {
+    const result = await api.showDialog('info', 'Mod Configuration Sync', {
+      bbcode: 'Many Stardew Valley mods generate their own configuration files during game play. By default the generated files are, '
+              + 'ingested by their respective mods.[br][/br][br][/br]'
+              + 'Unfortunately the mod configuration files are lost when updating or removing a mod.[br][/br][br][/br] This button allows you to '
+              + 'Import all of your active mod\'s configuration files into a single mod which will remain unaffected by mod updates.[br][/br][br][/br]'
+              + 'Would you like to enable this functionality?',
+    }, [
+      { label: 'Enable' },
+      { label: 'Close' }
+    ]);
 
-async function copyConfig(api: types.IExtensionApi, gameId: string, modId: string) {
-  const mod = api.getState().persistent.mods?.[gameId]?.[modId];
-  if (mod === undefined) {
-    return;
+    if (result.action === 'Close') {
+      return;
+    }
+  }
+
+  const purgeAllMods = (api: types.IExtensionApi) => new Promise<void>((resolve, reject) => {
+    api.events.emit('purge-mods', false, err => (err !== null)
+      ? reject(err)
+      : resolve());
+  });
+
+  try {
+    const mod = await initialize(api);
+    if (mod?.configModPath === undefined) {
+      return;
+    }
+    await purgeAllMods(api);
+    const installPath = selectors.installPathForGame(api.getState(), GAME_ID);
+    const files = await walkPath(installPath);
+    const filtered = files.filter(file => path.basename(file.filePath).toLowerCase() === MOD_CONFIG
+                                       && !path.dirname(file.filePath).includes(mod.configModPath));
+    await addModConfig(api, filtered.map(file => ({ filePath: file.filePath, candidates: [] })));
+  } catch (err) {
+    api.showErrorNotification('Failed to sync mod configurations', err);
   }
 }
 
@@ -45,15 +83,13 @@ async function initialize(api: types.IExtensionApi): Promise<ConfigMod> {
   if (profile?.gameId !== GAME_ID) {
     return Promise.resolve(undefined);
   }
-  const mergeConfigs = util.getSafe(state, ['settings', 'mergeConfigs', profile.id], false);
+  const mergeConfigs = util.getSafe(state, ['settings', 'SDV', 'mergeConfigs', profile.id], false);
   if (!mergeConfigs) {
     return Promise.resolve(undefined);
   }
 
-  const mods: { [modId: string]: types.IMod } = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
   try {
-    const modId = await ensureConfigMod(api);
-    const mod = mods[modId];
+    const mod = await ensureConfigMod(api);
     const installationPath = selectors.installPathForGame(state, GAME_ID);
     const configModPath = path.join(installationPath, mod.installationPath);
     return Promise.resolve({ configModPath, mod });
@@ -70,13 +106,16 @@ export async function addModConfig(api: types.IExtensionApi, files: IFileEntry[]
   }
 
   const state = api.getState();
-  const game = util.getGame(GAME_ID);
   const discovery = selectors.discoveryByGame(state, GAME_ID);
-  const modPaths = game.getModPaths(discovery.path);
-  const installPath = selectors.installPathForGame(state, GAME_ID);
+  const modsPath = path.join(discovery.path, defaultModsRelPath());
   for (const file of files) {
     try {
-      // TODO copy over the config files
+      const relPath = path.relative(modsPath, file.filePath);
+      const targetPath = path.join(configMod.configModPath, relPath);
+      const targetDir = path.extname(targetPath) !== '' ? path.dirname(targetPath) : targetPath;
+      await fs.ensureDirWritableAsync(targetDir);
+      await fs.copyAsync(file.filePath, targetPath, { overwrite: true });
+      await fs.removeAsync(file.filePath);
     } catch (err) {
       api.showErrorNotification('Failed to write mod config', err);
     }
@@ -90,21 +129,21 @@ export async function removeModConfig(api: types.IExtensionApi, files: IFileEntr
   }
 }
 
-export async function ensureConfigMod(api: types.IExtensionApi): Promise<string> {
+export async function ensureConfigMod(api: types.IExtensionApi): Promise<types.IMod> {
   const state = api.getState();
   const mods: { [modId: string]: types.IMod } = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
   const modInstalled = Object.values(mods).find(iter => iter.type === MOD_TYPE_CONFIG);
   if (modInstalled !== undefined) {
-    return Promise.resolve(modInstalled.id);
+    return Promise.resolve(modInstalled);
   } else {
     const profile = selectors.activeProfile(state);
     const modName = configModName(profile.name);
-    const modId = await createConfigMod(api, modName, profile);
-    return Promise.resolve(modId);
+    const mod = await createConfigMod(api, modName, profile);
+    return Promise.resolve(mod);
   }
 }
 
-async function createConfigMod(api: types.IExtensionApi, modName: string, profile: types.IProfile) {
+async function createConfigMod(api: types.IExtensionApi, modName: string, profile: types.IProfile): Promise<types.IMod> {
   const mod = {
     id: modName,
     state: 'installed',
@@ -123,85 +162,83 @@ async function createConfigMod(api: types.IExtensionApi, modName: string, profil
     type: MOD_TYPE_CONFIG,
   };
 
-  return new Promise<string>((resolve, reject) => {
+  return new Promise<types.IMod>((resolve, reject) => {
     api.events.emit('create-mod', profile.gameId, mod, async (error) => {
       if (error !== null) {
         return reject(error);
       }
-      return resolve(mod.id);
+      return resolve(mod as any);
     });
   });
 }
 
-export async function onAddedFiles(api: types.IExtensionApi) {
-  return async (profileId: string, files: IFileEntry[]) => {
-    const state = api.store.getState();
-    const profile = selectors.profileById(state, profileId);
-    if (profile?.gameId !== GAME_ID) {
-      // don't care about any other games
-      return;
+export async function onAddedFiles(api: types.IExtensionApi, profileId: string, files: IFileEntry[]) {
+  const state = api.store.getState();
+  const profile = selectors.profileById(state, profileId);
+  if (profile?.gameId !== GAME_ID) {
+    // don't care about any other games
+    return;
+  }
+  const mergeConfigs = util.getSafe(state, ['settings', 'SDV', 'mergeConfigs', profile.id], false);
+  const result = files.reduce((accum, file) => {
+    if (mergeConfigs && path.basename(file.filePath).toLowerCase() === MOD_CONFIG) {
+      accum.configs.push(file);
+    } else {
+      accum.regulars.push(file);
     }
-    const mergeConfigs = util.getSafe(state, ['settings', 'mergeConfigs', profile.id], false);
-    const result = files.reduce((accum, file) => {
-      if (mergeConfigs && path.basename(file.filePath).toLowerCase() === MOD_CONFIG) {
-        accum.configs.push(file);
-      } else {
-        accum.regulars.push(file);
+    return accum;
+  }, { configs: [] as IFileEntry[], regulars: [] as IFileEntry[] });
+  return Promise.all([
+    addConfigFiles(api, profileId, result.configs),
+    addRegularFiles(api, profileId, result.regulars)
+  ]);
+}
+
+async function addConfigFiles(api: types.IExtensionApi, profileId: string, files: IFileEntry[]) {
+  if (files.length === 0) {
+    return Promise.resolve();
+  }
+  return addModConfig(api, files);
+}
+
+async function addRegularFiles(api: types.IExtensionApi, profileId: string, files: IFileEntry[]) {
+  if (files.length === 0) {
+    return Promise.resolve();
+  }
+  const state = api.getState();
+  const game = util.getGame(GAME_ID);
+  const discovery = selectors.discoveryByGame(state, GAME_ID);
+  const modPaths = game.getModPaths(discovery.path);
+  const installPath = selectors.installPathForGame(state, GAME_ID);
+  for (const entry of files) {
+    if (entry.candidates.length === 1) {
+      const mod = util.getSafe(state.persistent.mods,
+        [GAME_ID, entry.candidates[0]],
+        undefined);
+      if (!isModCandidateValid(mod, entry)) {
+        return Promise.resolve();
       }
-      return accum;
-    }, { configs: [] as IFileEntry[], regulars: [] as IFileEntry[] });
-    return Promise.all([
-      addConfigFiles(api, profileId, result.configs),
-      addRegularFiles(api, profileId, result.regulars)
-    ]);
-  }
-
-  async function addConfigFiles(api: types.IExtensionApi, profileId: string, files: IFileEntry[]) {
-    if (files.length === 0) {
-      return Promise.resolve();
-    }
-    return addModConfig(api, files);
-  }
-
-  async function addRegularFiles(api: types.IExtensionApi, profileId: string, files: IFileEntry[]) {
-    if (files.length === 0) {
-      return Promise.resolve();
-    }
-    const state = api.getState();
-    const game = util.getGame(GAME_ID);
-    const discovery = selectors.discoveryByGame(state, GAME_ID);
-    const modPaths = game.getModPaths(discovery.path);
-    const installPath = selectors.installPathForGame(state, GAME_ID);
-    for (const entry of files) {
-      if (entry.candidates.length === 1) {
-        const mod = util.getSafe(state.persistent.mods,
-          [GAME_ID, entry.candidates[0]],
-          undefined);
-        if (!isModCandidateValid(mod, entry)) {
-          return Promise.resolve();
-        }
-        const from = modPaths[mod.type ?? ''];
-        if (from === undefined) {
-          // How is this even possible? regardless it's not this
-          //  function's job to report this.
-          log('error', 'failed to resolve mod path for mod type', mod.type);
-          return Promise.resolve();
-        }
-        const relPath = path.relative(from, entry.filePath);
-        const targetPath = path.join(installPath, mod.id, relPath);
-        // copy the new file back into the corresponding mod, then delete it. That way, vortex will
-        // create a link to it with the correct deployment method and not ask the user any questions
-        try {
-          await fs.ensureDirAsync(path.dirname(targetPath));
-          await fs.copyAsync(entry.filePath, targetPath);
-          await fs.removeAsync(entry.filePath);
-        } catch (err) {
-          if (!err.message.includes('are the same file')) {
-            // should we be reporting this to the user? This is a completely
-            // automated process and if it fails more often than not the
-            // user probably doesn't care
-            log('error', 'failed to re-import added file to mod', err.message);
-          }
+      const from = modPaths[mod.type ?? ''];
+      if (from === undefined) {
+        // How is this even possible? regardless it's not this
+        //  function's job to report this.
+        log('error', 'failed to resolve mod path for mod type', mod.type);
+        return Promise.resolve();
+      }
+      const relPath = path.relative(from, entry.filePath);
+      const targetPath = path.join(installPath, mod.id, relPath);
+      // copy the new file back into the corresponding mod, then delete it. That way, vortex will
+      // create a link to it with the correct deployment method and not ask the user any questions
+      try {
+        await fs.ensureDirWritableAsync(path.dirname(targetPath));
+        await fs.copyAsync(entry.filePath, targetPath);
+        await fs.removeAsync(entry.filePath);
+      } catch (err) {
+        if (!err.message.includes('are the same file')) {
+          // should we be reporting this to the user? This is a completely
+          // automated process and if it fails more often than not the
+          // user probably doesn't care
+          log('error', 'failed to re-import added file to mod', err.message);
         }
       }
     }

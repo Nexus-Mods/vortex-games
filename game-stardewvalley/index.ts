@@ -14,16 +14,18 @@ import sdvReducers from './reducers';
 import SMAPIProxy from './smapiProxy';
 import { testSMAPIOutdated } from './tests';
 import { compatibilityOptions, CompatibilityStatus, ISDVDependency, ISDVModManifest, ISMAPIResult } from './types';
-import { parseManifest } from './util';
+import { parseManifest, defaultModsRelPath } from './util';
 
-import { onAddedFiles } from './configMod';
+import Settings from './Settings';
+
+import { onAddedFiles, registerConfigMod } from './configMod';
 
 const path = require('path'),
   { clipboard } = require('electron'),
   rjson = require('relaxed-json'),
   { SevenZip } = util,
   { deploySMAPI, downloadSMAPI, findSMAPIMod } = require('./SMAPI'),
-  { GAME_ID, _SMAPI_BUNDLED_MODS, getBundledMods } = require('./common');
+  { GAME_ID, _SMAPI_BUNDLED_MODS, getBundledMods, MOD_TYPE_CONFIG } = require('./common');
 
 const MANIFEST_FILE = 'manifest.json';
 const PTRN_CONTENT = path.sep + 'Content' + path.sep;
@@ -142,7 +144,7 @@ class StardewValley implements types.IGame {
    */ 
   public queryModPath()
   {
-    return 'Mods';
+    return defaultModsRelPath();
   }
 
   /**
@@ -154,7 +156,7 @@ class StardewValley implements types.IGame {
   public setup = toBlue(async (discovery) => {
     // Make sure the folder for SMAPI mods exists.
     try {
-      await fs.ensureDirWritableAsync(path.join(discovery.path, 'Mods'));
+      await fs.ensureDirWritableAsync(path.join(discovery.path, defaultModsRelPath()));
     } catch (err) {
       return Promise.reject(err);
     }
@@ -726,16 +728,17 @@ function init(context: types.IExtensionContext) {
   context.registerGame(new StardewValley(context));
   context.registerReducer(['settings', 'SDV'], sdvReducers);
 
-  /*
-  context.registerSettings('Mods', Settings, undefined, () =>
-    selectors.activeGameId(context.api.getState()) === GAME_ID, 150);*/
+  context.registerSettings('Mods', Settings, undefined, () => selectors.activeGameId(context.api.getState()) === GAME_ID, 150);
 
   // Register our SMAPI mod type and installer. Note: This currently flags an error in Vortex on installing correctly.
   context.registerInstaller('smapi-installer', 30, testSMAPI, (files, dest) => Bluebird.resolve(installSMAPI(getDiscoveryPath, files, dest)));
-  context.registerModType('SMAPI', 30, gameId => gameId === GAME_ID, getSMAPIPath, isSMAPIModType);
+  context.registerInstaller('sdvrootfolder', 50, testRootFolder, installRootFolder);
   context.registerInstaller('stardew-valley-installer', 50, testSupported,
     (files, destinationPath) => Bluebird.resolve(install(context.api, dependencyManager, files, destinationPath)));
-  context.registerInstaller('sdvrootfolder', 50, testRootFolder, installRootFolder);
+
+  context.registerModType('SMAPI', 30, gameId => gameId === GAME_ID, getSMAPIPath, isSMAPIModType);
+  context.registerModType(MOD_TYPE_CONFIG, 30, (gameId) => (gameId === GAME_ID),
+    () => path.join(getDiscoveryPath(), defaultModsRelPath()), () => Bluebird.resolve(false));
   context.registerModType('sdvrootfolder', 25, (gameId) => (gameId === GAME_ID),
     () => getDiscoveryPath(), (instructions) => {
       // Only interested in copy instructions.
@@ -762,7 +765,7 @@ function init(context: types.IExtensionContext) {
       const hasManifest = copyInstructions.find(instr =>
         instr.destination.endsWith(MANIFEST_FILE))
       const hasModsFolder = copyInstructions.find(instr =>
-        instr.destination.startsWith('Mods' + path.sep)) !== undefined;
+        instr.destination.startsWith(defaultModsRelPath() + path.sep)) !== undefined;
       const hasContentFolder = copyInstructions.find(instr =>
         instr.destination.startsWith('Content' + path.sep)) !== undefined
 
@@ -771,6 +774,7 @@ function init(context: types.IExtensionContext) {
         : Bluebird.resolve(hasContentFolder);
     });
 
+  registerConfigMod(context)
   context.registerAction('mod-icons', 999, 'changelog', {}, 'SMAPI Log',
     () => { onShowSMAPILog(context.api); },
     () => {
@@ -821,7 +825,7 @@ function init(context: types.IExtensionContext) {
       priority: 25,
     });
     dependencyManager = new DependencyManager(context.api);
-    context.api.onAsync('added-files', onAddedFiles(context.api) as any);
+    context.api.onAsync('added-files', (profileId: string, files: any[]) => onAddedFiles(context.api, profileId, files) as any);
 
     context.api.onAsync('did-deploy', async (profileId) => {
       const state = context.api.getState();

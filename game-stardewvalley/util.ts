@@ -4,6 +4,10 @@ import turbowalk, { IEntry, IWalkOptions } from 'turbowalk';
 import { fs, util } from 'vortex-api';
 import { ISDVModManifest } from './types';
 
+export function defaultModsRelPath(): string {
+  return 'Mods';
+}
+
 export async function parseManifest(manifestFilePath: string): Promise<ISDVModManifest> {
   try {
     const manifestData = await fs.readFileAsync(manifestFilePath, { encoding: 'utf-8' });
