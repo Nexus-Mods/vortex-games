@@ -35,6 +35,7 @@ function Settings() {
             <Toggle
               checked={useRecommendations}
               onToggle={setUseRecommendations}
+              disabled={true}
             >
               {t('Use recommendations from the mod manifests')}
             </Toggle>

@@ -2,8 +2,16 @@
 import path from 'path';
 import { fs, types, selectors, log, util } from 'vortex-api';
 import { GAME_ID, MOD_CONFIG, RGX_INVALID_CHARS_WINDOWS, MOD_TYPE_CONFIG, getBundledMods } from './common';
+import { setMergeConfigs } from './actions';
 import { IFileEntry } from './types';
 import { walkPath, defaultModsRelPath } from './util';
+
+import { findSMAPIMod } from './SMAPI';
+import { IEntry } from 'turbowalk';
+
+const syncWrapper = (api: types.IExtensionApi) => {
+  onSyncModConfigurations(api);
+}
 
 export function registerConfigMod(context: types.IExtensionContext) {
   context.registerAction('mod-icons', 999, 'swap', {}, 'Sync Mod Configurations',
@@ -13,10 +21,6 @@ export function registerConfigMod(context: types.IExtensionContext) {
       const gameMode = selectors.activeGameId(state);
       return (gameMode === GAME_ID);
     });
-}
-
-const syncWrapper = (api: types.IExtensionApi) => {
-  onSyncModConfigurations(api);
 }
 
 async function onSyncModConfigurations(api: types.IExtensionApi): Promise<void> {
@@ -34,19 +38,25 @@ async function onSyncModConfigurations(api: types.IExtensionApi): Promise<void> 
               + 'Import all of your active mod\'s configuration files into a single mod which will remain unaffected by mod updates.[br][/br][br][/br]'
               + 'Would you like to enable this functionality?',
     }, [
-      { label: 'Enable' },
-      { label: 'Close' }
+      { label: 'Close' },
+      { label: 'Enable' }
     ]);
 
     if (result.action === 'Close') {
       return;
     }
+
+    if (result.action === 'Enable') {
+      api.store.dispatch(setMergeConfigs(profile.id, true));
+    }
   }
 
-  const purgeAllMods = (api: types.IExtensionApi) => new Promise<void>((resolve, reject) => {
-    api.events.emit('purge-mods', false, err => (err !== null)
-      ? reject(err)
-      : resolve());
+  type EventType = 'purge-mods' | 'deploy-mods';
+  const eventPromise = (api: types.IExtensionApi, eventType: EventType) => new Promise<void>((resolve, reject) => {
+    const cb = (err: any) => err !== null ? reject(err): resolve();
+    (eventType === 'purge-mods')
+      ? api.events.emit(eventType, false, cb)
+      : api.events.emit(eventType, cb);
   });
 
   try {
@@ -54,12 +64,23 @@ async function onSyncModConfigurations(api: types.IExtensionApi): Promise<void> 
     if (mod?.configModPath === undefined) {
       return;
     }
-    await purgeAllMods(api);
+    await eventPromise(api, 'purge-mods');
+
     const installPath = selectors.installPathForGame(api.getState(), GAME_ID);
+    const resolveCandidateName = (file: IEntry): string => {
+      const relPath = path.relative(installPath, file.filePath);
+      const segments = relPath.split(path.sep);
+      return segments[0];
+    }
     const files = await walkPath(installPath);
-    const filtered = files.filter(file => path.basename(file.filePath).toLowerCase() === MOD_CONFIG
-                                       && !path.dirname(file.filePath).includes(mod.configModPath));
-    await addModConfig(api, filtered.map(file => ({ filePath: file.filePath, candidates: [] })));
+    const filtered = files.reduce((accum: IFileEntry[], file: IEntry) => {
+      if (path.basename(file.filePath).toLowerCase() === MOD_CONFIG && !path.dirname(file.filePath).includes(mod.configModPath)) {
+        accum.push({ filePath: file.filePath, candidates: [resolveCandidateName(file)] });
+      }
+      return accum;
+    }, []);
+    await addModConfig(api, filtered, installPath);
+    await eventPromise(api, 'deploy-mods');
   } catch (err) {
     api.showErrorNotification('Failed to sync mod configurations', err);
   }
@@ -99,7 +120,7 @@ async function initialize(api: types.IExtensionApi): Promise<ConfigMod> {
   }
 }
 
-export async function addModConfig(api: types.IExtensionApi, files: IFileEntry[]) {
+export async function addModConfig(api: types.IExtensionApi, files: IFileEntry[], modsPath?: string) {
   const configMod = await initialize(api);
   if (configMod === undefined) {
     return;
@@ -107,8 +128,14 @@ export async function addModConfig(api: types.IExtensionApi, files: IFileEntry[]
 
   const state = api.getState();
   const discovery = selectors.discoveryByGame(state, GAME_ID);
-  const modsPath = path.join(discovery.path, defaultModsRelPath());
+  modsPath = modsPath ?? path.join(discovery.path, defaultModsRelPath());
+  const smapi = findSMAPIMod(api);
   for (const file of files) {
+    if (file.candidates.includes(smapi.installationPath)) {
+      // This should never happen but better safe than sorry
+      log('error', 'tried to add SMAPI config', JSON.stringify(file));
+      continue;
+    }
     try {
       const relPath = path.relative(modsPath, file.filePath);
       const targetPath = path.join(configMod.configModPath, relPath);
@@ -179,9 +206,12 @@ export async function onAddedFiles(api: types.IExtensionApi, profileId: string, 
     // don't care about any other games
     return;
   }
+
+  const mods: { [modId: string]: types.IMod } = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
+  const isSMAPI = (file: IFileEntry) => file.candidates.find(candidate => mods[candidate].type === 'SMAPI') !== undefined;
   const mergeConfigs = util.getSafe(state, ['settings', 'SDV', 'mergeConfigs', profile.id], false);
   const result = files.reduce((accum, file) => {
-    if (mergeConfigs && path.basename(file.filePath).toLowerCase() === MOD_CONFIG) {
+    if (mergeConfigs && !isSMAPI(file) && path.basename(file.filePath).toLowerCase() === MOD_CONFIG) {
       accum.configs.push(file);
     } else {
       accum.regulars.push(file);
