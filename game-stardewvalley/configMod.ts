@@ -191,6 +191,7 @@ async function createConfigMod(api: types.IExtensionApi, modName: string, profil
       variant: sanitizeProfileName(profile.name.replace(RGX_INVALID_CHARS_WINDOWS, '_')),
       installTime: new Date(),
     },
+    source: 'user-generated',
     installationPath: modName,
     type: MOD_TYPE_CONFIG,
   };
