@@ -58,3 +58,15 @@ export async function walkPath(dirPath: string, walkOptions?: IWalkOptions): Pro
     return resolve(walkResults);
   });
 }
+
+export async function deleteFolder(dirPath: string, walkOptions?: IWalkOptions): Promise<void> {
+  try {
+    const entries = await walkPath(dirPath, walkOptions);
+    for (const entry of entries) {
+      await fs.removeAsync(entry.filePath);
+    }
+    await fs.rmdirAsync(dirPath);
+  } catch (err) {
+    return Promise.reject(err);
+  }
+}

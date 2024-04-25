@@ -1,5 +1,6 @@
 export const GAME_ID = 'stardewvalley';
 export const MOD_CONFIG = 'config.json';
+export const MOD_MANIFEST = 'manifest.json';
 export const RGX_INVALID_CHARS_WINDOWS = /[:/\\*?"<>|]/g;
 export const MOD_TYPE_CONFIG = 'sdv-configuration-mod';
 

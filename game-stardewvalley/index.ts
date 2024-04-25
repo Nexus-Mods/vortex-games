@@ -18,7 +18,7 @@ import { parseManifest, defaultModsRelPath } from './util';
 
 import Settings from './Settings';
 
-import { onAddedFiles, registerConfigMod } from './configMod';
+import { onAddedFiles, onWillEnableMods, registerConfigMod } from './configMod';
 
 const path = require('path'),
   { clipboard } = require('electron'),
@@ -826,6 +826,8 @@ function init(context: types.IExtensionContext) {
     });
     dependencyManager = new DependencyManager(context.api);
     context.api.onAsync('added-files', (profileId: string, files: any[]) => onAddedFiles(context.api, profileId, files) as any);
+
+    context.api.onAsync('will-enable-mods', (profileId: string, modIds: string[], enabled: boolean) => onWillEnableMods(context.api, profileId, modIds, enabled) as any);
 
     context.api.onAsync('did-deploy', async (profileId) => {
       const state = context.api.getState();
