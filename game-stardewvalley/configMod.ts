@@ -79,7 +79,11 @@ async function onSyncModConfigurations(api: types.IExtensionApi, silent?: boolea
     const files = await walkPath(installPath);
     const filtered = files.reduce((accum: IFileEntry[], file: IEntry) => {
       if (path.basename(file.filePath).toLowerCase() === MOD_CONFIG && !path.dirname(file.filePath).includes(mod.configModPath)) {
-        accum.push({ filePath: file.filePath, candidates: [resolveCandidateName(file)] });
+        const candidateName = resolveCandidateName(file);
+        if (util.getSafe(profile, ['modState', candidateName, 'enabled'], false) === false) {
+          return accum;
+        }
+        accum.push({ filePath: file.filePath, candidates: [candidateName] });
       }
       return accum;
     }, []);
@@ -270,6 +274,25 @@ export async function applyToModConfig(api: types.IExtensionApi, cb: () => Promi
   } catch (err) {
     api.showErrorNotification('Failed to write mod config', err);
   }
+}
+
+export async function onRevertFiles(api: types.IExtensionApi, profileId: string) {
+  const state = api.getState();
+  const profile = selectors.profileById(state, profileId);
+  if (profile?.gameId !== GAME_ID) {
+    return;
+  }
+  const configMod = await initialize(api);
+  if (!configMod) {
+    return;
+  }
+  const attrib = extractConfigModAttributes(state, configMod.mod.id);
+  if (attrib.length === 0) {
+    return;
+  }
+
+  await onWillEnableMods(api, profileId, attrib, false);
+  return;
 }
 
 export async function onAddedFiles(api: types.IExtensionApi, profileId: string, files: IFileEntry[]) {

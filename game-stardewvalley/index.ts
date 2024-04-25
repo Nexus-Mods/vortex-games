@@ -18,7 +18,9 @@ import { parseManifest, defaultModsRelPath } from './util';
 
 import Settings from './Settings';
 
-import { onAddedFiles, onWillEnableMods, registerConfigMod } from './configMod';
+import { setMergeConfigs } from './actions';
+
+import { onAddedFiles, onRevertFiles, onWillEnableMods, registerConfigMod } from './configMod';
 
 const path = require('path'),
   { clipboard } = require('electron'),
@@ -728,7 +730,16 @@ function init(context: types.IExtensionContext) {
   context.registerGame(new StardewValley(context));
   context.registerReducer(['settings', 'SDV'], sdvReducers);
 
-  context.registerSettings('Mods', Settings, undefined, () => selectors.activeGameId(context.api.getState()) === GAME_ID, 150);
+  context.registerSettings('Mods', Settings, () => ({
+    onMergeConfigToggle: async (profileId: string, enabled: boolean) => {
+      if (!enabled) {
+        await onRevertFiles(context.api, profileId);
+        context.api.store.dispatch(setMergeConfigs(profileId, enabled));
+        context.api.sendNotification({ type: 'info', message: 'Mod configs returned to their respective mods', displayMS: 5000 });
+      }
+      return Promise.resolve();
+    }
+  }), () => selectors.activeGameId(context.api.getState()) === GAME_ID, 150);
 
   // Register our SMAPI mod type and installer. Note: This currently flags an error in Vortex on installing correctly.
   context.registerInstaller('smapi-installer', 30, testSMAPI, (files, dest) => Bluebird.resolve(installSMAPI(getDiscoveryPath, files, dest)));

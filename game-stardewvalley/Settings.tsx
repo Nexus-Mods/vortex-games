@@ -3,14 +3,19 @@ import { ControlLabel, FormGroup, HelpBlock, Panel } from 'react-bootstrap';
 import { useTranslation } from 'react-i18next';
 import { useSelector, useStore } from 'react-redux';
 import { Toggle, More, selectors, types } from 'vortex-api';
-import { setRecommendations, setMergeConfigs } from './actions';
+import { setRecommendations } from './actions';
 import { GAME_ID } from './common';
+
+interface IBaseProps {
+  onMergeConfigToggle: (profileId: string, enabled: boolean) => Promise<void>;
+}
 
 interface IConnectedProps {
   profileId: string;
 }
 
-function Settings() {
+function Settings(props: IBaseProps) {
+  const { onMergeConfigToggle } = props;
   const sdvSettings = useSelector((state: any) => state.settings['SDV']);
   const { useRecommendations, mergeConfigs } = sdvSettings;
   const store = useStore();
@@ -21,11 +26,11 @@ function Settings() {
   }, []);
 
   const setMergeConfigSetting = React.useCallback((enabled: boolean) => {
-    store.dispatch(setMergeConfigs(profileId, enabled));
-  }, [profileId]);
+    onMergeConfigToggle(profileId, enabled);
+  }, [onMergeConfigToggle, profileId]);
 
   const { t } = useTranslation();
-
+  const mergeEnabled = mergeConfigs?.[profileId];
   return (
     <form>
       <FormGroup controlId='default-enable'>
@@ -38,14 +43,14 @@ function Settings() {
               disabled={true}
             >
               {t('Use recommendations from the mod manifests')}
+              <More id='sdv_use_recommendations' name='SDV Use Recommendations'>
+                {t('If checked, when you install a mod for Stardew Valley you may get '
+                  + 'suggestions for installing further mods, required or recommended by it.'
+                  + 'This information could be wrong or incomplete so please carefully '
+                  + 'consider before accepting them.')}
+              </More>
             </Toggle>
-            <More id='sdv_use_recommendations' name='SDV Use Recommendations'>
-              {t('If checked, when you install a mod for Stardew Valley you may get '
-                + 'suggestions for installing further mods, required or recommended by it.'
-                + 'This information could be wrong or incomplete so please carefully '
-                + 'consider before accepting them.')}
-            </More>
-            <Toggle checked={mergeConfigs} onToggle={setMergeConfigSetting}>
+            <Toggle checked={mergeEnabled} onToggle={setMergeConfigSetting}>
               {t('Manage SDV mod configuration files')}
               <More id='sdv_mod_configuration' name='SDV Mod Configuration'>
                 {t('Vortex by default is configured to attempt to pull-in newly created files (mod configuration json files for example) '
