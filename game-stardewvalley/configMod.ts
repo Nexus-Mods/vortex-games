@@ -142,13 +142,15 @@ export async function addModConfig(api: types.IExtensionApi, files: IFileEntry[]
   if (smapi === undefined) {
     return;
   }
+  const configModAttributes: string[] = extractConfigModAttributes(state, configMod.mod.id);
+  let newConfigAttributes = Array.from(new Set(configModAttributes));
   for (const file of files) {
     if (file.candidates.includes(smapi?.installationPath)) {
       continue;
     }
-    const configModAttributes: string[] = extractConfigModAttributes(state, configMod.mod.id)
+    
     if (!configModAttributes.includes(file.candidates[0])) {
-      setConfigModAttribute(api, configMod.mod.id, [...configModAttributes, file.candidates[0]]);
+      newConfigAttributes.push(file.candidates[0]);
     }
     try {
       const installRelPath = path.relative(modsPath, file.filePath);
@@ -163,6 +165,8 @@ export async function addModConfig(api: types.IExtensionApi, files: IFileEntry[]
       api.showErrorNotification('Failed to write mod config', err);
     }
   }
+
+  setConfigModAttribute(api, configMod.mod.id, Array.from(new Set(newConfigAttributes)));
 }
 
 export async function ensureConfigMod(api: types.IExtensionApi): Promise<types.IMod> {
@@ -224,6 +228,13 @@ export async function onWillEnableMods(api: types.IExtensionApi, profileId: stri
 
   const configMod = await initialize(api);
   if (!configMod) {
+    return;
+  }
+
+  if (modIds.includes(configMod.mod.id)) {
+    // The config mod is getting disabled/uninstalled - re-instate all of
+    //  the configuration files.
+    await onRevertFiles(api, profileId);
     return;
   }
 
