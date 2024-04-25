@@ -838,7 +838,7 @@ function init(context: types.IExtensionContext) {
     dependencyManager = new DependencyManager(context.api);
     context.api.onAsync('added-files', (profileId: string, files: any[]) => onAddedFiles(context.api, profileId, files) as any);
 
-    context.api.onAsync('will-enable-mods', (profileId: string, modIds: string[], enabled: boolean) => onWillEnableMods(context.api, profileId, modIds, enabled) as any);
+    context.api.onAsync('will-enable-mods', (profileId: string, modIds: string[], enabled: boolean, options: any) => onWillEnableMods(context.api, profileId, modIds, enabled, options) as any);
 
     context.api.onAsync('did-deploy', async (profileId) => {
       const state = context.api.getState();

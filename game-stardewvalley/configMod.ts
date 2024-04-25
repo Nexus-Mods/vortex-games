@@ -1,7 +1,7 @@
 /* eslint-disable */
 import path from 'path';
 import { actions, fs, types, selectors, log, util } from 'vortex-api';
-import { GAME_ID, MOD_CONFIG, RGX_INVALID_CHARS_WINDOWS, MOD_TYPE_CONFIG, MOD_MANIFEST, getBundledMods } from './common';
+import { NOTIF_ACTIVITY_CONFIG_MOD, GAME_ID, MOD_CONFIG, RGX_INVALID_CHARS_WINDOWS, MOD_TYPE_CONFIG, MOD_MANIFEST, getBundledMods } from './common';
 import { setMergeConfigs } from './actions';
 import { IFileEntry } from './types';
 import { walkPath, defaultModsRelPath, deleteFolder } from './util';
@@ -145,6 +145,12 @@ export async function addModConfig(api: types.IExtensionApi, files: IFileEntry[]
   const configModAttributes: string[] = extractConfigModAttributes(state, configMod.mod.id);
   let newConfigAttributes = Array.from(new Set(configModAttributes));
   for (const file of files) {
+    api.sendNotification({
+      type: 'activity',
+      id: NOTIF_ACTIVITY_CONFIG_MOD,
+      title: 'Importing config files...',
+      message: file.candidates[0],
+    });
     if (file.candidates.includes(smapi?.installationPath)) {
       continue;
     }
@@ -159,6 +165,7 @@ export async function addModConfig(api: types.IExtensionApi, files: IFileEntry[]
       const targetPath = path.join(configMod.configModPath, relPath);
       const targetDir = path.extname(targetPath) !== '' ? path.dirname(targetPath) : targetPath;
       await fs.ensureDirWritableAsync(targetDir);
+      log('debug', 'importing config file from', { source: file.filePath, destination: targetPath, modId: file.candidates[0] });
       await fs.copyAsync(file.filePath, targetPath, { overwrite: true });
       await fs.removeAsync(file.filePath);
     } catch (err) {
@@ -166,6 +173,7 @@ export async function addModConfig(api: types.IExtensionApi, files: IFileEntry[]
     }
   }
 
+  api.dismissNotification(NOTIF_ACTIVITY_CONFIG_MOD);
   setConfigModAttribute(api, configMod.mod.id, Array.from(new Set(newConfigAttributes)));
 }
 
@@ -214,7 +222,7 @@ async function createConfigMod(api: types.IExtensionApi, modName: string, profil
   });
 }
 
-export async function onWillEnableMods(api: types.IExtensionApi, profileId: string, modIds: string[], enabled: boolean) {
+export async function onWillEnableMods(api: types.IExtensionApi, profileId: string, modIds: string[], enabled: boolean, options?: any) {
   const state = api.getState();
   const profile = selectors.profileById(state, profileId);
   if (profile?.gameId !== GAME_ID) {
@@ -236,6 +244,11 @@ export async function onWillEnableMods(api: types.IExtensionApi, profileId: stri
     //  the configuration files.
     await onRevertFiles(api, profileId);
     return;
+  }
+
+  if (options?.installed || options?.willBeReplaced) {
+    // Do nothing, the mods are being re-installed.
+    return Promise.resolve();
   }
 
   const attrib = extractConfigModAttributes(state, configMod.mod.id);
@@ -349,6 +362,13 @@ async function addConfigFiles(api: types.IExtensionApi, profileId: string, files
   if (files.length === 0) {
     return Promise.resolve();
   }
+  api.sendNotification({
+    type: 'activity',
+    id: NOTIF_ACTIVITY_CONFIG_MOD,
+    title: 'Importing config files...',
+    message: 'Starting up...'
+  });
+
   return addModConfig(api, files, undefined);
 }
 
