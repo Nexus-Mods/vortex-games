@@ -734,9 +734,9 @@ function init(context: types.IExtensionContext) {
     onMergeConfigToggle: async (profileId: string, enabled: boolean) => {
       if (!enabled) {
         await onRevertFiles(context.api, profileId);
-        context.api.store.dispatch(setMergeConfigs(profileId, enabled));
         context.api.sendNotification({ type: 'info', message: 'Mod configs returned to their respective mods', displayMS: 5000 });
       }
+      context.api.store.dispatch(setMergeConfigs(profileId, enabled));
       return Promise.resolve();
     }
   }), () => selectors.activeGameId(context.api.getState()) === GAME_ID, 150);
