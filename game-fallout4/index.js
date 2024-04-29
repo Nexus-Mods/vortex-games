@@ -12,6 +12,7 @@ const IGNORED_FILES = [ path.join('**', 'PersistantSubgraphInfoAndOffsetData.txt
 
 const MS_ID = 'BethesdaSoftworks.Fallout4-PC';
 const GOG_ID = '1998527297';
+const EPIC_ID = '61d52ce4d09d41e48800c22784d13ae8';
 
 let tools = [
   {
@@ -80,6 +81,7 @@ function main(context) {
       steam: [{ name: 'Fallout 4' }],
       xbox: [{ id: MS_ID }],      
       gog: [{ id: GOG_ID, prefer: 0 }],
+      epic: [{ id: EPIC_ID }],
       registry: [{ id: 'HKEY_LOCAL_MACHINE:Software\\Wow6432Node\\Bethesda Softworks\\Fallout4:Installed Path' }],
     },
     supportedTools: tools,
