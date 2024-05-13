@@ -21,6 +21,7 @@ var installPath
 var modType
 
 var namelessModInstalls = 0
+var prepath = ""
 
 var cont // Save context for later use
 
@@ -124,20 +125,23 @@ function installContent(files) {
         (!file.endsWith(path.sep)));
 
     let instructions = filtered.map(file => {
+        console.log("removing prepath " + prepath)
+
+        const destinationPath = path.join(installPath, file.startsWith(prepath) ? file.substring(prepath.length) : file);
+        console.log("install to " + destinationPath)
         return {
             type: 'copy',
             source: file,
-            destination: path.join(installPath, file),
+            destination: destinationPath,
         };
-
     });
 
-    if (modType == "json") { // Change the install path if it's a json mod
+    if (modType === "json") { // Change the install path if it's a json mod
         const modTypeInstr = {
             type: 'setmodtype',
             value: 'JSON Addon Mod',
-        }
-        instructions.push(modTypeInstr)
+        };
+        instructions.push(modTypeInstr);
     }
 
     return Promise.resolve({
@@ -145,20 +149,37 @@ function installContent(files) {
     });
 }
 
-
 function checkJsonDirectoryStructure(files) {
-    const baseFolders = ['addons\\', 'images\\'];
-    const subFolders = ['entities\\', 'encyclopaedia\\', 'geography\\']
+    const baseFolders = ['addon', 'images'];
+    const subFolders = ['entities', 'encyclopaedia', 'geography']
+
+    prepath = ""
+    let pathto = ""
+    for (let i = 0; i < files.length; i++) {
+        let parts = files[i].split("\\")
+        for (let i2 = 0; i2 < parts.length; i2++) {
+            if (baseFolders.includes(parts[i2].replace(/[\/\\]/g, ""))) {
+                prepath = pathto
+                break
+            }
+            pathto = parts[i2]
+        }
+        if (prepath !== "") {
+            return ""
+        }
+    }
 
     // Check if it's a base mod
-    const isBaseMod = baseFolders.some(folder => files.includes(folder));
+    const isBaseMod = files.some(file => baseFolders.includes(file.replace(/[\/\\]/g, "")));
+
+    // const isBaseMod = baseFolders.some(folder => files.includes(folder.replace(/[\/\\]/g, "")));
 
     if (isBaseMod) {
         return "";
     }
 
     // Checks whether the first entry in the files list is a folder that should be inside another folder
-    const isAModFolder = !subFolders.includes(files[0])
+    const isAModFolder = !subFolders.includes(files[0].replace(/[\/\\]/g, ""))
     // If not, just install it as is to addon
 
     if (isAModFolder) {
