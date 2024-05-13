@@ -1,4 +1,5 @@
 import { IncomingHttpHeaders } from 'http';
+import { types } from 'vortex-api';
 
 export interface IDeployment { [modTypeId: string]: IDeployedFile[]; }
 export interface IDeployedFile {
@@ -7,6 +8,14 @@ export interface IDeployedFile {
   merged?: string[];
   target?: string;
   time: number;
+}
+
+export interface IRemoveModOptions {
+  willBeReplaced?: boolean;
+  incomplete?: boolean;
+  ignoreInstalling?: boolean;
+  modData?: types.IMod;
+  progressCB?: (numRemoved: number, numTotal: number, name: string) => void;
 }
 
 export interface IIncomingGithubHttpHeaders extends IncomingHttpHeaders {

@@ -1,6 +1,6 @@
 /* eslint-disable */
 import path from 'path';
-import IniParser, { WinapiFormat } from 'vortex-parse-ini';
+import IniParser, { IniFile, WinapiFormat } from 'vortex-parse-ini';
 import { fs, selectors, types, util } from 'vortex-api';
 
 import { forceRefresh, isLockedEntry, getAllMods, getManuallyAddedMods } from './util';
@@ -140,14 +140,11 @@ export default class IniStructure {
     return;
   }
 
-  public async readStructure(): Promise<any> {
+  public async readStructure(): Promise<IniFile<object>> {
     const state = this.mApi.getState();
     const activeProfile = selectors.activeProfile(state);
     if (activeProfile?.id === undefined) {
-      // What an odd use case - perhaps the user had switched gameModes or
-      //  even deleted his profile during the pre-sort functionality ?
-      //  Odd but plausible I suppose ?
-      return Promise.resolve([]);
+      return Promise.resolve(null);
     }
   
     const filePath = getLoadOrderFilePath();

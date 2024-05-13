@@ -14,7 +14,7 @@ import { GAME_ID, LOCKED_PREFIX, I18N_NAMESPACE, UNI_PATCH } from './common';
 import { IDeployedFile, IDeployment } from './types';
 
 export async function getDeployment(api: types.IExtensionApi,
-                                    includedMods?: string[]): Promise<IDeployment> {
+  includedMods?: string[]): Promise<IDeployment> {
   const state = api.getState();
   const discovery = util.getSafe(state,
     ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
@@ -99,12 +99,16 @@ export function notifyMissingScriptMerger(api) {
               + '[url=https://wiki.nexusmods.com/index.php/Tool_Setup:_Witcher_3_Script_Merger]Find out more about how to configure it as a tool for use in Vortex.[/url][br][/br][br][/br]'
               + 'Note: While script merging works well with the vast majority of mods, there is no guarantee for a satisfying outcome in every single case.', { ns: I18N_NAMESPACE }),
           }, [
-            { label: 'Cancel', action: () => {
-              api.dismissNotification('missing-script-merger');
-            }},
-            { label: 'Download Script Merger', action: () => util.opn('https://www.nexusmods.com/witcher3/mods/484')
-                                                .catch(err => null)
-                                                .then(() => api.dismissNotification('missing-script-merger')) },
+            {
+              label: 'Cancel', action: () => {
+                api.dismissNotification('missing-script-merger');
+              }
+            },
+            {
+              label: 'Download Script Merger', action: () => util.opn('https://www.nexusmods.com/witcher3/mods/484')
+                .catch(err => null)
+                .then(() => api.dismissNotification('missing-script-merger'))
+            },
           ]);
         },
       },
@@ -134,29 +138,35 @@ export async function findModFolder(installationPath: string, mod: types.IMod): 
   return Promise.reject(new Error('Failed to find mod folder'));
 }
 
-export function getManagedModNames(api: types.IExtensionApi, mods: types.IMod[]) {
+export async function getManagedModNames(api: types.IExtensionApi, mods: types.IMod[]): Promise<{ name: string, id: string }[]> {
+  const isDeployed = async (modPath: string) => await fs.statAsync(modPath).then(stats => stats.isDirectory()).catch(err => false);
   const installationPath = selectors.installPathForGame(api.getState(), GAME_ID);
-  return Bluebird.reduce(mods, (accum, mod) => findModFolder(installationPath, mod)
-    .then(modName => {
-      if (!modName || ['collection', 'w3modlimitpatcher'].includes(mod.type)) {
-        return Promise.resolve(accum);
-      }
-      const modComponents = util.getSafe(mod, ['attributes', 'modComponents'], []);
-      if (modComponents.length === 0) {
-        modComponents.push(modName);
-      }
-      [...modComponents].forEach(key => {
-        accum.push({
-          id: mod.id,
-          name: key,
-        });
-      });
-      return Promise.resolve(accum);
-    })
-    .catch(err => {
+  const modTypes: { [typeId: string]: string } = selectors.modPathsForGame(api.getState(), GAME_ID);
+  return mods.reduce(async (accumP, mod) => {
+    const accum = await accumP;
+    let modName;
+    try {
+      modName = await findModFolder(installationPath, mod);
+    } catch (err) {
       log('error', 'unable to resolve mod name', err);
+    }
+    if (!modName || ['collection', 'w3modlimitpatcher'].includes(mod.type)) {
       return Promise.resolve(accum);
-    }), []);
+    }
+    const modPath = modTypes[mod.type];
+    const modComponents = util.getSafe(mod, ['attributes', 'modComponents'], []);
+    if (modComponents.length === 0) {
+      modComponents.push(modName);
+    }
+
+    for (const component of modComponents) {
+      const res = await isDeployed(path.join(modPath, component));
+      if (res) {
+        accum.push({ id: mod.id, name: component });
+      }
+    }
+    return Promise.resolve(accum);
+  }, Promise.resolve([]));
 }
 
 export async function getAllMods(api: types.IExtensionApi) {
@@ -217,12 +227,14 @@ export async function getManuallyAddedMods(api: types.IExtensionApi) {
     // Ok, we know the folder is there - lets ensure that
     //  it actually contains files.
     try {
-      const entries = await walkPath(path.join(modsPath, mod), { skipHidden: true, skipLinks: true });
-      const valid = [].concat(candidates, entries.filter(entry => (!entry.isDirectory)
-                              && (path.extname(path.basename(entry.filePath)) !== '')
-                              && (entry?.linkCount === undefined || entry.linkCount <= 1)));
-      if (valid.length > 0) {
-        accum.push(mod);
+      const entries = await walkPath(modFolder, { skipHidden: true, skipLinks: true });
+      if (entries.length > 0) {
+        const files = entries.filter(entry => !entry.isDirectory
+          && (path.extname(path.basename(entry.filePath)) !== '')
+          && (entry?.linkCount === undefined || entry.linkCount <= 1));
+        if (files.length > 0) {
+          accum.push(mod);
+        }
       }
     } catch (err) {
       if (!['ENOENT', 'ENOTFOUND'].some(err.code)) {
@@ -238,7 +250,7 @@ export async function getManuallyAddedMods(api: types.IExtensionApi) {
 export function isLockedEntry(modName: string) {
   // We're adding this to avoid having the load order page
   //  from not loading if we encounter an invalid mod name.
-  if (!modName || typeof(modName) !== 'string') {
+  if (!modName || typeof (modName) !== 'string') {
     log('debug', 'encountered invalid mod instance/name');
     return false;
   }

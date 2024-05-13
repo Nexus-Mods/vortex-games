@@ -12,7 +12,6 @@ import { genCollectionsData, parseCollectionsData } from './collections/collecti
 import { IW3CollectionsData } from './collections/types';
 import CollectionsDataView from './views/CollectionsDataView';
 
-
 import { downloadScriptMerger, getScriptMergerDir, setMergerConfig } from './scriptmerger';
 
 import { DO_NOT_DEPLOY, GAME_ID, getLoadOrderFilePath, INPUT_XML_FILENAME,
@@ -35,7 +34,8 @@ import { getDLCPath, getAllMods, determineExecutable, getDocumentsPath,
 import TW3LoadOrder from './loadOrder';
 
 
-import { onDidDeploy, onDidPurge, onGameModeActivation, onProfileWillChange, onSettingsChange, onWillDeploy } from './eventHandlers';
+import { onDidDeploy, onDidPurge, onDidRemoveMod, onGameModeActivation, onModsDisabled,
+  onProfileWillChange, onSettingsChange, onWillDeploy } from './eventHandlers';
 import IniStructure from './iniParser';
 
 const GOG_ID = '1207664663';
@@ -353,10 +353,14 @@ function main(context: types.IExtensionContext) {
     });
 
     context.api.events.on('gamemode-activated', onGameModeActivation(context.api));
+    context.api.events.on('profile-will-change', onProfileWillChange(context.api));
+    context.api.events.on('mods-enabled', onModsDisabled(context.api, priorityManager));
+
     context.api.onAsync('will-deploy', onWillDeploy(context.api) as any);
     context.api.onAsync('did-deploy', onDidDeploy(context.api, priorityManager) as any);
     context.api.onAsync('did-purge', onDidPurge(context.api, priorityManager) as any);
-    context.api.events.on('profile-will-change', onProfileWillChange(context.api) as any);
+    context.api.onAsync('did-remove-mod', onDidRemoveMod(context.api, priorityManager) as any);
+
     context.api.onStateChange(['settings', 'witcher3'], onSettingsChange(context.api, priorityManager) as any);
   });
   return true;

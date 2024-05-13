@@ -3,13 +3,16 @@ import { actions, types, selectors, util } from 'vortex-api';
 
 import { setPriorityType } from './actions';
 
-import { GAME_ID, getPriorityTypeBranch, PART_SUFFIX,
-  INPUT_XML_FILENAME, SCRIPT_MERGER_ID, I18N_NAMESPACE } from './common';
+import {
+  GAME_ID, getPriorityTypeBranch, PART_SUFFIX,
+  INPUT_XML_FILENAME, SCRIPT_MERGER_ID, I18N_NAMESPACE
+} from './common';
 
 import menuMod from './menumod';
 import { storeToProfile, restoreFromProfile } from './mergeBackup';
 import { validateProfile, forceRefresh } from './util';
 import { PriorityManager } from './priorityManager';
+import { IRemoveModOptions } from './types';
 
 import IniStructure from './iniParser';
 import { getPersistentLoadOrder } from './migrations';
@@ -55,6 +58,31 @@ export const onWillDeploy = (api: types.IExtensionApi) => {
   }
 }
 
+const applyToIniStruct = (api: types.IExtensionApi, priorityManager: PriorityManager, modIds: string[]) => {
+  const currentLO = getPersistentLoadOrder(api);
+  const newLO: types.ILoadOrderEntry[] = [...currentLO.filter(entry => !modIds.includes(entry.modId))];
+  IniStructure.getInstance(api, priorityManager).setINIStruct(newLO, priorityManager);
+  forceRefresh(api);
+}
+
+export const onModsDisabled = (api: types.IExtensionApi, priorityManager: PriorityManager) => {
+  return async (modIds: string[], enabled: boolean, gameId: string) => {
+    if (gameId !== GAME_ID || enabled) {
+      return;
+    }
+    applyToIniStruct(api, priorityManager, modIds);
+  }
+}
+
+export const onDidRemoveMod = (api: types.IExtensionApi, priorityManager: PriorityManager) => {
+  return async (gameId: string, modId: string, removeOpts: IRemoveModOptions) => {
+    if (GAME_ID !== gameId || removeOpts?.willBeReplaced) {
+      return Promise.resolve();
+    }
+    applyToIniStruct(api, priorityManager, [modId]);
+  }
+};
+
 export const onDidPurge = (api: types.IExtensionApi, priorityManager: PriorityManager) => {
   return async (profileId: string, deployment: Deployment) => {
     const state = api.getState();
@@ -87,7 +115,7 @@ export const onDidDeploy = (api: types.IExtensionApi, priorityManager: PriorityM
     const loadOrder = getPersistentLoadOrder(api);
     const docFiles = (deployment['witcher3menumodroot'] ?? [])
       .filter(file => file.relPath.endsWith(PART_SUFFIX)
-                      && (file.relPath.indexOf(INPUT_XML_FILENAME) === -1));
+        && (file.relPath.indexOf(INPUT_XML_FILENAME) === -1));
     const menuModPromise = () => {
       if (docFiles.length === 0) {
         // If there are no menu mods deployed - remove the mod.

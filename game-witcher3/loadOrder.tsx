@@ -68,7 +68,7 @@ class TW3LoadOrder implements types.ILoadOrderGameInfo {
       const finalEntries = [].concat(entries.locked, entries.regular);
       return Promise.resolve(finalEntries);
     } catch (err) {
-      return 
+      return;
     }
   }
 
