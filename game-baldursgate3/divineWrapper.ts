@@ -91,7 +91,7 @@ async function divine(api: types.IExtensionApi,
     }
 
     try {
-      const command = `${exe} ${args.join(' ')}`;
+      const command = `"${exe}" ${args.join(' ')}`;
       const { stdout, stderr } = await exec(command, execOpts);
       if (!!stderr) {
         return reject(new Error(`divine.exe failed: ${stderr}`));
