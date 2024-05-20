@@ -210,6 +210,10 @@ function runScriptMerger(api) {
 function queryScriptMerge(api: types.IExtensionApi, reason: string) {
   const state = api.store.getState();
   const t = api.translate;
+  if ((state.session.base.activity?.installing_dependencies ?? []).length > 0) {
+    // Do not bug users while they're installing a collection.
+    return;
+  }
   const scriptMergerTool = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID, 'tools', SCRIPT_MERGER_ID], undefined);
   if (!!scriptMergerTool?.path) {
     api.sendNotification({
