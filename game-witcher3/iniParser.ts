@@ -65,7 +65,7 @@ export default class IniStructure {
           ? totalLocked.indexOf(name) + 1
           : idxOfEntry === -1
             ? loadOrder.length + 1
-            : idxOfEntry,
+            : idxOfEntry + totalLocked.length,
         VK: key,
       };
       return accum;

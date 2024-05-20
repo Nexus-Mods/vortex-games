@@ -147,18 +147,19 @@ function convertFilePath(filePath, installPath) {
   //  on the user's end. This functor will convert the abs path from
   //  the curator's path to the user's path.
   const segments = filePath.split(path.sep);
-  const idx = segments.findIndex((seg, idx) => {
-    if (seg.toLowerCase() === 'mods' && segments[idx - 1] === GAME_ID) {
-      return true;
+  const idx = segments.reduce((prev, seg, idx) => {
+    if (seg.toLowerCase() === GAME_ID) {
+      return idx;
     } else {
-      return false;
+      return prev;
     }
-  });
+  }, -1);
   if (idx === -1) {
     log('error', 'unexpected menu mod filepath', filePath);
     return filePath;
   }
-  return path.join(installPath, segments.slice(idx + 1).join(path.sep));
+  const relPath = segments.slice(idx + 1).join(path.sep);
+  return path.join(installPath, relPath);
 }
 
 async function onWillDeploy(api, deployment, activeProfile) {
