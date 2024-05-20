@@ -73,7 +73,7 @@ function readModData(filePath) {
 
 function populateCache(api, activeProfile, modIds, initialCacheValue) {
   const state = api.store.getState();
-  const loadOrder = getpersistentLoadOrder(api);
+  const loadOrder = getPersistentLoadOrder(api);
   const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
   const modState = util.getSafe(activeProfile, ['modState'], {});
 
