@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.6.0] - 2024-xx-xx
 
 - Added Epic Game Store discovery
+- Added context menu item in Mods page to allow users to import LO and script merge data when right clicking the mod entry.
+- Fixed longstanding issue causing the menu mod to fail deployment when imported from a collection
 - Version information now displaying correctly
 - Removed mod limit patcher (no longer needed)
 - Migrated load ordering system to use new FBLO API
