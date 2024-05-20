@@ -10,7 +10,7 @@ import {
 
 import menuMod from './menumod';
 import { storeToProfile, restoreFromProfile } from './mergeBackup';
-import { validateProfile, forceRefresh } from './util';
+import { validateProfile, forceRefresh, suppressEventHandlers } from './util';
 import { PriorityManager } from './priorityManager';
 import { IRemoveModOptions } from './types';
 
@@ -47,7 +47,7 @@ export const onWillDeploy = (api: types.IExtensionApi) => {
   return async (profileId: string, deployment: Deployment) => {
     const state = api.store.getState();
     const activeProfile = validateProfile(profileId, state);
-    if (activeProfile === undefined) {
+    if (activeProfile === undefined || suppressEventHandlers(api)) {
       return Promise.resolve();
     }
 
@@ -58,14 +58,13 @@ export const onWillDeploy = (api: types.IExtensionApi) => {
   }
 }
 
-const applyToIniStruct = (api: types.IExtensionApi, priorityManager: PriorityManager, modIds: string[]) => {
+const applyToIniStruct = (api: types.IExtensionApi, getPriorityManager: () => PriorityManager, modIds: string[]) => {
   const currentLO = getPersistentLoadOrder(api);
   const newLO: types.ILoadOrderEntry[] = [...currentLO.filter(entry => !modIds.includes(entry.modId))];
-  IniStructure.getInstance(api, priorityManager).setINIStruct(newLO, priorityManager);
-  forceRefresh(api);
+  IniStructure.getInstance(api, getPriorityManager).setINIStruct(newLO).then(() => forceRefresh(api));
 }
 
-export const onModsDisabled = (api: types.IExtensionApi, priorityManager: PriorityManager) => {
+export const onModsDisabled = (api: types.IExtensionApi, priorityManager: () => PriorityManager) => {
   return async (modIds: string[], enabled: boolean, gameId: string) => {
     if (gameId !== GAME_ID || enabled) {
       return;
@@ -74,7 +73,7 @@ export const onModsDisabled = (api: types.IExtensionApi, priorityManager: Priori
   }
 }
 
-export const onDidRemoveMod = (api: types.IExtensionApi, priorityManager: PriorityManager) => {
+export const onDidRemoveMod = (api: types.IExtensionApi, priorityManager: () => PriorityManager) => {
   return async (gameId: string, modId: string, removeOpts: IRemoveModOptions) => {
     if (GAME_ID !== gameId || removeOpts?.willBeReplaced) {
       return Promise.resolve();
@@ -83,7 +82,7 @@ export const onDidRemoveMod = (api: types.IExtensionApi, priorityManager: Priori
   }
 };
 
-export const onDidPurge = (api: types.IExtensionApi, priorityManager: PriorityManager) => {
+export const onDidPurge = (api: types.IExtensionApi, priorityManager: () => PriorityManager) => {
   return async (profileId: string, deployment: Deployment) => {
     const state = api.getState();
     const activeProfile = validateProfile(profileId, state);
@@ -96,7 +95,7 @@ export const onDidPurge = (api: types.IExtensionApi, priorityManager: PriorityMa
 }
 
 let prevDeployment: Deployment = {};
-export const onDidDeploy = (api: types.IExtensionApi, priorityManager: PriorityManager) => {
+export const onDidDeploy = (api: types.IExtensionApi) => {
   return async (profileId: string, deployment: Deployment) => {
     const state = api.getState();
     const activeProfile = validateProfile(profileId, state);
@@ -135,8 +134,7 @@ export const onDidDeploy = (api: types.IExtensionApi, priorityManager: PriorityM
     };
 
     return menuModPromise()
-      .then(() => IniStructure.getInstance().setINIStruct(loadOrder, priorityManager))
-      .then(() => IniStructure.getInstance().writeToModSettings())
+      .then(() => IniStructure.getInstance().setINIStruct(loadOrder))
       .then(() => {
         forceRefresh(api);
         return Promise.resolve();
@@ -168,7 +166,7 @@ export const onProfileWillChange = (api: types.IExtensionApi) => {
   }
 }
 
-export const onSettingsChange = (api: types.IExtensionApi, priorityManager: PriorityManager) => {
+export const onSettingsChange = (api: types.IExtensionApi, priorityManager: () => PriorityManager) => {
   return async (prev: string, current: any) => {
     const state = api.getState();
     const activeProfile = selectors.activeProfile(state);
@@ -177,7 +175,7 @@ export const onSettingsChange = (api: types.IExtensionApi, priorityManager: Prio
     }
 
     const priorityType = util.getSafe(state, getPriorityTypeBranch(), 'prefix-based');
-    priorityManager.priorityType = priorityType;
+    priorityManager().priorityType = priorityType;
     api.events.on('purge-mods', () => {
       IniStructure.getInstance().revertLOFile();
     });

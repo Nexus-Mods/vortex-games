@@ -5,8 +5,8 @@ import { actions, selectors, types, util } from 'vortex-api';
 import { GAME_ID, I18N_NAMESPACE, LOCKED_PREFIX } from './common';
 import { PriorityManager } from './priorityManager';
 
+import TW3LoadOrder, { importLoadOrder } from './loadOrder';
 import { makeOnContextImport } from './mergeBackup';
-import { ModLimitPatcher } from './modLimitPatch';
 
 import { forceRefresh } from './util';
 import { getPersistentLoadOrder } from './migrations';
@@ -45,6 +45,18 @@ export const registerActions = (props: IProps) => {
       return activeGameId === GAME_ID;
     });
 
+  context.registerAction('mods-action-icons', 300, 'start-install', {}, 'Import Load Order',
+    instanceIds => { importLoadOrder(context.api, instanceIds[0]); },
+    instanceIds => {
+      const state = context.api.getState();
+      const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
+      if (mods[instanceIds?.[0]]?.type !== 'collection') {
+        return false;
+      }
+      const activeGameId = selectors.activeGameId(state);
+      return activeGameId === GAME_ID;
+    });
+
   // context.registerAction('mod-icons', 500, 'savegame', {}, 'Apply Mod Limit Patch', () => {
   //   getModLimitPatcher().ensureModLimitPatch()
   //     .catch(err => {
@@ -55,10 +67,10 @@ export const registerActions = (props: IProps) => {
   // }, () => selectors.activeGameId(context.api.getState()) === GAME_ID);
 
   context.registerAction('mod-icons', 300, 'open-ext', {},
-                         'Open TW3 Documents Folder', openTW3DocPath, isTW3);
+    'Open TW3 Documents Folder', openTW3DocPath, isTW3);
 
   context.registerAction('fb-load-order-icons', 300, 'open-ext', {},
-                         'Open TW3 Documents Folder', openTW3DocPath, isTW3);
+    'Open TW3 Documents Folder', openTW3DocPath, isTW3);
 
   context.registerAction('fb-load-order-icons', 100, 'loot-sort', {}, 'Sort by Deploy Order',
     () => {
@@ -69,47 +81,51 @@ export const registerActions = (props: IProps) => {
           + 'to the bottom of the list, while all mods that have been installed through Vortex will shift '
           + 'in position to match the deploy order!', { ns: I18N_NAMESPACE }),
       }, [
-        { label: 'Cancel', action: () => {
-          return;
-        }},
-        { label: 'Sort by Deploy Order', action: () => {
-          const state = context.api.getState();
-          const gameMods = state.persistent.mods?.[GAME_ID] || {};
-          const profile = selectors.activeProfile(state);
-          const mods = Object.keys(gameMods)
-            .filter(key => util.getSafe(profile, ['modState', key, 'enabled'], false))
-            .map(key => gameMods[key]);
-          const findIndex = (entry: types.ILoadOrderEntry, modList: types.IMod[]) => {
-            return modList.findIndex(m => m.id === entry.modId);
+        {
+          label: 'Cancel', action: () => {
+            return;
           }
-          return util.sortMods(GAME_ID, mods, context.api)
-            .then(sorted => {
-              const loadOrder = getPersistentLoadOrder(context.api);
-              const filtered = loadOrder.filter(entry =>
-                sorted.find(mod => mod.id === entry.id) !== undefined);
-              const sortedLO = filtered.sort((a, b) => findIndex(a, sorted) - findIndex(b, sorted));
-              const locked = loadOrder.filter(entry => entry.name.includes(LOCKED_PREFIX));
-              const manuallyAdded = loadOrder.filter(key => !filtered.includes(key) && !locked.includes(key));
-              const newLO = [...locked, ...sortedLO, ...manuallyAdded].reduce((accum, entry, idx) => {
-                accum.push({
-                  ...entry,
-                  data: {
-                    prefix: idx + 1
-                  }
-                });
-                return accum;
-              }, []);
+        },
+        {
+          label: 'Sort by Deploy Order', action: () => {
+            const state = context.api.getState();
+            const gameMods = state.persistent.mods?.[GAME_ID] || {};
+            const profile = selectors.activeProfile(state);
+            const mods = Object.keys(gameMods)
+              .filter(key => util.getSafe(profile, ['modState', key, 'enabled'], false))
+              .map(key => gameMods[key]);
+            const findIndex = (entry: types.ILoadOrderEntry, modList: types.IMod[]) => {
+              return modList.findIndex(m => m.id === entry.modId);
+            }
+            return util.sortMods(GAME_ID, mods, context.api)
+              .then(sorted => {
+                const loadOrder = getPersistentLoadOrder(context.api);
+                const filtered = loadOrder.filter(entry =>
+                  sorted.find(mod => mod.id === entry.id) !== undefined);
+                const sortedLO = filtered.sort((a, b) => findIndex(a, sorted) - findIndex(b, sorted));
+                const locked = loadOrder.filter(entry => entry.name.includes(LOCKED_PREFIX));
+                const manuallyAdded = loadOrder.filter(key => !filtered.includes(key) && !locked.includes(key));
+                const newLO = [...locked, ...sortedLO, ...manuallyAdded].reduce((accum, entry, idx) => {
+                  accum.push({
+                    ...entry,
+                    data: {
+                      prefix: idx + 1
+                    }
+                  });
+                  return accum;
+                }, []);
 
-              context.api.store.dispatch(actions.setLoadOrder(profile.id, newLO as any));
-            })
-            .catch(err => {
-              const allowReport = !(err instanceof util.CycleError);
-              context.api.showErrorNotification('Failed to sort by deployment order', err,
-                { allowReport });
-            }).finally(() => {
-              forceRefresh(context.api);
-            });
-        }},
+                context.api.store.dispatch(actions.setLoadOrder(profile.id, newLO as any));
+              })
+              .catch(err => {
+                const allowReport = !(err instanceof util.CycleError);
+                context.api.showErrorNotification('Failed to sort by deployment order', err,
+                  { allowReport });
+              }).finally(() => {
+                forceRefresh(context.api);
+              });
+          }
+        },
       ]);
     }, () => {
       const state = context.api.store.getState();

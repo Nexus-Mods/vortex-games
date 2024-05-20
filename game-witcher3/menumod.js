@@ -148,7 +148,7 @@ function convertFilePath(filePath, installPath) {
   //  the curator's path to the user's path.
   const segments = filePath.split(path.sep);
   const idx = segments.findIndex((seg, idx) => {
-    if (seg === 'mods' && segments[idx - 1] === GAME_ID) {
+    if (seg.toLowerCase() === 'mods' && segments[idx - 1] === GAME_ID) {
       return true;
     } else {
       return false;

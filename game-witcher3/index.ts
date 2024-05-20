@@ -238,6 +238,7 @@ function merge(filePath, mergeDir, context) {
 
 let loadOrder: TW3LoadOrder;
 let priorityManager: PriorityManager;
+const getPriorityManager = () => priorityManager;
 // let modLimitPatcher: ModLimitPatcher;
 
 function main(context: types.IExtensionContext) {
@@ -285,11 +286,7 @@ function main(context: types.IExtensionContext) {
 
   context.registerMigration((oldVersion) => (migrate148(context, oldVersion) as any));
 
-  registerActions({
-    context,
-    getPriorityManager: () => priorityManager,
-    // getModLimitPatcher: () => modLimitPatcher,
-  });
+  registerActions({ context, getPriorityManager });
 
   context.optional.registerCollectionFeature(
     'witcher3_collection_data',
@@ -334,7 +331,7 @@ function main(context: types.IExtensionContext) {
   const props = {
     onToggleModsState: toggleModsState,
     api: context.api,
-    priorityManager,
+    getPriorityManager,
   }
   context.registerLoadOrder(new TW3LoadOrder(props));
   // context.registerTest('tw3-mod-limit-breach', 'gamemode-activated',
@@ -344,24 +341,24 @@ function main(context: types.IExtensionContext) {
 
   context.once(() => {
     priorityManager = new PriorityManager(context.api, 'prefix-based');
-    IniStructure.getInstance(context.api, priorityManager);
+    IniStructure.getInstance(context.api, getPriorityManager);
     // modLimitPatcher = new ModLimitPatcher(context.api);
     loadOrder = new TW3LoadOrder({
       api: context.api,
-      priorityManager,
+      getPriorityManager,
       onToggleModsState: toggleModsState
     });
 
     context.api.events.on('gamemode-activated', onGameModeActivation(context.api));
     context.api.events.on('profile-will-change', onProfileWillChange(context.api));
-    context.api.events.on('mods-enabled', onModsDisabled(context.api, priorityManager));
+    context.api.events.on('mods-enabled', onModsDisabled(context.api, getPriorityManager));
 
     context.api.onAsync('will-deploy', onWillDeploy(context.api) as any);
-    context.api.onAsync('did-deploy', onDidDeploy(context.api, priorityManager) as any);
-    context.api.onAsync('did-purge', onDidPurge(context.api, priorityManager) as any);
-    context.api.onAsync('did-remove-mod', onDidRemoveMod(context.api, priorityManager) as any);
+    context.api.onAsync('did-deploy', onDidDeploy(context.api) as any);
+    context.api.onAsync('did-purge', onDidPurge(context.api, getPriorityManager) as any);
+    context.api.onAsync('did-remove-mod', onDidRemoveMod(context.api, getPriorityManager) as any);
 
-    context.api.onStateChange(['settings', 'witcher3'], onSettingsChange(context.api, priorityManager) as any);
+    context.api.onStateChange(['settings', 'witcher3'], onSettingsChange(context.api, getPriorityManager) as any);
   });
   return true;
 }

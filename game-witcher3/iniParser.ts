@@ -6,13 +6,11 @@ import { fs, selectors, types, util } from 'vortex-api';
 import { forceRefresh, isLockedEntry, getAllMods, getManuallyAddedMods } from './util';
 import { PriorityManager } from './priorityManager';
 
-import { getPersistentLoadOrder } from './migrations';
-
 import { GAME_ID, ResourceInaccessibleError, getLoadOrderFilePath } from './common';
 
 export default class IniStructure {
   private static instance: IniStructure = null;
-  public static getInstance(api?: types.IExtensionApi, priorityManager?: PriorityManager): IniStructure {
+  public static getInstance(api?: types.IExtensionApi, priorityManager?: () => PriorityManager): IniStructure {
     if (!IniStructure.instance) {
       if (api === undefined || priorityManager === undefined) {
         throw new Error('IniStructure is not context aware');
@@ -25,17 +23,17 @@ export default class IniStructure {
   private mIniStruct = {};
   private mApi: types.IExtensionApi;
   private mPriorityManager: PriorityManager;
-  constructor(api: types.IExtensionApi, priorityManager: PriorityManager) {
+  constructor(api: types.IExtensionApi, priorityManager: () => PriorityManager) {
     this.mIniStruct = {};
     this.mApi = api;
-    this.mPriorityManager = priorityManager;
+    this.mPriorityManager = priorityManager();
   }
 
   public async getIniStructure() {
     return this.mIniStruct;
   }
 
-  public async setINIStruct(loadOrder: types.LoadOrder, priorityManager: PriorityManager) {
+  public async setINIStruct(loadOrder: types.LoadOrder) {
     const modMap = await getAllMods(this.mApi);
     this.mIniStruct = {};
     const mods = [].concat(modMap.merged, modMap.managed, modMap.manual);
@@ -47,7 +45,7 @@ export default class IniStructure {
     this.mIniStruct = mods.reduce((accum, mod, idx) => {
       let name;
       let key;
-      if (typeof(mod) === 'object' && mod !== null) {
+      if (typeof(mod) === 'object' && !!mod) {
         name = mod.name;
         key = mod.id;
       } else {
@@ -56,14 +54,18 @@ export default class IniStructure {
       }
 
       const LOEntry = (loadOrder || []).find(iter => iter.modId === key);
-      const idxOfEntry = (loadOrder || []).findIndex(iter => iter.modId === key);
+      const idxOfEntry = (loadOrder || []).findIndex(iter => iter.name === name || iter.modId === key);
       if (idx === 0) {
-        priorityManager?.resetMaxPriority(totalLocked.length);
+        this.mPriorityManager?.resetMaxPriority(totalLocked.length);
       }
       accum[name] = {
         // The INI file's enabled attribute expects 1 or 0
         Enabled: (LOEntry !== undefined) ? LOEntry.enabled ? 1 : 0 : 1,
-        Priority: totalLocked.includes(name) ? totalLocked.indexOf(name) + 1 : idxOfEntry + 1,
+        Priority: totalLocked.includes(name)
+          ? totalLocked.indexOf(name) + 1
+          : idxOfEntry === -1
+            ? loadOrder.length + 1
+            : idxOfEntry,
         VK: key,
       };
       return accum;

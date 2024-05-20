@@ -1,7 +1,6 @@
 /* eslint-disable */
-import path from 'path';
 import semver from 'semver';
-import { actions, fs, selectors, types, util } from 'vortex-api';
+import { selectors, types, util } from 'vortex-api';
 
 import { GAME_ID } from './common';
 import { ILoadOrder, ILoadOrderEntry } from './collections/types';
@@ -75,6 +74,7 @@ export function getPersistentLoadOrder(api: types.IExtensionApi, loadOrder?: ILo
 function convertDisplayItem(key: string, item: ILoadOrderEntry): types.ILoadOrderEntry {
   return {
     id: key,
+    modId: key,
     name: key,
     locked: item.locked,
     enabled: true,

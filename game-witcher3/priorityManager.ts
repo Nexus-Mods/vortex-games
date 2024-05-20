@@ -45,13 +45,14 @@ export class PriorityManager {
     this.mMaxPriority = this.getMaxPriority(props);
   }
 
-  public getPriority = (item: types.ILoadOrderEntry) => {
-    const props: IProps = this.genProps();
-    const { loadOrder, minPriority } = (props === undefined)
-      ? { loadOrder: [], minPriority: 0 }
-      : props;
+  public getPriority = (loadOrder: types.LoadOrder, item: types.ILoadOrderEntry) => {
+    if (item === undefined) {
+      // Send it off to the end.
+      return ++this.mMaxPriority;
+    }
+    const minPriority = Object.keys(loadOrder).filter(key => loadOrder[key]?.locked).length + 1;
 
-    const itemIdx = loadOrder.findIndex(x => x.id === item.id);
+    const itemIdx = loadOrder.findIndex(x => x?.id === item.id);
     if (itemIdx !== -1) {
       if (this.mPriorityType === 'position-based') {
         const position = itemIdx + 1;
@@ -93,7 +94,7 @@ export class PriorityManager {
     return { state, profile, loadOrder, minPriority };
   }
 
-  private getMaxPriority = (props: IProps) => {
+  public getMaxPriority = (props: IProps) => {
     const { loadOrder, minPriority } = props;
     return Object.keys(loadOrder).reduce((prev, key) => {
       const prefixVal = loadOrder[key]?.data?.prefix ?? loadOrder[key]?.prefix;

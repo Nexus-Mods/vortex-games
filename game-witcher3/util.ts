@@ -10,7 +10,7 @@ import { getMergedModNames } from './mergeInventoryParsing';
 
 import turbowalk, { IEntry, IWalkOptions } from 'turbowalk';
 
-import { GAME_ID, LOCKED_PREFIX, I18N_NAMESPACE, UNI_PATCH } from './common';
+import { GAME_ID, LOCKED_PREFIX, I18N_NAMESPACE, UNI_PATCH, ACTIVITY_ID_IMPORTING_LOADORDER } from './common';
 import { IDeployedFile, IDeployment } from './types';
 
 export async function getDeployment(api: types.IExtensionApi,
@@ -116,7 +116,7 @@ export function notifyMissingScriptMerger(api) {
   });
 }
 
-export async function findModFolder(installationPath: string, mod: types.IMod): Promise<string> {
+export async function findModFolders(installationPath: string, mod: types.IMod): Promise<string[]> {
   if (!installationPath || !mod?.installationPath) {
     const errMessage = !installationPath
       ? 'Game is not discovered'
@@ -128,42 +128,34 @@ export async function findModFolder(installationPath: string, mod: types.IMod): 
     ? path.join(installationPath, mod.installationPath, 'Mods')
     : path.join(installationPath, mod.installationPath);
   const entries = await fs.readdirAsync(expectedModNameLocation);
+  const validEntries = [];
   for (const entry of entries) {
     const stats = await fs.statAsync(path.join(expectedModNameLocation, entry)).catch(err => null);
     if (stats?.isDirectory()) {
-      return Promise.resolve(entry);
+      validEntries.push(entry);
     }
   }
 
-  return Promise.reject(new Error('Failed to find mod folder'));
+  return (validEntries.length > 0)
+    ? Promise.resolve(validEntries)
+    : Promise.reject(new Error('Failed to find mod folder'));
 }
 
 export async function getManagedModNames(api: types.IExtensionApi, mods: types.IMod[]): Promise<{ name: string, id: string }[]> {
-  const isDeployed = async (modPath: string) => await fs.statAsync(modPath).then(stats => stats.isDirectory()).catch(err => false);
   const installationPath = selectors.installPathForGame(api.getState(), GAME_ID);
-  const modTypes: { [typeId: string]: string } = selectors.modPathsForGame(api.getState(), GAME_ID);
   return mods.reduce(async (accumP, mod) => {
     const accum = await accumP;
-    let modName;
+    let folderNames = [];
     try {
-      modName = await findModFolder(installationPath, mod);
-    } catch (err) {
-      log('error', 'unable to resolve mod name', err);
-    }
-    if (!modName || ['collection', 'w3modlimitpatcher'].includes(mod.type)) {
-      return Promise.resolve(accum);
-    }
-    const modPath = modTypes[mod.type];
-    const modComponents = util.getSafe(mod, ['attributes', 'modComponents'], []);
-    if (modComponents.length === 0) {
-      modComponents.push(modName);
-    }
-
-    for (const component of modComponents) {
-      const res = await isDeployed(path.join(modPath, component));
-      if (res) {
+      if (!folderNames || ['collection', 'w3modlimitpatcher'].includes(mod.type)) {
+        return Promise.resolve(accum);
+      }
+      folderNames = await findModFolders(installationPath, mod);
+      for (const component of folderNames) {
         accum.push({ id: mod.id, name: component });
       }
+    } catch (err) {
+      log('error', 'unable to resolve mod name', err);
     }
     return Promise.resolve(accum);
   }, Promise.resolve([]));
@@ -310,6 +302,12 @@ export function validateProfile(profileId: string, state: types.IState) {
 
   return activeProfile;
 };
+
+export function suppressEventHandlers(api: types.IExtensionApi) {
+  // This isn't cool, but meh.
+  const state = api.getState();
+  return (state.session.notifications.notifications.some(n => n.id === ACTIVITY_ID_IMPORTING_LOADORDER));
+}
 
 export function toBlue<T>(func: (...args: any[]) => Promise<T>): (...args: any[]) => Bluebird<T> {
   return (...args: any[]) => Bluebird.resolve(func(...args));

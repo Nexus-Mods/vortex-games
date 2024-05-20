@@ -1,15 +1,18 @@
 /* eslint-disable */
 import React from 'react';
-import { selectors, types } from 'vortex-api';
+import path from 'path';
+import { actions, fs, selectors, types, util } from 'vortex-api';
 
-import { GAME_ID, LOCKED_PREFIX, UNI_PATCH } from './common';
+import { ACTIVITY_ID_IMPORTING_LOADORDER, GAME_ID, LOCKED_PREFIX, UNI_PATCH } from './common';
 import InfoComponent from './views/InfoComponent';
 import IniStructure from './iniParser';
 import { PriorityManager } from './priorityManager';
+import { getPersistentLoadOrder } from './migrations';
+import { forceRefresh } from './util';
 
 export interface IBaseProps {
   api: types.IExtensionApi;
-  priorityManager: PriorityManager;
+  getPriorityManager: () => PriorityManager;
   onToggleModsState: (enable: boolean) => void;
 };
 
@@ -30,15 +33,15 @@ class TW3LoadOrder implements types.ILoadOrderGameInfo {
     this.noCollectionGeneration = true;
     this.usageInstructions = () => (<InfoComponent onToggleModsState={props.onToggleModsState}/>);
     this.mApi = props.api;
-    this.mPriorityManager = props.priorityManager;
+    this.mPriorityManager = props.getPriorityManager();
     this.deserializeLoadOrder = this.deserializeLoadOrder.bind(this);
     this.serializeLoadOrder = this.serializeLoadOrder.bind(this);
     this.validate = this.validate.bind(this);
   }
 
   public async serializeLoadOrder(loadOrder: types.LoadOrder): Promise<void> {
-    return IniStructure.getInstance(this.mApi, this.mPriorityManager)
-                       .setINIStruct(loadOrder, this.mPriorityManager);
+    return IniStructure.getInstance(this.mApi, () => this.mPriorityManager)
+                       .setINIStruct(loadOrder);
   }
 
   private readableNames = {[UNI_PATCH]: 'Unification/Community Patch'};
@@ -50,7 +53,7 @@ class TW3LoadOrder implements types.ILoadOrderGameInfo {
     }
     const findName = (val: string) => this.readableNames?.[val] || val;
     try {
-      const ini = await IniStructure.getInstance(this.mApi, this.mPriorityManager).readStructure();
+      const ini = await IniStructure.getInstance(this.mApi, () => this.mPriorityManager).readStructure();
       const entries = Object.keys(ini.data).sort((a, b) => ini.data[a].Priority - ini.data[b].Priority).reduce((accum, iter, idx) => {
           const entry = ini.data[iter];
           accum[iter.startsWith(LOCKED_PREFIX) ? 'locked' : 'regular'].push({
@@ -74,6 +77,74 @@ class TW3LoadOrder implements types.ILoadOrderGameInfo {
 
   public async validate(prev: types.LoadOrder, current: types.LoadOrder): Promise<types.IValidationResult> {
     return Promise.resolve(undefined);
+  }
+}
+
+export async function importLoadOrder(api: types.IExtensionApi, collectionId: string): Promise<void> {
+  // import load order from collection.
+  const state = api.getState();
+  api.sendNotification({
+    type: 'activity',
+    id: ACTIVITY_ID_IMPORTING_LOADORDER,
+    title: 'Importing Load Order',
+    message: 'Parsing collection data',
+    allowSuppress: false,
+    noDismiss: true,
+  });
+
+  const mods: { [modId: string]: types.IMod } = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
+  const collectionMod = mods[collectionId];
+  if (collectionMod?.installationPath === undefined) {
+    api.dismissNotification(ACTIVITY_ID_IMPORTING_LOADORDER);
+    api.showErrorNotification('collection mod is missing', collectionId);
+    return;
+  }
+
+  const stagingFolder = selectors.installPathForGame(state, GAME_ID);
+  try {
+    api.sendNotification({
+      type: 'activity',
+      id: ACTIVITY_ID_IMPORTING_LOADORDER,
+      title: 'Importing Load Order',
+      message: 'Ensuring mods are deployed...',
+      allowSuppress: false,
+      noDismiss: true,
+    });
+    await util.toPromise(cb => api.events.emit('deploy-mods', cb));
+    const fileData = await fs.readFileAsync(path.join(stagingFolder, collectionMod.installationPath, 'collection.json'), { encoding: 'utf8' });
+    const collection = JSON.parse(fileData);
+    const loadOrder = collection?.loadOrder || {};
+    if (Object.keys(loadOrder).length === 0) {
+      api.sendNotification({
+        type: 'success',
+        message: 'Collection does not include load order to import',
+        displayMS: 3000,
+      });
+      return;
+    }
+
+    const converted = getPersistentLoadOrder(api, loadOrder);
+    api.sendNotification({
+      type: 'activity',
+      id: ACTIVITY_ID_IMPORTING_LOADORDER,
+      title: 'Importing Load Order',
+      message: 'Writing Load Order...',
+      allowSuppress: false,
+      noDismiss: true,
+    });
+    await IniStructure.getInstance().setINIStruct(converted)
+      .then(() => forceRefresh(api));
+    api.sendNotification({
+      type: 'success',
+      message: 'Collection load order has been imported',
+      displayMS: 3000,
+    });
+    return;
+  } catch (err) {
+    api.showErrorNotification('Failed to import load order', err);
+    return;
+  } finally {
+    api.dismissNotification(ACTIVITY_ID_IMPORTING_LOADORDER);
   }
 }
 
