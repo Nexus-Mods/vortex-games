@@ -10,7 +10,7 @@ import {
 
 import menuMod from './menumod';
 import { storeToProfile, restoreFromProfile } from './mergeBackup';
-import { validateProfile, forceRefresh, suppressEventHandlers } from './util';
+import { validateProfile, forceRefresh, suppressEventHandlers, notifyMissingScriptMerger } from './util';
 import { PriorityManager } from './priorityManager';
 import { IRemoveModOptions } from './types';
 
@@ -196,7 +196,7 @@ function getScriptMergerTool(api) {
 function runScriptMerger(api) {
   const tool = getScriptMergerTool(api);
   if (tool?.path === undefined) {
-    this.notifyMissingScriptMerger(api);
+    notifyMissingScriptMerger(api);
     return Promise.resolve();
   }
 
@@ -240,6 +240,6 @@ function queryScriptMerge(api: types.IExtensionApi, reason: string) {
       ],
     });
   } else {
-    this.notifyMissingScriptMerger(api);
+    notifyMissingScriptMerger(api);
   }
 }
