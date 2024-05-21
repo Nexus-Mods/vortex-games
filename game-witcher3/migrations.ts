@@ -1,8 +1,9 @@
-import path from 'path';
+/* eslint-disable */
 import semver from 'semver';
-import { actions, fs, selectors, types, util } from 'vortex-api';
+import { selectors, types, util } from 'vortex-api';
 
 import { GAME_ID } from './common';
+import { ILoadOrder, ILoadOrderEntry } from './collections/types';
 
 export async function migrate148(context: types.IExtensionContext,
                                  oldVersion: string): Promise<void> {
@@ -47,4 +48,38 @@ export async function migrate148(context: types.IExtensionContext,
   });
 
   return Promise.resolve();
+}
+
+export function getPersistentLoadOrder(api: types.IExtensionApi, loadOrder?: ILoadOrder): types.LoadOrder {
+  // We migrated away from the regular mod load order extension
+  //  to the file based load ordering
+  const state = api.getState();
+  const profile: types.IProfile = selectors.activeProfile(state);
+  if (profile?.gameId !== GAME_ID) {
+    return [];
+  }
+  loadOrder = loadOrder ?? util.getSafe(state, ['persistent', 'loadOrder', profile.id], undefined);
+  if (loadOrder === undefined) {
+    return [];
+  }
+  if (Array.isArray(loadOrder)) {
+    return loadOrder;
+  }
+  if (typeof loadOrder === 'object') {
+    return Object.entries(loadOrder).map(([key, item]) => convertDisplayItem(key, item));
+  }
+  return [];
+}
+
+function convertDisplayItem(key: string, item: ILoadOrderEntry): types.ILoadOrderEntry {
+  return {
+    id: key,
+    modId: key,
+    name: key,
+    locked: item.locked,
+    enabled: true,
+    data: {
+      prefix: item.prefix,
+    }
+  }
 }

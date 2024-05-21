@@ -1,3 +1,4 @@
+/* eslint-disable */
 import Bluebird from 'bluebird';
 import path from 'path';
 import { parseStringPromise } from 'xml2js';
@@ -6,10 +7,10 @@ import { GAME_ID, SCRIPT_MERGER_ID, MERGE_INV_MANIFEST } from './common';
 
 import { fs, log, types, util } from 'vortex-api';
 
-function getMergeInventory(context: types.IExtensionContext) {
+function getMergeInventory(api: types.IExtensionApi) {
   // Provided with a pattern, attempts to retrieve element values
   //  from any element keys that match the pattern inside the merge inventory file.
-  const state = context.api.store.getState();
+  const state = api.getState();
   const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
   const scriptMerger = util.getSafe(discovery, ['tools', SCRIPT_MERGER_ID], undefined);
   if ((scriptMerger === undefined) || (scriptMerger.path === undefined)) {
@@ -30,15 +31,15 @@ function getMergeInventory(context: types.IExtensionContext) {
       : Promise.reject(new util.DataInvalid(`Failed to parse ${MERGE_INV_MANIFEST}: ${err}`)));
 }
 
-export function getMergedModNames(context: types.IExtensionContext) {
+export function getMergedModNames(api: types.IExtensionApi) {
   // This retrieves the name of the resulting merged mod itself.
   //  AKA "mod0000_MergedFiles"
-  return getMergeInventory(context)
+  return getMergeInventory(api)
     .then(async mergeInventory => {
       if (mergeInventory === undefined) {
         return Promise.resolve([]);
       }
-      const state = context.api.getState();
+      const state = api.getState();
       const discovery = util.getSafe(state,
         ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
       const modsPath = path.join(discovery.path, 'Mods');
@@ -76,20 +77,20 @@ export function getMergedModNames(context: types.IExtensionContext) {
       //  Rather than blocking the user from modding his game we're
       //  we simply return an empty array; but before we do that,
       //  we need to tell him we were unable to parse the merged inventory.
-      context.api.showErrorNotification('Invalid MergeInventory.xml file', err,
+      api.showErrorNotification('Invalid MergeInventory.xml file', err,
         { allowReport: false });
       return Promise.resolve([]);
     });
 }
 
-export function getNamesOfMergedMods(context: types.IExtensionContext): Bluebird<string[]> {
+export function getNamesOfMergedMods(api: types.IExtensionApi): Bluebird<string[]> {
   // This retrieves a unique list of mod names included in the merged mod
-  return getMergeInventory(context)
+  return getMergeInventory(api)
     .then(async mergeInventory => {
       if (mergeInventory === undefined) {
         return Promise.resolve([]);
       }
-      const state = context.api.getState();
+      const state = api.getState();
       const discovery = util.getSafe(state,
         ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
       const modsPath = path.join(discovery.path, 'Mods');

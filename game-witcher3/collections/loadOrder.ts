@@ -1,21 +1,22 @@
 import { actions, selectors, types, util } from 'vortex-api';
 import { GAME_ID } from '../common';
-import { ILoadOrder, ILoadOrderEntry, IW3CollectionsData } from './types';
+import { IW3CollectionsData } from './types';
 
 import { CollectionGenerateError, CollectionParseError,
-  genCollectionLoadOrder, isModInCollection, isValidMod } from './util';
+  genCollectionLoadOrder } from './util';
+import { getPersistentLoadOrder } from '../migrations';
 
-export async function exportLoadOrder(state: types.IState,
+export async function exportLoadOrder(api: types.IExtensionApi,
                                       modIds: string[],
                                       mods: { [modId: string]: types.IMod })
-                                      : Promise<ILoadOrder> {
+                                      : Promise<types.LoadOrder> {
+  const state = api.getState();
   const profileId = selectors.lastActiveProfileForGame(state, GAME_ID);
   if (profileId === undefined) {
     return Promise.reject(new CollectionGenerateError('Invalid profile id'));
   }
 
-  const loadOrder: ILoadOrder = util.getSafe(state,
-    ['persistent', 'loadOrder', profileId], undefined);
+  const loadOrder: types.LoadOrder = getPersistentLoadOrder(api);
   if (loadOrder === undefined) {
     // This is theoretically "fine" - the user may have simply
     //  downloaded the mods and immediately created the collection
@@ -32,7 +33,7 @@ export async function exportLoadOrder(state: types.IState,
     }
     return accum;
   }, {});
-  const filteredLO: ILoadOrder = genCollectionLoadOrder(loadOrder, includedMods);
+  const filteredLO: types.LoadOrder = genCollectionLoadOrder(loadOrder, includedMods);
   return Promise.resolve(filteredLO);
 }
 
@@ -45,6 +46,7 @@ export async function importLoadOrder(api: types.IExtensionApi,
     return Promise.reject(new CollectionParseError(collection?.['info']?.['name'] || '', 'Invalid profile id'));
   }
 
-  api.store.dispatch(actions.setLoadOrder(profileId, collection.loadOrder as any));
+  const converted = getPersistentLoadOrder(api, collection.loadOrder as any);
+  api.store.dispatch(actions.setLoadOrder(profileId, converted));
   return Promise.resolve(undefined);
 }
