@@ -9,6 +9,8 @@ import IniStructure from './iniParser';
 import { PriorityManager } from './priorityManager';
 import { getPersistentLoadOrder } from './migrations';
 import { forceRefresh } from './util';
+import ItemRenderer from './views/ItemRenderer';
+import { IItemRendererProps } from './types';
 
 export interface IBaseProps {
   api: types.IExtensionApi;
@@ -22,6 +24,7 @@ class TW3LoadOrder implements types.ILoadOrderGameInfo {
   public clearStateOnPurge?: boolean | undefined;
   public usageInstructions?: React.ComponentType<{}>;
   public noCollectionGeneration?: boolean | undefined;
+  public customItemRenderer?: React.ComponentType<{ className?: string, item: IItemRendererProps, forwardedRef?: (ref: any) => void }>;
 
   private mApi: types.IExtensionApi;
   private mPriorityManager: PriorityManager;
@@ -32,6 +35,9 @@ class TW3LoadOrder implements types.ILoadOrderGameInfo {
     this.toggleableEntries = true;
     this.noCollectionGeneration = true;
     this.usageInstructions = () => (<InfoComponent onToggleModsState={props.onToggleModsState}/>);
+    this.customItemRenderer = (props) => {
+      return (<ItemRenderer className={props.className} item={props.item} />)
+    };
     this.mApi = props.api;
     this.mPriorityManager = props.getPriorityManager();
     this.deserializeLoadOrder = this.deserializeLoadOrder.bind(this);
