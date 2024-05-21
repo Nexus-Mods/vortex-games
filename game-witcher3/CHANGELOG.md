@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added Epic Game Store discovery
 - Added context menu item in Mods page to allow users to import LO and script merge data when right clicking the mod entry.
+- Added custom item renderer to view source mods of load order entries
 - Fixed longstanding issue causing the menu mod to fail deployment when imported from a collection
 - Version information now displaying correctly
 - Removed mod limit patcher (no longer needed)
