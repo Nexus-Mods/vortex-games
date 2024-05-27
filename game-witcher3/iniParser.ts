@@ -161,7 +161,7 @@ export default class IniStructure {
     try {
       await fs.removeAsync(filePath);
       await fs.writeFileAsync(filePath, '', { encoding: 'utf8' });
-      const ini = await parser.read(filePath);
+      const ini = await this.ensureModSettings();
       const struct = Object.keys(this.mIniStruct).sort((a, b) => this.mIniStruct[a].Priority - this.mIniStruct[b].Priority);
       for (const key of struct) {
         if (this.mIniStruct?.[key]?.Enabled === undefined) {

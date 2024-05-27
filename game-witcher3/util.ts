@@ -197,7 +197,14 @@ export async function getManuallyAddedMods(api: types.IExtensionApi) {
     // How/why are we even here ?
     return Promise.reject(new util.ProcessCanceled('Game is not discovered!'));
   }
-  const ini = await IniStructure.getInstance().ensureModSettings();
+  let ini;
+  try {
+    ini = await IniStructure.getInstance().ensureModSettings();
+  } catch (err) {
+    api.showErrorNotification('Failed to load INI structure', err, { allowReport: false });
+    return Promise.resolve([]);
+  }
+
   const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
   const modKeys = Object.keys(mods);
   const iniEntries = Object.keys(ini.data);
