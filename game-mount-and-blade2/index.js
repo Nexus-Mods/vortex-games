@@ -1,16 +1,14 @@
-const path = require('path');
 function main(context) {
   context.registerGameStub({
     id: 'mountandblade2bannerlord',
-    executable: () => path.join('bin', 'Win64_Shipping_Client', 'Bannerlord.exe'),
+    executable: null,
     mergeMods: false,
     name: 'Mount & Blade II:\tBannerlord',
     queryModPath: () => '.',
     requiredFiles: [],
   }, {
-    name: "Game: Mount and Blade II: Bannerlord (BUTR)",
+    name: "Mount and Blade II Bannerlord Vortex Support",
     modId: 875,
-    fileId: 3270,
   });
 }
 
