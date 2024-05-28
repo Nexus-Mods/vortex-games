@@ -1,4 +1,4 @@
-
+/* eslint-disable */
 import _ from 'lodash';
 import path from 'path';
 import turbowalk from 'turbowalk';
@@ -31,12 +31,12 @@ interface IBaseProps {
 const sortInc = (lhs: string, rhs: string) => lhs.length - rhs.length;
 const sortDec = (lhs: string, rhs: string) => rhs.length - lhs.length;
 
-function genBaseProps(context: types.IExtensionContext,
+function genBaseProps(api: types.IExtensionApi,
                       profileId: string, force?: boolean): IBaseProps {
   if (!profileId) {
     return undefined;
   }
-  const state = context.api.getState();
+  const state = api.getState();
   const profile: types.IProfile = selectors.profileById(state, profileId);
   if (profile?.gameId !== GAME_ID) {
     return undefined;
@@ -57,7 +57,7 @@ function genBaseProps(context: types.IExtensionContext,
     return undefined;
   }
 
-  return { api: context.api, state, profile, scriptMergerTool, gamePath: discovery.path };
+  return { api, state, profile, scriptMergerTool, gamePath: discovery.path };
 }
 
 function getFileEntries(filePath: string): Promise<string[]> {
@@ -222,8 +222,8 @@ async function handleMergedScripts(props: IBaseProps, opType: OpType, dest?: str
   }
 }
 
-export async function storeToProfile(context: types.IExtensionContext, profileId: string) {
-  const props: IBaseProps = genBaseProps(context, profileId);
+export async function storeToProfile(api: types.IExtensionApi, profileId: string) {
+  const props: IBaseProps = genBaseProps(api, profileId);
   if (props === undefined) {
     return;
   }
@@ -237,8 +237,8 @@ export async function storeToProfile(context: types.IExtensionContext, profileId
   return handleMergedScripts(props, 'export');
 }
 
-export async function restoreFromProfile(context: types.IExtensionContext, profileId: string) {
-  const props: IBaseProps = genBaseProps(context, profileId);
+export async function restoreFromProfile(api: types.IExtensionApi, profileId: string) {
+  const props: IBaseProps = genBaseProps(api, profileId);
   if (props === undefined) {
     return;
   }
@@ -252,13 +252,13 @@ export async function restoreFromProfile(context: types.IExtensionContext, profi
   return handleMergedScripts(props, 'import');
 }
 
-export async function queryScriptMerges(context: types.IExtensionContext,
+export async function queryScriptMerges(api: types.IExtensionApi,
                                         includedModIds: string[],
                                         collection: types.IMod) {
-  const state = context.api.getState();
+  const state = api.getState();
   const mods: { [modId: string]: types.IMod } = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
   const modTypes: { [typeId: string]: string } = selectors.modPathsForGame(state, GAME_ID);
-  const deployment: IDeployment = await getDeployment(context.api, includedModIds);
+  const deployment: IDeployment = await getDeployment(api, includedModIds);
   const deployedNames: string[] = Object.keys(modTypes).reduce((accum, typeId) => {
     const modPath = modTypes[typeId];
     const files: IDeployedFile[] = deployment[typeId];
@@ -278,7 +278,7 @@ export async function queryScriptMerges(context: types.IExtensionContext,
     return accum;
   }, []);
   const uniqueDeployed = Array.from(new Set(deployedNames));
-  const merged = await getNamesOfMergedMods(context);
+  const merged = await getNamesOfMergedMods(api);
   const diff = _.difference(merged, uniqueDeployed);
   const isOptional = (modId: string) => (collection.rules ?? []).find(rule => {
     const mod: types.IMod = mods[modId];
@@ -299,11 +299,11 @@ export async function queryScriptMerges(context: types.IExtensionContext,
   }
 }
 
-export async function exportScriptMerges(context: types.IExtensionContext,
+export async function exportScriptMerges(api: types.IExtensionApi,
                                          profileId: string,
                                          includedModIds: string[],
                                          collection: types.IMod) {
-  const props: IBaseProps = genBaseProps(context, profileId, true);
+  const props: IBaseProps = genBaseProps(api, profileId, true);
   if (props === undefined) {
     return;
   }
@@ -321,7 +321,7 @@ export async function exportScriptMerges(context: types.IExtensionContext,
   };
 
   try {
-    await queryScriptMerges(context, includedModIds, collection);
+    await queryScriptMerges(api, includedModIds, collection);
     return exportMergedData();
   } catch (err) {
     if (err instanceof MergeDataViolationError) {
@@ -336,7 +336,7 @@ export async function exportScriptMerges(context: types.IExtensionContext,
         ? 'No longer part of the collection and need to be re-added:{{br}}[list]'
           + notIncluded.map(ni => `[*]${ni}`) + '[/list]{{br}}'
         : '';
-      return context.api.showDialog('question', 'Potential merged data mismatch', {
+      return api.showDialog('question', 'Potential merged data mismatch', {
         bbcode: 'Your collection includes a script merge that is referencing mods '
           + `that are...{{bl}} ${notIncludedSegment}${optionalSegment}`
           + 'For the collection to function correctly you will need to address the '
@@ -356,14 +356,14 @@ export async function exportScriptMerges(context: types.IExtensionContext,
   }
 }
 
-export async function importScriptMerges(context: types.IExtensionContext,
+export async function importScriptMerges(api: types.IExtensionApi,
                                          profileId: string,
                                          fileData: Buffer) {
-  const props: IBaseProps = genBaseProps(context, profileId, true);
+  const props: IBaseProps = genBaseProps(api, profileId, true);
   if (props === undefined) {
     return;
   }
-  const res = await context.api.showDialog('question', 'Script Merges Import', {
+  const res = await api.showDialog('question', 'Script Merges Import', {
     text: 'The collection you are importing contains script merges which the creator of '
         + 'the collection deemed necessary for the mods to function correctly. Please note that '
         + 'importing these will overwrite any existing script merges you may have effectuated. '
@@ -383,7 +383,7 @@ export async function importScriptMerges(context: types.IExtensionContext,
     await fs.ensureDirWritableAsync(tempPath);
     const data = await restoreFileData(fileData, tempPath);
     await handleMergedScripts(props, 'import', tempPath);
-    context.api.sendNotification({
+    api.sendNotification({
       message: 'Script merges imported successfully',
       id: 'witcher3-script-merges-status',
       type: 'success',
@@ -394,8 +394,8 @@ export async function importScriptMerges(context: types.IExtensionContext,
   }
 }
 
-export async function makeOnContextImport(context: types.IExtensionContext, collectionId: string) {
-  const state = context.api.getState();
+export async function makeOnContextImport(api: types.IExtensionApi, collectionId: string) {
+  const state = api.getState();
   const mods: { [modId: string]: types.IMod } = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
   const collectionMod = mods[collectionId];
   if (collectionMod?.installationPath === undefined) {
@@ -413,14 +413,14 @@ export async function makeOnContextImport(context: types.IExtensionContext, coll
       const scriptMergerTool = util.getSafe(state,
         ['settings', 'gameMode', 'discovered', GAME_ID, 'tools', SCRIPT_MERGER_ID], undefined);
       if (scriptMergerTool === undefined) {
-        await downloadScriptMerger(context);
+        await downloadScriptMerger(api);
       }
       const profileId = selectors.lastActiveProfileForGame(state, GAME_ID);
-      await importScriptMerges(context, profileId, hex2Buffer(scriptMergedData));
+      await importScriptMerges(api, profileId, hex2Buffer(scriptMergedData));
     }
   } catch (err) {
     if (!(err instanceof util.UserCanceled)) {
-      context.api.showErrorNotification('Failed to import script merges', err);
+      api.showErrorNotification('Failed to import script merges', err);
     }
   }
 }

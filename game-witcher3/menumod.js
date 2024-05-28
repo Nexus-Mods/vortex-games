@@ -1,8 +1,11 @@
+/* eslint-disable */
 const path = require('path');
 const Promise = require('bluebird');
 const { actions, fs, log, selectors, util } = require('vortex-api');
 const IniParser = require('vortex-parse-ini');
 const generate = require('shortid').generate;
+
+const { getPersistentLoadOrder } = require('./migrations');
 
 const { prepareFileData, restoreFileData } = require('./collections/util');
 
@@ -70,7 +73,7 @@ function readModData(filePath) {
 
 function populateCache(api, activeProfile, modIds, initialCacheValue) {
   const state = api.store.getState();
-  const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
+  const loadOrder = getPersistentLoadOrder(api);
   const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
   const modState = util.getSafe(activeProfile, ['modState'], {});
 
@@ -144,18 +147,19 @@ function convertFilePath(filePath, installPath) {
   //  on the user's end. This functor will convert the abs path from
   //  the curator's path to the user's path.
   const segments = filePath.split(path.sep);
-  const idx = segments.findIndex((seg, idx) => {
-    if (seg === 'mods' && segments[idx - 1] === GAME_ID) {
-      return true;
+  const idx = segments.reduce((prev, seg, idx) => {
+    if (seg.toLowerCase() === GAME_ID) {
+      return idx;
     } else {
-      return false;
+      return prev;
     }
-  });
+  }, -1);
   if (idx === -1) {
     log('error', 'unexpected menu mod filepath', filePath);
     return filePath;
   }
-  return path.join(installPath, segments.slice(idx + 1).join(path.sep));
+  const relPath = segments.slice(idx + 1).join(path.sep);
+  return path.join(installPath, relPath);
 }
 
 async function onWillDeploy(api, deployment, activeProfile) {
@@ -256,7 +260,7 @@ async function toIniFileObject(data, tempDest) {
 
 async function onDidDeploy(api, deployment, activeProfile) {
   const state = api.store.getState();
-  const loadOrder = util.getSafe(state, ['persistent', 'loadOrder', activeProfile.id], {});
+  const loadOrder = getPersistentLoadOrder(api);
   const docFiles = deployment['witcher3menumodroot'].filter(file => (file.relPath.endsWith(PART_SUFFIX))
     && (file.relPath.indexOf(INPUT_XML_FILENAME) === -1));
 
@@ -266,7 +270,7 @@ async function onDidDeploy(api, deployment, activeProfile) {
 
   const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
   const modState = util.getSafe(activeProfile, ['modState'], {});
-  let nextAvailableId = Object.keys(loadOrder).length;
+  let nextAvailableId = loadOrder.length;
   const getNextId = () => {
     return nextAvailableId++;
   }

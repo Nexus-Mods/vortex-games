@@ -32,6 +32,8 @@ As Baldur's Gate 3 doesn't have official mod support ([yet](https://larian.com/s
 
 In the majority of cases, mods for Baldur's Gate 3 will require a 3rd party tool called [LSLib](https://github.com/Norbyte/lslib) to manipulate game files. When you first manage the game, Vortex should popup and give you the option to download and install this tool automatically. If that has already been dismissed, it can be accessed again via the 'Re-install LSLib/Divine' button on the toolbar in the Mods page of Vortex.
 
+LSLib (since 1.19) requires .NET 8 to be installed. This can be installed from [.NET 8.0 Desktop Runtime from Microsoft](https://dotnet.microsoft.com/en-us/download/dotnet/thank-you/runtime-desktop-8.0.3-windows-x64-installer).
+
 Please ensure that the tool is always enabled and deployed on the mods page. Some Anti-Virus software may flag this tool as malicious due to the nature of what it does. We suggest you ensure that your security software is configured to allow this tool to install.
 
 # Settings
@@ -87,3 +89,5 @@ The below instructions should reset the game files and allow you to continue you
 # Thanks!
 
 Thank you to all members of the #vortex-baldursgate3 discord channel that have spent time and effort to help test this extension before we send out into the wild. It's a pretty big update and their input has been invaluable when trying to find those niche issues and to just have more eyes on. We have plenty of plans to further Baldur's Gate 3 support and hopefully everyone will be just as willing to test and help make decisions around the best way to tackle it.
+
+[Norbyte and LSLib](https://github.com/Norbyte/lslib) for allowing us to peek inside PAK files, it's a great tool.

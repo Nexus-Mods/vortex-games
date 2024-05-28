@@ -137,4 +137,10 @@ export const UNI_PATCH = 'mod0000____CompilationTrigger';
 export const LOCKED_PREFIX = 'mod0000_';
 
 export const DO_NOT_DISPLAY = ['communitypatch-base'];
-export const DO_NOT_DEPLOY = ['readme.txt'];
+// minimatch is supposed to be case-insensitive, but it's not working for some reason...
+export const DO_NOT_DEPLOY = ['README.TXT'];
+export const SCRIPT_MERGER_FILES = ['WitcherScriptMerger.exe'];
+
+export const NON_SORTABLE = ['witcher3menumoddocuments', 'collection'];
+
+export const ACTIVITY_ID_IMPORTING_LOADORDER = 'activity-witcher3-importing-loadorder';

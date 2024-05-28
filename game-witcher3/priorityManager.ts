@@ -1,19 +1,10 @@
-import { selectors, types, util } from 'vortex-api';
+/* eslint-disable */
+import { selectors, types } from 'vortex-api';
 
 import { GAME_ID } from './common';
+import { getPersistentLoadOrder } from './migrations';
 
 export type PriorityType = 'position-based' | 'prefix-based';
-export interface ILoadOrderEntry {
-  pos: number;
-  enabled: boolean;
-  prefix?: string;
-  locked?: boolean;
-  external?: boolean;
-}
-
-export interface ILoadOrder {
-  [modId: string]: ILoadOrderEntry;
-}
 
 export interface IOffsetMap {
   [offset: number]: number;
@@ -22,7 +13,7 @@ export interface IOffsetMap {
 interface IProps {
   state: types.IState;
   profile: types.IProfile;
-  loadOrder: { [modId: string]: ILoadOrderEntry };
+  loadOrder: types.LoadOrder;
   minPriority: number;
 }
 
@@ -54,24 +45,27 @@ export class PriorityManager {
     this.mMaxPriority = this.getMaxPriority(props);
   }
 
-  public getPriority = (item: types.ILoadOrderDisplayItem) => {
-    const props: IProps = this.genProps();
-    const { loadOrder, minPriority } = (props === undefined)
-      ? { loadOrder: {}, minPriority: 0 }
-      : props;
+  public getPriority = (loadOrder: types.LoadOrder, item: types.ILoadOrderEntry) => {
+    if (item === undefined) {
+      // Send it off to the end.
+      return ++this.mMaxPriority;
+    }
+    const minPriority = Object.keys(loadOrder).filter(key => loadOrder[key]?.locked).length + 1;
 
-    const itemKey = Object.keys(loadOrder).find(x => x === item.id);
-    if (itemKey !== undefined) {
+    const itemIdx = loadOrder.findIndex(x => x?.id === item.id);
+    if (itemIdx !== -1) {
       if (this.mPriorityType === 'position-based') {
-        const position = loadOrder[itemKey].pos + 1;
+        const position = itemIdx + 1;
         return (position > minPriority)
           ? position : ++this.mMaxPriority;
       } else {
-        const prefixVal = (loadOrder[itemKey]?.prefix !== undefined)
-        ? parseInt(loadOrder[itemKey].prefix, 10) : loadOrder[itemKey].pos;
-        const posVal = loadOrder[itemKey].pos;
-        if (posVal !== prefixVal && prefixVal > minPriority) {
-          return prefixVal;
+        const prefixVal = loadOrder[itemIdx]?.data?.prefix ?? loadOrder[itemIdx]?.['prefix'];
+        const intVal = prefixVal !== undefined
+          ? parseInt(prefixVal, 10)
+          : itemIdx;
+        const posVal = itemIdx;
+        if (posVal !== intVal && intVal > minPriority) {
+          return intVal;
         } else {
           return (posVal > minPriority)
             ? posVal : ++this.mMaxPriority;
@@ -93,24 +87,24 @@ export class PriorityManager {
       return undefined;
     }
 
-    const loadOrder: { [modId: string]: ILoadOrderEntry } = util.getSafe(state,
-      ['persistent', 'loadOrder', lastProfId], {});
+    const loadOrder: types.LoadOrder = getPersistentLoadOrder(this.mApi);
 
     const lockedEntries = Object.keys(loadOrder).filter(key => loadOrder[key]?.locked);
     const minPriority = (min) ? min : lockedEntries.length;
     return { state, profile, loadOrder, minPriority };
   }
 
-  private getMaxPriority = (props: IProps) => {
+  public getMaxPriority = (props: IProps) => {
     const { loadOrder, minPriority } = props;
     return Object.keys(loadOrder).reduce((prev, key) => {
-      const prefixVal = (loadOrder[key]?.prefix !== undefined)
+      const prefixVal = loadOrder[key]?.data?.prefix ?? loadOrder[key]?.prefix;
+      const intVal = prefixVal !== undefined
         ? parseInt(loadOrder[key].prefix, 10)
         : loadOrder[key].pos;
       const posVal = loadOrder[key].pos;
-      if (posVal !== prefixVal) {
-        prev = (prefixVal > prev)
-          ? prefixVal : prev;
+      if (posVal !== intVal) {
+        prev = (intVal > prev)
+          ? intVal : prev;
       } else {
         prev = (posVal > prev)
           ? posVal : prev;

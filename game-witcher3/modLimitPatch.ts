@@ -1,3 +1,4 @@
+/* eslint-disable */
 import _ from 'lodash';
 import path from 'path';
 import { actions, fs, selectors, types, util } from 'vortex-api';
@@ -5,6 +6,11 @@ import { actions, fs, selectors, types, util } from 'vortex-api';
 import { setSuppressModLimitPatch } from './actions';
 
 import { GAME_ID, I18N_NAMESPACE } from './common';
+
+/**
+ * Theoretically the mod limit patcher is no longer needed (CDPR raised the file handle limit)
+ *  but we will still keep this functionality in case it is needed in the future.
+ */
 
 const RANGE_START = 0xB94000;
 const RANGE_END = 0xB98000;
