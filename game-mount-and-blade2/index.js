@@ -8,8 +8,9 @@ function main(context) {
     queryModPath: () => '.',
     requiredFiles: [],
   }, {
-    name: 'Game: Mount and Blade II: Bannerlord',
+    name: "Game: Mount and Blade II: Bannerlord (BUTR)",
     modId: 875,
+    fileId: 3270,
   });
 }
 
