@@ -30,8 +30,8 @@ export function scriptMergerDummyInstaller() {
 export function testMenuModRoot(instructions: any[], gameId: string): Promise<types.ISupportedResult | boolean> {
   // This function can test for both installers and modTypes
   const predicate = (instr) => (!!gameId)
-    ? ((GAME_ID === gameId) && (instr.indexOf(CONFIG_MATRIX_REL_PATH) !== -1))
-    : ((instr.type === 'copy') && (instr.destination.indexOf(CONFIG_MATRIX_REL_PATH) !== -1));
+    ? ((GAME_ID === gameId) && (instr.toLowerCase().indexOf(CONFIG_MATRIX_REL_PATH) !== -1))
+    : ((instr.type === 'copy') && (instr.destination.toLowerCase().indexOf(CONFIG_MATRIX_REL_PATH) !== -1));
 
   return (!!gameId)
     ? Promise.resolve({
@@ -262,6 +262,22 @@ export function installDLCMod(files: string[]) {
   return Promise.resolve({ instructions });
 }
 
+const hasPrefix = (prefix: PrefixType, fileEntry: string) => {
+  const segments = fileEntry.toLowerCase().split(path.sep);
+  const contentIdx = segments.indexOf('content');
+  if ([-1, 0].includes(contentIdx)) {
+    // No content folder, no mod.
+    return false;
+  }
+
+  return segments[contentIdx - 1].indexOf(prefix) !== -1;
+};
+
+const isRootDirectory = (fileEntry: string) => {
+  const segments = fileEntry.toLowerCase().split(path.sep);
+  return (['mods', 'dlc'].includes(segments[0]));
+}
+
 export function testSupportedMixed(files: string[], gameId: string): Promise<types.ISupportedResult> {
   if (gameId !== GAME_ID) {
     return Promise.resolve({ supported: false, requiredFiles: [] });
@@ -273,20 +289,7 @@ export function testSupportedMixed(files: string[], gameId: string): Promise<typ
     return Promise.resolve({ supported: false, requiredFiles: [] });
   }
 
-  const hasPrefix = (prefix: PrefixType, fileEntry: string) => {
-    const segments = fileEntry.toLowerCase().split(path.sep);
-    if (segments.indexOf('content') !== 1) {
-      // We expect the content folder to be nested one level beneath
-      //  the mod's folder e.g. 'archive.zip/dlcModName/content/' otherwise
-      //  it's simply too unreliable to attempt to detect this packaging pattern.
-      return false;
-    }
-
-    return (segments[0].length > 3) && (segments[0].startsWith(prefix));
-  };
-
-  const supported = ((files.find(file => hasPrefix('dlc', file)) !== undefined)
-    && (files.find(file => hasPrefix('mod', file)) !== undefined));
+  const supported = (files.some(file => hasPrefix('dlc', file))) && (files.some(file => hasPrefix('mod', file)));
   return Promise.resolve({
     supported,
     requiredFiles: [],
@@ -298,34 +301,51 @@ export function installMixed(files: string[]) {
   //  with the 'mod' prefix go inside mods.
   const modNames: string[] = [];
   const instructions: types.IInstruction[] = files.reduce((accum, iter) => {
+    const isRootDir = isRootDirectory(iter);
     const segments = iter.split(path.sep);
     if (!path.extname(segments[segments.length - 1])) {
       return accum;
     }
-    const modName = segments[0].startsWith('mod')
-      ? segments[0] : undefined;
-    const destination = (segments[0].startsWith('dlc'))
-      ? ['dlc'].concat(segments).join(path.sep)
-      : (modName !== undefined)
-        ? ['mods'].concat(segments).join(path.sep)
-        : undefined;
-    if (destination !== undefined) {
-      if (modName !== undefined) {
-        modNames.push(modName);
-      }
-      const instruction: types.IInstruction = {
-        type: 'copy',
-        source: iter,
-        destination,
-      };
-      accum.push(instruction);
+
+    let destinationSegments = [];
+    const contentIdx = segments.map(seg => seg.toLowerCase()).indexOf('content');
+
+    if (isRootDir) {
+      // Take out the root folder.
+      segments.shift();
+    } else if (contentIdx > 1) {
+      // Take out anything prior to the mod folder.
+      segments.splice(contentIdx - 1);
     }
+
+    if (hasPrefix('dlc', iter)) {
+      destinationSegments = ['dlc'].concat(segments);
+    } else if (hasPrefix('mod', iter)) {
+      destinationSegments = ['mods'].concat(segments);
+    } else {
+      // Don't know, don't care
+      destinationSegments = iter.split(path.sep);
+    }
+
+    modNames.push(segments[0]);
+    const instruction: types.IInstruction = {
+      type: 'copy',
+      source: iter,
+      destination: destinationSegments.join(path.sep),
+    };
+    accum.push(instruction);
+
     return accum;
-  }, [])
-    .concat({
+  }, []).concat([
+    {
       type: 'attribute',
       key: 'modComponents',
-      value: modNames,
-    });
+      value: Array.from(new Set(modNames)),
+    },
+    {
+      type: 'setmodtype',
+      value: 'dinput',
+    }
+  ]);
   return Promise.resolve({ instructions });
 }
