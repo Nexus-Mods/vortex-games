@@ -1,6 +1,8 @@
 import { IncomingHttpHeaders } from 'http';
 import { types } from 'vortex-api';
 
+export type PrefixType = 'dlc' | 'mod';
+
 export interface IDeployment { [modTypeId: string]: IDeployedFile[]; }
 export interface IDeployedFile {
   relPath: string;

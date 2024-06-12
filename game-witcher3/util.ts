@@ -11,7 +11,7 @@ import { getMergedModNames } from './mergeInventoryParsing';
 import turbowalk, { IEntry, IWalkOptions } from 'turbowalk';
 
 import { GAME_ID, LOCKED_PREFIX, I18N_NAMESPACE, UNI_PATCH, ACTIVITY_ID_IMPORTING_LOADORDER } from './common';
-import { IDeployedFile, IDeployment } from './types';
+import { IDeployedFile, IDeployment, PrefixType } from './types';
 
 export async function getDeployment(api: types.IExtensionApi,
   includedMods?: string[]): Promise<IDeployment> {
@@ -116,6 +116,17 @@ export function notifyMissingScriptMerger(api) {
   });
 }
 
+export const hasPrefix = (prefix: PrefixType, fileEntry: string) => {
+  const segments = fileEntry.toLowerCase().split(path.sep);
+  const contentIdx = segments.indexOf('content');
+  if ([-1, 0].includes(contentIdx)) {
+    // No content folder, no mod.
+    return false;
+  }
+
+  return segments[contentIdx - 1].indexOf(prefix) !== -1;
+};
+
 export async function findModFolders(installationPath: string, mod: types.IMod): Promise<string[]> {
   if (!installationPath || !mod?.installationPath) {
     const errMessage = !installationPath
@@ -124,18 +135,17 @@ export async function findModFolders(installationPath: string, mod: types.IMod):
     return Promise.reject(new Error(errMessage));
   }
 
-  const expectedModNameLocation = ['witcher3menumodroot', 'witcher3tl'].includes(mod.type)
-    ? path.join(installationPath, mod.installationPath, 'Mods')
-    : path.join(installationPath, mod.installationPath);
-  const entries = await fs.readdirAsync(expectedModNameLocation);
-  const validEntries = [];
-  for (const entry of entries) {
-    const stats = await fs.statAsync(path.join(expectedModNameLocation, entry)).catch(err => null);
-    if (stats?.isDirectory()) {
-      validEntries.push(entry);
-    }
-  }
-
+  const validNames = new Set<string>();
+  await turbowalk(path.join(installationPath, mod.installationPath), (entries: IEntry[]) => {
+    entries.forEach(entry => {
+      const segments = entry.filePath.split(path.sep);
+      const contentIdx = segments.findIndex(seg => seg.toLowerCase() === 'content');
+      if (![-1, 0].includes(contentIdx)) {
+        validNames.add(segments[contentIdx - 1]);
+      }
+    });
+  }, { recurse: true, skipHidden: true, skipLinks: true });
+  const validEntries = Array.from(validNames);
   return (validEntries.length > 0)
     ? Promise.resolve(validEntries)
     : Promise.reject(new Error('Failed to find mod folder'));
@@ -155,7 +165,7 @@ export async function getManagedModNames(api: types.IExtensionApi, mods: types.I
         accum.push({ id: mod.id, name: component });
       }
     } catch (err) {
-      log('error', 'unable to resolve mod name', err);
+      log('warn', 'unable to resolve mod name', mod.id);
     }
     return Promise.resolve(accum);
   }, Promise.resolve([]));
