@@ -2,8 +2,7 @@
 import path from 'path';
 import { types } from 'vortex-api';
 import { CONFIG_MATRIX_REL_PATH, GAME_ID, SCRIPT_MERGER_FILES, PART_SUFFIX } from './common';
-
-export type PrefixType = 'dlc' | 'mod';
+import { PrefixType } from './types';
 
 export function scriptMergerTest(files, gameId) {
   const matcher = (file => SCRIPT_MERGER_FILES.includes(file));
