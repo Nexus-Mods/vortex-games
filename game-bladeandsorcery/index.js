@@ -100,23 +100,7 @@ function prepareForModding(discovery, api) {
 }
 
 async function getOfficialModType(api, discovery = undefined) {
-  const discoveryPath = (discovery?.path !== undefined)
-    ? discovery.path
-    : getDiscoveryPath(api);
-  if (discoveryPath === undefined) {
-    return Promise.reject(new GameNotDiscoveredException());
-  }
-  let gameVersion;
-  try {
-    gameVersion = await getGameVersion(discoveryPath, BAS_EXEC);
-  } catch (err) {
-    return missingGameJsonError(api, err);
-  }
-  //const segments = gameVersion.split('.');
-  //const ver = segments[0] === '0' ? segments.slice(1).join('.') : gameVersion;
-  const modType = semver.gte(semver.coerce(gameVersion), semver.coerce('0.8.4'))
-    ? 'bas-official-modtype' : 'bas-legacy-modtype';
-  return Promise.resolve(modType);
+  return Promise.resolve('bas-official-modtype');
 }
 
 async function getDeployedManaged(context, modType) {
@@ -423,10 +407,10 @@ function main(context) {
       installOfficialMod(files, destinationPath, gameId, progressDelegate, context.api));
 
   context.registerModType('bas-official-modtype', 15, (gameId) => (gameId === GAME_ID),
-    getOfficialDestination, () => Promise.resolve(false), { name: 'Official Mod (v8.4+)' });
+    getOfficialDestination, () => Promise.resolve(false), { name: 'Official Mod (v1.0+)' });
 
   context.registerModType('bas-legacy-modtype', 15, (gameId) => (gameId === GAME_ID),
-    getLegacyDestination, () => Promise.resolve(false), { name: 'Legacy Mod (v8.3 and below)' });
+    getLegacyDestination, () => Promise.resolve(false), { name: 'Legacy Mod (v0.8.3 and below)' });
 
   let refreshFunc;
   context.registerLoadOrderPage({
