@@ -6,7 +6,7 @@ const { util } = require('vortex-api');
 const { app, remote } = require('electron');
 const uniApp = app || remote.app;
 
-const { BAS_EXEC, GAME_ID, MOD_MANIFEST, GameNotDiscoveredException } = require('./common');
+const { BAS_EXEC, GAME_ID, MOD_MANIFEST } = require('./common');
 const { getModName, checkModGameVersion, getGameVersion,
   getMinModVersion, getDiscoveryPath, missingGameJsonError } = require('./util');
 
@@ -42,33 +42,21 @@ async function installOfficialMod(files,
   }
   let isEngineInject;
   try {
-    gameVersion = await getGameVersion(discoveryPath, BAS_EXEC);
-    minModVersion = await getMinModVersion(discoveryPath, BAS_EXEC);
-    try {
-      const relPath = files.find(f => path.basename(f).toLowerCase() === MOD_MANIFEST);
-      isEngineInject = path.dirname(relPath).startsWith('BladeAndSorcery_Data');
-      // just validating if the name is valid
-      await getModName(path.join(destinationPath, relPath), 'Name');
-    } catch (err) {
-      // invalid mod name, refuse installation
-      return {
-        instructions: [
-          {
-            type: 'error',
-            value: 'fatal',
-            source: 'This mod is not compatible with Blade&Sorcery version 8.4 and newer.',
-          },
-        ],
-      };
-    }
-    minModVersion.version = minModVersion.version.toString().replace(',', '.');
-  }
-  catch (err) {
-    return missingGameJsonError(api, err);
-  }
-
-  if (minModVersion === undefined) {
-    throw new util.DataInvalid('Failed to identify game version');
+    const relPath = files.find(f => path.basename(f).toLowerCase() === MOD_MANIFEST);
+    isEngineInject = path.dirname(relPath).startsWith('BladeAndSorcery_Data');
+    // just validating if the name is valid
+    await getModName(path.join(destinationPath, relPath), 'Name');
+  } catch (err) {
+    // invalid mod name, refuse installation
+    return {
+      instructions: [
+        {
+          type: 'error',
+          value: 'fatal',
+          source: 'This mod is not compatible with Blade&Sorcery version 8.4 and newer.',
+        },
+      ],
+    };
   }
 
   const usedModNames = [];
@@ -88,7 +76,6 @@ async function installOfficialMod(files,
 
         usedModNames.push(modName);
 
-
         // Remove directories and anything that isn't in the rootPath (unless mod type engine inject).
         const filtered = files.filter(file =>
           (((file.indexOf(rootPath) !== -1) || isEngineInject) && (!file.endsWith(path.sep))));
@@ -107,34 +94,9 @@ async function installOfficialMod(files,
           value: (manifestFiles.length > 1),
         })
 
-        let modVersion;
-        try {
-          modVersion = await checkModGameVersion(destinationPath, minModVersion, manifestFile);
-        } catch (err) {
-          return Promise.reject(err);
-        }
-
-        const segments = gameVersion.split('.');
-        const ver = segments[0] === '0' ? segments.slice(1).join('.') : gameVersion;
-        if ((process.env.NODE_ENV === 'development') || semver.satisfies(uniApp.getVersion(), '>=1.4.0')) {
-          // All this bullshit could've been avoided had the game used semantic versioning
-          //  from the get-go.
-          instructions.push({
-            type: 'attribute',
-            key: 'maxGameVersion',
-            value: (segments[0] === '0')
-              ? (modVersion.modVersion.split('.')[0] === '0')
-                ? semver.coerce(modVersion.modVersion).version
-                : semver.coerce(`0.${modVersion.modVersion}`).version
-              : semver.coerce(modVersion.modVersion).version,
-          })
-        }
-
         const modTypeInstr = {
           type: 'setmodtype',
-          value: isEngineInject ? 'dinput' : semver.gte(semver.coerce(ver), semver.coerce('8.4'))
-            ? 'bas-official-modtype'
-            : 'bas-legacy-modtype'
+          value: isEngineInject ? 'dinput' : 'bas-official-modtype',
         }
 
         instructions.push(modTypeInstr);
