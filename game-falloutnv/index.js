@@ -102,7 +102,6 @@ const tools = [
     id: 'geckfnv',
     name: 'GECK',
     logo: 'geck.png',
-    shortName: 'NVSE',
     executable: () => 'GECK.exe',
     requiredFiles: [
       'GECK.exe',
