@@ -99,6 +99,7 @@ function main(context) {
       steamAppId: 377160,
       gogAppId: GOG_ID,
       ignoreConflicts: IGNORED_FILES,
+      compatibleDownloads: ['fallout4london'],
       hashFiles: [
         'appxmanifest.xml',
         'Data/Fallout4.esm',
