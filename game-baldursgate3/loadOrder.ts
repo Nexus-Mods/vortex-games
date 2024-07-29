@@ -132,7 +132,7 @@ export async function deserialize(context: types.IExtensionContext): Promise<typ
     addedMods.forEach(pak => {
       filteredLoadOrder.push({
         id: pak.fileName,
-        modId: pak.mod.id,
+        modId: pak.mod?.id,
         enabled: true,  // not using load order for enabling/disabling      
         name: path.basename(pak.fileName, '.pak'),
         data: pak.info,
