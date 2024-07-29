@@ -34,7 +34,7 @@ class TW3LoadOrder implements types.ILoadOrderGameInfo {
     this.clearStateOnPurge = true;
     this.toggleableEntries = true;
     this.noCollectionGeneration = true;
-    this.usageInstructions = () => (<InfoComponent onToggleModsState={props.onToggleModsState}/>);
+    this.usageInstructions = () => (<InfoComponent onToggleModsState={props.onToggleModsState} />);
     this.customItemRenderer = (props) => {
       return (<ItemRenderer className={props.className} item={props.item} />)
     };
@@ -47,10 +47,10 @@ class TW3LoadOrder implements types.ILoadOrderGameInfo {
 
   public async serializeLoadOrder(loadOrder: types.LoadOrder): Promise<void> {
     return IniStructure.getInstance(this.mApi, () => this.mPriorityManager)
-                       .setINIStruct(loadOrder);
+      .setINIStruct(loadOrder);
   }
 
-  private readableNames = {[UNI_PATCH]: 'Unification/Community Patch'};
+  private readableNames = { [UNI_PATCH]: 'Unification/Community Patch' };
   public async deserializeLoadOrder(): Promise<types.LoadOrder> {
     const state = this.mApi.getState();
     const activeProfile = selectors.activeProfile(state);
@@ -61,19 +61,22 @@ class TW3LoadOrder implements types.ILoadOrderGameInfo {
     try {
       const ini = await IniStructure.getInstance(this.mApi, () => this.mPriorityManager).readStructure();
       const entries = Object.keys(ini.data).sort((a, b) => ini.data[a].Priority - ini.data[b].Priority).reduce((accum, iter, idx) => {
-          const entry = ini.data[iter];
-          accum[iter.startsWith(LOCKED_PREFIX) ? 'locked' : 'regular'].push({
-            id: iter,
-            name: findName(iter),
-            enabled: entry.Enabled === '1',
-            modId: entry?.VK ?? iter,
-            locked: iter.startsWith(LOCKED_PREFIX),
-            data: {
-              prefix: iter.startsWith(LOCKED_PREFIX) ? accum.locked.length : entry?.Priority ?? idx + 1,
-            }
-          })
+        if (iter.startsWith('dlc')) {
           return accum;
-        }, { locked: [], regular: [] });
+        }
+        const entry = ini.data[iter];
+        accum[iter.startsWith(LOCKED_PREFIX) ? 'locked' : 'regular'].push({
+          id: iter,
+          name: findName(iter),
+          enabled: entry.Enabled === '1',
+          modId: entry?.VK ?? iter,
+          locked: iter.startsWith(LOCKED_PREFIX),
+          data: {
+            prefix: iter.startsWith(LOCKED_PREFIX) ? accum.locked.length : entry?.Priority ?? idx + 1,
+          }
+        })
+        return accum;
+      }, { locked: [], regular: [] });
       const finalEntries = [].concat(entries.locked, entries.regular);
       return Promise.resolve(finalEntries);
     } catch (err) {
