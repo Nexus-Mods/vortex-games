@@ -53,6 +53,10 @@ export default class IniStructure {
         key = mod;
       }
 
+      if (name.toLowerCase().startsWith('dlc')) {
+        return accum;
+      }
+
       const LOEntry = (loadOrder || []).find(iter => iter.modId === key);
       const idxOfEntry = (loadOrder || []).findIndex(iter => iter.name === name || iter.modId === key);
       if (idx === 0) {
@@ -142,7 +146,7 @@ export default class IniStructure {
     return;
   }
 
-  public async readStructure(): Promise<IniFile<object>> {
+  public async readStructure(): Promise<{ [key: string]: any }> {
     const state = this.mApi.getState();
     const activeProfile = selectors.activeProfile(state);
     if (activeProfile?.id === undefined) {
@@ -152,7 +156,14 @@ export default class IniStructure {
     const filePath = getLoadOrderFilePath();
     const parser = new IniParser(new WinapiFormat());
     const ini = await parser.read(filePath);
-    return Promise.resolve(ini);
+    const data = Object.entries(ini.data).reduce((accum, [key, value]) => {
+      if (key.toLowerCase().startsWith('dlc')) {
+        return accum;
+      }
+      accum[key] = value;
+      return accum;
+    }, {});
+    return Promise.resolve(data);
   }
 
   public async writeToModSettings(): Promise<void> {
