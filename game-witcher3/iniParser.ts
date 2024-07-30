@@ -53,6 +53,10 @@ export default class IniStructure {
         key = mod;
       }
 
+      if (name.toLowerCase().startsWith('dlc')) {
+        return accum;
+      }
+
       const LOEntry = (loadOrder || []).find(iter => iter.modId === key);
       const idxOfEntry = (loadOrder || []).findIndex(iter => iter.name === name || iter.modId === key);
       if (idx === 0) {
@@ -70,25 +74,7 @@ export default class IniStructure {
       };
       return accum;
     }, {});
-    this.resolveDuplicates();
     return this.writeToModSettings();
-  }
-
-  private resolveDuplicates() {
-    const findDuplicate = (key: string, vk: string) => Object.keys(this.mIniStruct).find((k) => k !== key && !k.startsWith('dlc') && this.mIniStruct[k].VK === vk);
-    this.mIniStruct = Object.entries(this.mIniStruct).reduce((accum, iter) => {
-      const [key, value] = iter;
-      if (key === value?.['VK']) {
-        // Not managed by Vortex
-        accum[key] = value;
-      } else {
-        const dup = findDuplicate(key, value?.['VK']);
-        if (!dup) {
-          accum[key] = value;
-        }
-      }
-      return accum;
-    }, {});
   }
 
   public async revertLOFile() {
@@ -170,13 +156,9 @@ export default class IniStructure {
     const filePath = getLoadOrderFilePath();
     const parser = new IniParser(new WinapiFormat());
     const ini = await parser.read(filePath);
-    const keys = Object.keys(ini.data);
     const data = Object.entries(ini.data).reduce((accum, [key, value]) => {
-      if (key.startsWith('dlc')) {
-        const hasPrimary = keys.find((k) => !k.startsWith('dlc') && ini.data[k].VK === value.VK);
-        if (hasPrimary) {
-          return accum;
-        }
+      if (key.toLowerCase().startsWith('dlc')) {
+        return accum;
       }
       accum[key] = value;
       return accum;
