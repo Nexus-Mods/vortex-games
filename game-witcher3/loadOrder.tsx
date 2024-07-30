@@ -57,14 +57,32 @@ class TW3LoadOrder implements types.ILoadOrderGameInfo {
     if (activeProfile?.id === undefined) {
       return Promise.resolve([]);
     }
-    const findName = (val: string) => this.readableNames?.[val] || val;
+    const findName = (entry: { name: string, VK?: string }) => {
+      if (this.readableNames?.[entry.name] !== undefined) {
+        return this.readableNames[entry.name];
+      }
+
+      if (entry.VK === undefined) {
+        return entry.name;
+      }
+
+      const state = this.mApi.getState();
+      const mods: { [modId: string]: types.IMod } = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
+      const mod: types.IMod = mods[entry.VK];
+      if (mod === undefined) {
+        return entry.name;
+      }
+
+      return `${util.renderModName(mod)} (${entry.name})`;
+    };
+
     try {
       const unsorted: { [key: string]: any } = await IniStructure.getInstance(this.mApi, () => this.mPriorityManager).readStructure();
       const entries = Object.keys(unsorted).sort((a, b) => unsorted[a].Priority - unsorted[b].Priority).reduce((accum, iter, idx) => {
         const entry = unsorted[iter];
         accum[iter.startsWith(LOCKED_PREFIX) ? 'locked' : 'regular'].push({
           id: iter,
-          name: findName(iter),
+          name: findName({ name: iter, VK: entry.VK }),
           enabled: entry.Enabled === '1',
           modId: entry?.VK ?? iter,
           locked: iter.startsWith(LOCKED_PREFIX),
