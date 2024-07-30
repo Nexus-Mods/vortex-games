@@ -59,12 +59,9 @@ class TW3LoadOrder implements types.ILoadOrderGameInfo {
     }
     const findName = (val: string) => this.readableNames?.[val] || val;
     try {
-      const ini = await IniStructure.getInstance(this.mApi, () => this.mPriorityManager).readStructure();
-      const entries = Object.keys(ini.data).sort((a, b) => ini.data[a].Priority - ini.data[b].Priority).reduce((accum, iter, idx) => {
-        if (iter.startsWith('dlc')) {
-          return accum;
-        }
-        const entry = ini.data[iter];
+      const unsorted: { [key: string]: any } = await IniStructure.getInstance(this.mApi, () => this.mPriorityManager).readStructure();
+      const entries = Object.keys(unsorted).sort((a, b) => unsorted[a].Priority - unsorted[b].Priority).reduce((accum, iter, idx) => {
+        const entry = unsorted[iter];
         accum[iter.startsWith(LOCKED_PREFIX) ? 'locked' : 'regular'].push({
           id: iter,
           name: findName(iter),
