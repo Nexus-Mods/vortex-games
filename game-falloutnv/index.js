@@ -176,6 +176,7 @@ async function requiresLauncher(gamePath, store) {
 }
 
 function main(context) {
+  context.requireExtension('Fallout New Vegas Sanity Checks');
   context.registerGame({
     id: GAME_ID,
     name: 'Fallout:\tNew Vegas',
