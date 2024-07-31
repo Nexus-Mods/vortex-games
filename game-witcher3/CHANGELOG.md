@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.7]
+
+- Added user friendly names to the load order entries.
+
+## [1.6.5-6]
+
+- Removed dlc load order entries.
+
 ## [1.6.4] - 2024-06-12
 
 - Fixed incorrect detection of load order entry names for mixed mods
