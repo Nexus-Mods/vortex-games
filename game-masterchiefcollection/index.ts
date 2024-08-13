@@ -10,8 +10,6 @@ import { testPlugAndPlayModType } from './modTypes';
 import { installPlugAndPlay, testModConfigInstaller, testPlugAndPlayInstaller, installModConfig, install, testInstaller } from './installers';
 import { applyToManifest } from './util';
 
-let _GAME_STORE_ID;
-
 // Master chef collection
 class MasterChiefCollectionGame implements types.IGame {
   public context: types.IExtensionContext;
@@ -73,15 +71,12 @@ class MasterChiefCollectionGame implements types.IGame {
 
   public queryPath() {
     return util.GameStoreHelper.findByAppId([STEAM_ID, MS_APPID])
-      .then(game => {
-        _GAME_STORE_ID = game.gameStoreId;
-        return game.gamePath
-      });
+      .then(game => game.gamePath);
   }
 
-  public requiresLauncer = util.toBlue((gamePath: string) => this.checkLauncher(gamePath));
-  public async checkLauncher(gamePath: string): LauncherConfig | undefined {
-    if (_GAME_STORE_ID === 'xbox') {
+  public requiresLauncher = util.toBlue((gamePath: string, store: string) => this.checkLauncher(gamePath, store));
+  public async checkLauncher(gamePath: string, store: string): LauncherConfig | undefined {
+    if (store === 'xbox') {
       return Promise.resolve({
         launcher: 'xbox',
         addInfo: {
@@ -91,7 +86,7 @@ class MasterChiefCollectionGame implements types.IGame {
           ],
         }
       });
-    } else if (_GAME_STORE_ID === 'steam') {
+    } else if (store === 'steam') {
       return Promise.resolve({
         launcher: 'steam',
         addInfo: {
