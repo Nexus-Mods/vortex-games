@@ -22,8 +22,6 @@ export function identifyHaloGames(files: string[]): IHaloGame[] {
   }, []);
 }
 
-
-
 export async function applyToManifest(api: types.IExtensionApi, apply: boolean) {
   let manifestData = '';
   try {
