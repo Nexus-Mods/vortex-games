@@ -2,16 +2,25 @@
 import path from 'path';
 import { fs, selectors, types, util } from 'vortex-api';
 
-import { GAME_ID, HALO1_MAPS_RELPATH } from './common';
+import { GAME_ID, HALO1_MAPS_RELPATH, HALO_GAMES } from './common';
 
 const MAP_NUMBER_CONSTRAINT = 28;
 export async function testCEMP(api: types.IExtensionApi): Promise<types.ITestResult> {
   const state = api.getState();
+  const activeGameMode = selectors.activeGameId(state);
+  if (activeGameMode !== GAME_ID) {
+    return Promise.resolve(undefined);
+  }
   const discovery = selectors.discoveryByGame(state, GAME_ID);
   if (discovery === undefined) {
     return Promise.resolve(undefined);
   }
 
+  const mods = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
+  const ceMods = Object.keys(mods).filter(modId => mods[modId]?.attributes?.haloGames.includes(HALO_GAMES.halo1.internalId));
+  if (ceMods.length === 0) {
+    return Promise.resolve(undefined);
+  }
   const halo1MapsPath = path.join(discovery.path, HALO1_MAPS_RELPATH);
   try {
     const fileEntries = await fs.readdirAsync(halo1MapsPath);
