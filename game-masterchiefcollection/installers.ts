@@ -16,11 +16,29 @@ export async function installPlugAndPlay(files: string[], destinationPath: strin
   const modInfo = files.find(file => path.basename(file).toLowerCase() === MOD_INFO_JSON_FILE);
   const modInfoData = await fs.readFileAsync(path.join(destinationPath, modInfo), { encoding: 'utf8' });
   const parsed: IModConfig = rjson.parse(modInfoData) as IModConfig;
-  const gameInstruction: types.IInstruction = {
+  let modConfigAttributes: types.IInstruction[] = [];
+  modConfigAttributes.push({
     type: 'attribute',
     key: 'haloGames',
     value: [HALO_GAMES[parsed.Engine.toLowerCase()].internalId],
+  });
+
+  if (parsed.ModVersion !== undefined) {
+    modConfigAttributes.push({
+      type: 'attribute',
+      key: 'version',
+      value: `${parsed.ModVersion.Major || 0}.${parsed.ModVersion.Minor || 0}.${parsed.ModVersion.Patch || 0}`,
+    });
   }
+
+  if (parsed.Title?.Neutral !== undefined) {
+    modConfigAttributes.push({
+      type: 'attribute',
+      key: 'customFileName',
+      value: parsed.Title.Neutral,
+    });
+  }
+
   const infoSegments = modInfo.split(path.sep);
   const modFolderIndex = infoSegments.length >= 2 ? infoSegments.length - 2 : 0;
   const filtered = files.filter(file => path.extname(path.basename(file)) !== '');
@@ -34,7 +52,7 @@ export async function installPlugAndPlay(files: string[], destinationPath: strin
     };
   });
 
-  instructions.push(gameInstruction);
+  instructions.push(...modConfigAttributes);
   return Promise.resolve({ instructions });
 }
 

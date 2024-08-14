@@ -9,6 +9,8 @@ export const MOD_MANIFEST_FILE = 'ModManifest.txt';
 export const MOD_MANIFEST_FILE_PATH = path.join(MCC_LOCAL_LOW, 'Config', MOD_MANIFEST_FILE);
 export const MOD_INFO_JSON_FILE = 'modinfo.json';
 
+export const HALO1_MAPS_RELPATH = path.join('halo1', 'maps');
+
 export const MS_APPID = 'Microsoft.Chelan';
 export const STEAM_ID = '976730';
 export const GAME_ID = 'halothemasterchiefcollection';

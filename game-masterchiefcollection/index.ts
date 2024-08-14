@@ -8,6 +8,7 @@ import { GAME_ID, HALO_GAMES, MS_APPID, STEAM_ID, MODTYPE_PLUG_AND_PLAY } from '
 import { LauncherConfig } from './types';
 import { testPlugAndPlayModType } from './modTypes';
 import { installPlugAndPlay, testModConfigInstaller, testPlugAndPlayInstaller, installModConfig, install, testInstaller } from './installers';
+import { testCEMP } from './tests';
 import { applyToManifest } from './util';
 
 // Master chef collection
@@ -162,6 +163,8 @@ module.exports = {
 
     context.registerInstaller('masterchiefinstaller',
       25, testInstaller as any, install as any);
+
+    context.registerTest('mcc-ce-mp-test', 'gamemode-activated', util.toBlue(() => testCEMP(context.api)));
 
     context.registerTableAttribute('mods', {
       id: 'gameType',

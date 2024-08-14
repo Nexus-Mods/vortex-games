@@ -8,7 +8,7 @@ export interface IHaloGame {
 interface IModIdentifier {
   ModGuid: string;
   HostedModIds?: {
-      SteamWorkshopId?: number;
+    SteamWorkshopId?: number;
   };
 }
 
