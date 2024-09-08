@@ -208,7 +208,8 @@ export async function extractPakInfoImpl(api: types.IExtensionApi, pakPath: stri
     name: attr('Name', () => genName),
     type: attr('Type', () => 'Adventure'),
     uuid: attr('UUID', () => require('uuid').v4()),
-    version: attr('Version', () => '1'),
+    version: attr('Version64', () => '1'),
+    publishHandle: attr('PublishHandle', () => '0'),
     isListed: isListed
   };
 }

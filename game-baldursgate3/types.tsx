@@ -10,6 +10,7 @@ export interface IPakInfo {
   author?: string;
   description?: string;
   isListed?: boolean;
+  publishHandle?: string;
 }
 
 export interface IProps {
