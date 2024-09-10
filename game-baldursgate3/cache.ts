@@ -72,6 +72,7 @@ export default class PakInfoCache {
 
   public reset() {
     this.mCache = new LRU<string, ICacheEntry>({ max: 700 });
+    this.save();
   }
 
   public async save() {

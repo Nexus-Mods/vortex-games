@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.5.1 - 2024-09-10
+
+- Added support for BG3 patch 7
+- Externally added mods are now sortable via the load order screen
+- Backwards compatibility with patch 6 and lower is maintained
+- Added ability to open the LO file through the FBLO screen
+- Fixed global profile resolution
+
 ## 1.4.2 - 2024-07-25
 
 - Fixed inability to deserialize manually added mod entries. ([#16106](https://github.com/Nexus-Mods/Vortex/issues/16106))

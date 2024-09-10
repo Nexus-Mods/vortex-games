@@ -1,5 +1,28 @@
 import path from 'path';
-export const DEFAULT_MOD_SETTINGS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+export const DEFAULT_MOD_SETTINGS_V7 = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<save>
+  <version major="4" minor="7" revision="1" build="3"/>
+  <region id="ModuleSettings">
+    <node id="root">
+      <children>
+        <node id="Mods">
+          <children>
+            <node id="ModuleShortDesc">
+              <attribute id="Folder" type="LSString" value="GustavDev"/>
+              <attribute id="MD5" type="LSString" value=""/>
+              <attribute id="Name" type="LSString" value="GustavDev"/>
+              <attribute id="PublishHandle" type="uint64" value="0"/>
+              <attribute id="UUID" type="guid" value="28ac9ce2-2aba-8cda-b3b5-6e922f71b6b8"/>
+              <attribute id="Version64" type="int64" value="36028797018963968"/>
+            </node>
+          </children>
+        </node>
+      </children>
+    </node>
+  </region>
+</save>`;
+
+export const DEFAULT_MOD_SETTINGS_V6 = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <save>
   <version major="4" minor="0" revision="10" build="100"/>
   <region id="ModuleSettings">

@@ -26,7 +26,9 @@ If migrating from an existing version (older than 0.3), there are some extra thi
 
 ### Mod Fixer
 
-As Baldur's Gate 3 doesn't have official mod support ([yet](https://larian.com/support/faqs/mod-information_77)), a fix is needed so that certain mod types work. Some mods already include this fix as part of what they are doing anyway and there is no harm in having this fix multiple times. Vortex will notify you of 'Recommended Mods' and will link to [Baldur's Gate 3 Mod Fixer](https://www.nexusmods.com/baldursgate3/mods/141?tab=description) on Nexus Mods to download it.
+~~As Baldur's Gate 3 doesn't have official mod support ([yet](https://larian.com/support/faqs/mod-information_77)), a fix is needed so that certain mod types work. Some mods already include this fix as part of what they are doing anyway and there is no harm in having this fix multiple times. Vortex will notify you of 'Recommended Mods' and will link to [Baldur's Gate 3 Mod Fixer](https://www.nexusmods.com/baldursgate3/mods/141?tab=description) on Nexus Mods to download it.~~
+
+Since Patch 7, Baldur's Gate 3 contains official mod support with an in-game mod manager. ModFixer isn't needed anymore in Patch 7, but it _generally_ does not cause issues. Some mods do contain their own attempts at 'ModFixer' and in some occasions this can cause problems. Please see the [BG3 Modding Wiki](https://wiki.bg3.community/en/Tutorials/patch7-troubleshooting) for more information. 
 
 ### LSLib
 
@@ -85,6 +87,7 @@ The below instructions should reset the game files and allow you to continue you
 * [Mod Compatibility List (Nexus Forums) ](https://forums.nexusmods.com/index.php?/topic/13287213-baldurs-gate-3-mod-compatibility-megathread/)
 * [Vortex Support (Nexus Forums) ](https://forums.nexusmods.com/index.php?/forum/4306-vortex-support/)
 * [Vortex Support (Discord)](https://discord.com/channels/215154001799413770/408252140533055499)
+* [BG3 Community Modding Wiki](https://wiki.bg3.community/en/Tutorials/patch7-troubleshooting )
 
 # Thanks!
 

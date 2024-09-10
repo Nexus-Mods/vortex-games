@@ -1,5 +1,7 @@
 import { types } from 'vortex-api';
 
+export type LOFormat = 'pre-v6' | 'v6' | 'v7';
+
 export interface IPakInfo {
   type?: string;
   uuid?: string;
@@ -10,6 +12,7 @@ export interface IPakInfo {
   author?: string;
   description?: string;
   isListed?: boolean;
+  publishHandle?: string;
 }
 
 export interface IProps {
