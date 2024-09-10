@@ -7,6 +7,7 @@ const reducer: types.IReducerSpec = {
     [actions.setMigration as any]: (state, payload) => util.setSafe(state, ['migration'], payload),
     [actions.setAutoExportLoadOrder as any]: (state, payload) => util.setSafe(state, ['autoExportLoadOrder'], payload),
     [actions.setPlayerProfile as any]: (state, payload) => util.setSafe(state, ['playerProfile'], payload),
+    [actions.setBG3ExtensionVersion as any]: (state, payload) => util.setSafe(state, ['extensionVersion'], payload),
     [actions.settingsWritten as any]: (state, payload) => {
       const { profile, time, count } = payload;
       return util.setSafe(state, ['settingsWritten', profile], { time, count });
@@ -17,6 +18,7 @@ const reducer: types.IReducerSpec = {
     autoExportLoadOrder: true,
     playerProfile: 'global',
     settingsWritten: {},
+    extensionVersion: '0.0.0',
   },
 };
 

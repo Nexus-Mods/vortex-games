@@ -11,7 +11,7 @@ import { LockedState } from 'vortex-api/lib/extensions/file_based_loadorder/type
 import { IOpenOptions, ISaveOptions } from 'vortex-api/lib/types/IExtensionContext';
 
 import { DivineExecMissing } from './divineWrapper';
-import { findNode, forceRefresh, logDebug, modsPath, profilesPath } from './util';
+import { convertV6toV7, findNode, forceRefresh, getActivePlayerProfile, getDefaultModSettingsFormat, getPlayerProfiles, logDebug, modsPath, profilesPath } from './util';
 
 import PakInfoCache, { ICacheEntry } from './cache';
 
@@ -101,23 +101,15 @@ export async function deserialize(context: types.IExtensionContext): Promise<typ
     //const paksWithMods:BG3Pak[] = paks.filter(pak => pak.mod !== undefined);
 
       // go through each pak file in the Mods folder...
-    const processedPaks = paks.reduce((acc, curr) => {      
-
-      // if pak file doesn't have an associated mod, then we don't want to deal with it
-      if(curr.mod === undefined) {
-        acc.invalid.push(curr); 
-        return acc;
-      }
-      
+    const processedPaks = paks.reduce((acc, curr) => {            
       acc.valid.push(curr);
       return acc;
-
     }, { valid: [], invalid: [] });
 
     logDebug('deserialize processedPaks=', processedPaks);
 
     // get any pak files that aren't in the filteredLoadOrder
-    const addedMods:BG3Pak[] = processedPaks.valid.filter(pak => filteredLoadOrder.find(entry => entry.id === pak.fileName) === undefined);
+    const addedMods: BG3Pak[] = processedPaks.valid.filter(pak => filteredLoadOrder.find(entry => entry.id === pak.fileName) === undefined);
 
     logDebug('deserialize addedMods=', addedMods);
     
@@ -134,7 +126,7 @@ export async function deserialize(context: types.IExtensionContext): Promise<typ
         id: pak.fileName,
         modId: pak.mod?.id,
         enabled: true,  // not using load order for enabling/disabling      
-        name: path.basename(pak.fileName, '.pak'),
+        name: pak.info?.name || path.basename(pak.fileName, '.pak'),
         data: pak.info,
         locked: pak.info.isListed as LockedState        
       })      
@@ -213,7 +205,8 @@ export async function importModSettingsFile(api: types.IExtensionApi): Promise<b
 
 export async function importModSettingsGame(api: types.IExtensionApi): Promise<boolean | void> {
 
-  const gameSettingsPath:string = path.join(profilesPath(), 'Public', 'modsettings.lsx');
+  const bg3ProfileId = await getActivePlayerProfile(api);
+  const gameSettingsPath: string = path.join(profilesPath(), bg3ProfileId, 'modsettings.lsx');
 
   logDebug('importModSettingsGame gameSettingsPath=', gameSettingsPath);
 
@@ -250,7 +243,20 @@ async function processBG3MMFile(api: types.IExtensionApi, jsonPath: string) {
   }
 }
 
-async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {  
+export async function getNodes(lsxPath: string): Promise<any> {
+  const lsxLoadOrder: IModSettings = await readLsxFile(lsxPath);
+    logDebug('processLsxFile lsxPath=', lsxPath);
+
+    // buildup object from xml
+    const region = findNode(lsxLoadOrder?.save?.region, 'ModuleSettings');
+    const root = findNode(region?.node, 'root');
+    const modsNode = findNode(root?.children?.[0]?.node, 'Mods');
+    const modsOrderNode = findNode(root?.children?.[0]?.node, 'ModOrder');
+
+    return { region, root, modsNode, modsOrderNode };
+}
+
+export async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {  
 
   const state = api.getState();
   const profileId = selectors.activeProfile(state)?.id;
@@ -265,21 +271,13 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
   });
 
   try {
-
-    const lsxLoadOrder:IModSettings = await readLsxFile(lsxPath);
-    logDebug('processLsxFile lsxPath=', lsxPath);
-
-    // buildup object from xml
-    const region = findNode(lsxLoadOrder?.save?.region, 'ModuleSettings');
-    const root = findNode(region?.node, 'root');
-    const modsNode = findNode(root?.children?.[0]?.node, 'Mods');
-    const loNode = findNode(root?.children?.[0]?.node, 'ModOrder') ?? { children: [] };
-    if ((loNode.children === undefined) || ((loNode.children[0] as any) === '')) {
-      loNode.children = [{ node: [] }];
-    }
-    if ((modsNode.children === undefined) || ((modsNode.children[0] as any) === '')) {
+    const { modsNode, modsOrderNode } = await getNodes(lsxPath);
+    if ((modsNode?.children === undefined) || ((modsNode?.children[0] as any) === '')) {
       modsNode.children = [{ node: [] }];
     }
+
+    const format = await getDefaultModSettingsFormat(api);
+    let loNode = format === 'v7' ? modsNode : modsOrderNode !== undefined ? modsOrderNode : modsNode;
 
     // get nice string array, in order, of mods from the load order section
     let uuidArray:string[] = loNode.children[0].node.map((loEntry) => loEntry.attribute.find(attr => (attr.$.id === 'UUID')).$.value);
@@ -298,10 +296,10 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
       }); 
       
       // remove these duplicates after the first one
-      //uuidArray = Array.from(new Set(uuidArray));
+      uuidArray = Array.from(new Set(uuidArray));
     }   
 
-    const lsxModNodes:IModNode[] = modsNode.children[0].node;
+    const lsxModNodes: IModNode[] = modsNode.children[0].node;
 
     /*
     // get mods, in the above order, from the mods section of the file 
@@ -349,9 +347,9 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
       if (pak !== undefined) {
         acc.push({
           id: pak.fileName,
-          modId: pak.mod.id,
+          modId: pak?.mod?.id,
           enabled: true,        
-          name: path.basename(pak.fileName, '.pak'),
+          name: pak.info?.name || path.basename(pak.fileName, '.pak'),
           data: pak.info,
           locked: pak.info.isListed as LockedState        
         });
@@ -366,9 +364,9 @@ async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
     missing.forEach(pak => {
       newLoadOrder.push({
         id: pak.fileName,
-        modId: pak.mod.id,
+        modId:  pak?.mod?.id,
         enabled: true,        
-        name: path.basename(pak.fileName, '.pak'),
+        name: pak.info?.name || path.basename(pak.fileName, '.pak'),
         data: pak.info,
         locked: pak.info.isListed as LockedState        
       })      
@@ -434,10 +432,7 @@ async function exportTo(api: types.IExtensionApi, filepath: string) {
     const region = findNode(modSettings?.save?.region, 'ModuleSettings');
     const root = findNode(region?.node, 'root');
     const modsNode = findNode(root?.children?.[0]?.node, 'Mods');
-    const loNode = findNode(root?.children?.[0]?.node, 'ModOrder') ?? { children: [] };
-    if ((loNode.children === undefined) || ((loNode.children[0] as any) === '')) {
-      loNode.children = [{ node: [] }];
-    }
+    
     if ((modsNode.children === undefined) || ((modsNode.children[0] as any) === '')) {
       modsNode.children = [{ node: [] }];
     }
@@ -446,10 +441,6 @@ async function exportTo(api: types.IExtensionApi, filepath: string) {
     const descriptionNodes = modsNode?.children?.[0]?.node?.filter?.(iter =>
       iter.attribute.find(attr => (attr.$.id === 'Name') && (attr.$.value === 'GustavDev'))) ?? [];
 
-    
-
-
-    // 
     const filteredPaks = loadOrder.filter(entry => !!entry.data?.uuid
                     && entry.enabled
                     && !entry.data?.isListed);
@@ -459,30 +450,30 @@ async function exportTo(api: types.IExtensionApi, filepath: string) {
     // add new nodes for the enabled mods
     for (const entry of filteredPaks) {
       // const md5 = await util.fileMD5(path.join(modsPath(), key));
+
+      /*
+        <attribute id="Folder" type="LSString" value="ClassAdditions_c4fc3dc0-3222-cf3b-58cd-ccce8ce4c8f5"/>
+        <attribute id="MD5" type="LSString" value="d678aeb54c6c1496c0eae71ce033e9fb"/>
+        <attribute id="Name" type="LSString" value="Ilonias Changes"/>
+        <attribute id="PublishHandle" type="uint64" value="4325285"/>
+        <attribute id="UUID" type="guid" value="c4fc3dc0-3222-cf3b-58cd-ccce8ce4c8f5"/>
+        <attribute id="Version64" type="int64" value="36028797018963970"/>
+      */
+
       descriptionNodes.push({
         $: { id: 'ModuleShortDesc' },
         attribute: [
-          { $: { id: 'Folder', type: 'LSWString', value: entry.data.folder } },
+          { $: { id: 'Folder', type: 'LSString', value: entry.data.folder } },
           { $: { id: 'MD5', type: 'LSString', value: entry.data.md5 } },
-          { $: { id: 'Name', type: 'FixedString', value: entry.data.name } },
-          { $: { id: 'UUID', type: 'FixedString', value: entry.data.uuid } },
-          { $: { id: 'Version', type: 'int32', value: entry.data.version } },
+          { $: { id: 'Name', type: 'LSString', value: entry.data.name } },
+          { $: { id: 'PublishHandle', type: 'uint64', value: 0 } },
+          { $: { id: 'UUID', type: 'guid', value: entry.data.uuid } },
+          { $: { id: 'Version64', type: 'int64', value: entry.data.version } },
         ],
       });
     }
 
-    // 
-    const loadOrderNodes = filteredPaks
-      //.sort((lhs, rhs) => lhs.pos - rhs.pos) // don't know if we need this now
-      .map((entry): IModNode => ({
-        $: { id: 'Module' },
-        attribute: [
-          { $: { id: 'UUID', type: 'FixedString', value: entry.data.uuid } },
-        ],
-      }));
-
     modsNode.children[0].node = descriptionNodes;
-    loNode.children[0].node = loadOrderNodes;
 
     writeModSettings(api, modSettings, filepath);
     
@@ -541,7 +532,8 @@ export async function exportToFile(api: types.IExtensionApi): Promise<boolean | 
   
 export async function exportToGame(api: types.IExtensionApi): Promise<boolean | void> {
 
-  const settingsPath = path.join(profilesPath(), 'Public', 'modsettings.lsx');
+  const bg3ProfileId = await getActivePlayerProfile(api);
+  const settingsPath: string = path.join(profilesPath(), bg3ProfileId, 'modsettings.lsx');
 
   logDebug(`exportToGame ${settingsPath}`);
 
@@ -559,12 +551,10 @@ export async function deepRefresh(api: types.IExtensionApi): Promise<boolean | v
   logDebug('deepRefresh', loadOrder);
 }
 
-
-
 async function readModSettings(api: types.IExtensionApi): Promise<IModSettings> {
-  
-  const settingsPath = path.join(profilesPath(), 'Public', 'modsettings.lsx');
-  const dat = await fs.readFileAsync(settingsPath);
+  const bg3ProfileId = await getActivePlayerProfile(api);
+  const settingsPath: string = path.join(profilesPath(), bg3ProfileId, 'modsettings.lsx');
+  const dat = await fs.readFileAsync(settingsPath, { encoding: 'utf8' });
   logDebug('readModSettings', dat);
   return parseStringPromise(dat);
 }

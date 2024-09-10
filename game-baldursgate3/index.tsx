@@ -14,8 +14,7 @@ import * as path from 'path';
 import * as React from 'react';
 import { fs, selectors, types, util } from 'vortex-api';
 
-import {
-  DEFAULT_MOD_SETTINGS, GAME_ID, IGNORE_PATTERNS,
+import { GAME_ID, IGNORE_PATTERNS,
   MOD_TYPE_BG3SE, MOD_TYPE_LOOSE, MOD_TYPE_LSLIB, MOD_TYPE_REPLACER,
 } from './common';
 import * as gitHubDownloader from './githubDownloader';
@@ -27,6 +26,11 @@ import {
   logDebug, forceRefresh, getLatestInstalledLSLibVer,
   getGameDataPath, getGamePath, globalProfilePath, modsPath,
   getLatestLSLibMod, getOwnGameVersion, readStoredLO,
+  getDefaultModSettings,
+  getDefaultModSettingsFormat,
+  getActivePlayerProfile,
+  profilesPath,
+  convertV6toV7,
 } from './util';
 
 import {
@@ -41,6 +45,7 @@ import {
 import {
   deserialize, importModSettingsFile, importModSettingsGame,
   importFromBG3MM, serialize, exportToGame, exportToFile, validate,
+  getNodes,
 } from './loadOrder';
 
 import { InfoPanelWrap } from './InfoPanel'
@@ -62,14 +67,15 @@ function findGame(): any {
 
 async function ensureGlobalProfile(api: types.IExtensionApi, discovery: types.IDiscoveryResult) {
   if (discovery?.path) {
-    const profilePath = globalProfilePath();
+    const profilePath = await globalProfilePath(api);
     try {
       await fs.ensureDirWritableAsync(profilePath);
       const modSettingsFilePath = path.join(profilePath, 'modsettings.lsx');
       try {
         await fs.statAsync(modSettingsFilePath);
       } catch (err) {
-        await fs.writeFileAsync(modSettingsFilePath, DEFAULT_MOD_SETTINGS, { encoding: 'utf8' });
+        const defaultModSettings = await getDefaultModSettings(api);
+        await fs.writeFileAsync(modSettingsFilePath, defaultModSettings, { encoding: 'utf8' });
       }
     } catch (err) {
       return Promise.reject(err);
@@ -77,22 +83,13 @@ async function ensureGlobalProfile(api: types.IExtensionApi, discovery: types.ID
   }
 }
 
-function prepareForModding(api: types.IExtensionApi, discovery): any {
+async function prepareForModding(api: types.IExtensionApi, discovery) {
   const mp = modsPath();  
 
-  showFullReleaseModFixerRecommendation(api); 
-
-  /*
-  api.sendNotification({
-    id: 'bg3-uses-lslib',
-    type: 'info',
-    title: 'BG3 support uses LSLib',
-    message: LSLIB_URL,
-    allowSuppress: true,
-    actions: [
-      { title: 'Visit Page', action: () => util.opn(LSLIB_URL).catch(() => null) },
-    ],
-  });*/
+  const format = await getDefaultModSettingsFormat(api);
+  if (format !== 'v7') {
+    showFullReleaseModFixerRecommendation(api);
+  }
   
   return fs.statAsync(mp)
     .catch(() => fs.ensureDirWritableAsync(mp, () => Bluebird.resolve() as any))
@@ -174,6 +171,21 @@ async function onGameModeActivated(api: types.IExtensionApi, gameId: string) {
   }
   try {
     await migrate(api);
+    const bg3ProfileId = await getActivePlayerProfile(api);
+    const gameSettingsPath: string = path.join(profilesPath(), bg3ProfileId, 'modsettings.lsx');
+    let nodes = await getNodes(gameSettingsPath);
+    const { modsNode, modsOrderNode } = nodes;
+    if ((modsNode.children === undefined) || ((modsNode.children[0] as any) === '')) {
+      modsNode.children = [{ node: [] }];
+    }
+
+    const format = await getDefaultModSettingsFormat(api);
+    if (format === 'v7' && modsOrderNode !== undefined) {
+      const dat = await fs.readFileAsync(gameSettingsPath, { encoding: 'utf8' });
+      const newData = await convertV6toV7(dat);
+      await fs.removeAsync(gameSettingsPath).catch(err => Promise.resolve());
+      await fs.writeFileAsync(gameSettingsPath, newData, { encoding: 'utf8' });
+    }
   } catch (err) {
     api.showErrorNotification(
       'Failed to migrate', err, {
@@ -222,7 +234,7 @@ function main(context: types.IExtensionContext) {
     queryModPath: modsPath,
     logo: 'gameart.jpg',
     executable: () => 'bin/bg3_dx11.exe',
-    setup: discovery => prepareForModding(context.api, discovery),
+    setup: discovery => prepareForModding(context.api, discovery) as any,
     requiredFiles: [
       'bin/bg3_dx11.exe',
     ],
@@ -313,6 +325,13 @@ function main(context: types.IExtensionContext) {
     importModSettingsFile(context.api); 
   }, isBG3);
   context.registerAction('fb-load-order-icons', 170, 'import', {}, 'Import from BG3MM...', () => { importFromBG3MM(context); }, isBG3);
+  context.registerAction('fb-load-order-icons', 190, 'open-ext', {}, 'Open Load Order File', () => {
+    getActivePlayerProfile(context.api)
+      .then(bg3ProfileId => {
+        const gameSettingsPath: string = path.join(profilesPath(), bg3ProfileId, 'modsettings.lsx');
+        util.opn(gameSettingsPath).catch(() => null)
+      });
+  }, isBG3);
 
   context.registerSettings('Mods', Settings, undefined, isBG3, 150);
 
