@@ -532,7 +532,8 @@ export async function exportToFile(api: types.IExtensionApi): Promise<boolean | 
   
 export async function exportToGame(api: types.IExtensionApi): Promise<boolean | void> {
 
-  const settingsPath = path.join(profilesPath(), 'Public', 'modsettings.lsx');
+  const bg3ProfileId = await getActivePlayerProfile(api);
+  const settingsPath: string = path.join(profilesPath(), bg3ProfileId, 'modsettings.lsx');
 
   logDebug(`exportToGame ${settingsPath}`);
 
@@ -551,7 +552,8 @@ export async function deepRefresh(api: types.IExtensionApi): Promise<boolean | v
 }
 
 async function readModSettings(api: types.IExtensionApi): Promise<IModSettings> {
-  const settingsPath = path.join(profilesPath(), 'Public', 'modsettings.lsx');
+  const bg3ProfileId = await getActivePlayerProfile(api);
+  const settingsPath: string = path.join(profilesPath(), bg3ProfileId, 'modsettings.lsx');
   const dat = await fs.readFileAsync(settingsPath, { encoding: 'utf8' });
   logDebug('readModSettings', dat);
   return parseStringPromise(dat);

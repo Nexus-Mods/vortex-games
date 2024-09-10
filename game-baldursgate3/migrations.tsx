@@ -3,12 +3,13 @@ import { fs, types, util } from 'vortex-api';
 import { importModSettingsGame } from './loadOrder';
 import path from 'path';
 
-import { logDebug, profilesPath } from './util';
+import { getActivePlayerProfile, logDebug, profilesPath } from './util';
 import { setBG3ExtensionVersion } from './actions';
+import { DEBUG } from './common';
 
 export async function migrate(api: types.IExtensionApi): Promise<void> {
-  
-  const settingsPath = path.join(profilesPath(), 'Public', 'modsettings.lsx');
+  const bg3ProfileId = await getActivePlayerProfile(api);
+  const settingsPath: string = path.join(profilesPath(), bg3ProfileId, 'modsettings.lsx');
   const backupPath = settingsPath + '.backup';
   const currentVersion = util.getSafe(api.getState(), ['settings', 'baldursgate3','extensionVersion'], '0.0.0');
 
@@ -45,7 +46,7 @@ export async function migrate15(api: types.IExtensionApi, oldVersion: string): P
   const newVersion = '1.5.0';
 
   // if old version is newer, then skip
-  if (semver.gte(oldVersion, newVersion)) {
+  if (!DEBUG && semver.gte(oldVersion, newVersion)) {
     logDebug('skipping migration');
     return Promise.resolve();
   }
@@ -60,7 +61,11 @@ export async function migrate15(api: types.IExtensionApi, oldVersion: string): P
       title: 'More',
       action: (dismiss) => {
         api.showDialog('info', 'Baldur\'s Gate 3 patch 7', {
-          bbcode: t('As of Baldur\'s Gate 3 patch 7, the "ModFixer" mod is no longer required. Please feel free to disable it.'),
+          bbcode: t('As of Baldur\'s Gate 3 patch 7, the "ModFixer" mod is no longer required. Please feel free to disable it.{{bl}}'
+                  + 'Additional information about patch 7 troubleshooting can be found here: [url]{{url}}[/url]', { replace: {
+            bl: '[br][/br][br][/br]',
+            url: 'https://wiki.bg3.community/en/Tutorials/patch7-troubleshooting',
+          } }),
         }, [ { label: 'Close', action: () => dismiss() } ]);
       }
     }],
