@@ -1,40 +1,71 @@
 import * as semver from 'semver';
-import { fs, types } from 'vortex-api';
+import { fs, types, util } from 'vortex-api';
 import { importModSettingsGame } from './loadOrder';
 import path from 'path';
 
-import { profilesPath } from './util';
+import { logDebug, profilesPath } from './util';
+import { setBG3ExtensionVersion } from './actions';
 
 export async function migrate(api: types.IExtensionApi): Promise<void> {
   
   const settingsPath = path.join(profilesPath(), 'Public', 'modsettings.lsx');
   const backupPath = settingsPath + '.backup';
-
+  const currentVersion = util.getSafe(api.getState(), ['settings', 'baldursgate3','extensionVersion'], '0.0.0');
 
   try {
     await fs.statAsync(backupPath); // if it doesn't exist, make a backup
   } 
   catch (err) {
 
-    console.log(`${backupPath} doesn't exist.`);
+    logDebug(`${backupPath} doesn't exist.`);
 
     try {
       await fs.statAsync(settingsPath); 
       await fs.copyAsync(settingsPath, backupPath, { overwrite: true } );
       
-      console.log(`backup created`);
+      logDebug(`backup created`);
       
       // import
       await importModSettingsGame(api);
       
-      //console.log(`${backupPath} doesn't exist`);
+      //logDebug(`${backupPath} doesn't exist`);
     } 
     catch (err) {
-      console.log(`${settingsPath} doesn't exist`);
+      logDebug(`${settingsPath} doesn't exist`);
     }    
+  } finally {
+    await migrate15(api, currentVersion);
   }
 
   // back up made just in case
+}
+
+export async function migrate15(api: types.IExtensionApi, oldVersion: string): Promise<void> {
+
+  const newVersion = '1.5.0';
+
+  // if old version is newer, then skip
+  if (semver.gte(oldVersion, newVersion)) {
+    logDebug('skipping migration');
+    return Promise.resolve();
+  }
+
+  await importModSettingsGame(api);
+  const t = api.translate;
+  api.sendNotification({
+    id: 'bg3-patch7-info',
+    type: 'info',
+    message: 'Baldur\'s Gate 3 patch 7',
+    actions: [{
+      title: 'More',
+      action: (dismiss) => {
+        api.showDialog('info', 'Baldur\'s Gate 3 patch 7', {
+          bbcode: t('As of Baldur\'s Gate 3 patch 7, the "ModFixer" mod is no longer required. Please feel free to disable it.'),
+        }, [ { label: 'Close', action: () => dismiss() } ]);
+      }
+    }],
+  })
+  api.store.dispatch(setBG3ExtensionVersion(newVersion));
 }
 
 export async function migrate13(api: types.IExtensionApi, oldVersion: string): Promise<void> {
@@ -43,11 +74,11 @@ export async function migrate13(api: types.IExtensionApi, oldVersion: string): P
 
   // if old version is newer, then skip
   if (semver.gte(oldVersion, newVersion)) {
-    console.log('skipping migration');
+    logDebug('skipping migration');
     return Promise.reject();
   }
 
-  console.log('perform migration');
+  logDebug('perform migration');
 
   // do we just a force a import from game?!
 

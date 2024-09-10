@@ -5,9 +5,9 @@ import { generate as shortid } from 'shortid';
 import walk from 'turbowalk';
 import { actions, fs, types, selectors, log, util } from 'vortex-api';
 import { Builder, parseStringPromise } from 'xml2js';
-import { DEBUG, MOD_TYPE_LSLIB, GAME_ID } from './common';
+import { DEBUG, MOD_TYPE_LSLIB, GAME_ID, DEFAULT_MOD_SETTINGS_V7, DEFAULT_MOD_SETTINGS_V6 } from './common';
 import { extractPak } from './divineWrapper';
-import { IModSettings, IPakInfo, IModNode, IXmlNode } from './types';
+import { IModSettings, IPakInfo, IModNode, IXmlNode, LOFormat } from './types';
 
 export function getGamePath(api): string {
   const state = api.getState();
@@ -36,15 +36,16 @@ export function profilesPath() {
   return path.join(documentsPath(), 'PlayerProfiles');
 }
 
-export function globalProfilePath() {
-  return path.join(documentsPath(), 'global');
+export async function globalProfilePath(api: types.IExtensionApi) {
+  const bg3ProfileId = await getActivePlayerProfile(api);
+  return path.join(documentsPath(), bg3ProfileId);
 }
 
 export const getPlayerProfiles = (() => {
   let cached = [];
   try {
     cached = (fs as any).readdirSync(profilesPath())
-        .filter(name => (path.extname(name) === '') && (name !== 'Default'));
+      .filter(name => (path.extname(name) === '') && (name !== 'Default'));
   } catch (err) {
     if (err.code !== 'ENOENT') {
       throw err;
@@ -62,7 +63,7 @@ export async function getOwnGameVersion(state: types.IState): Promise<string> {
   return await util.getGame(GAME_ID).getInstalledVersion(discovery);
 }
 
-export async function getActivePlayerProfile(api: types.IExtensionApi) {
+export async function getActivePlayerProfile(api: types.IExtensionApi): Promise<string> {
   return gameSupportsProfile(await getOwnGameVersion(api.getState()))
     ? api.store.getState().settings.baldursgate3?.playerProfile || 'global'
     : 'Public';
@@ -87,7 +88,7 @@ const resolveMeta = (metadata?: any) => {
 
 export function logError(message: string, metadata?: any) {
   const meta = resolveMeta(metadata);
-    log('debug', message, meta);
+  log('debug', message, meta);
 }
 
 export function logDebug(message: string, metadata?: any) {
@@ -157,6 +158,89 @@ export function getLatestInstalledLSLibVer(api: types.IExtensionApi) {
     }
     return prev;
   }, '0.0.0');
+}
+
+let _FORMAT: LOFormat = null;
+export async function getDefaultModSettingsFormat(api: types.IExtensionApi): Promise<LOFormat> {
+  if (_FORMAT !== null) {
+    return _FORMAT;
+  }
+  _FORMAT = 'v7';
+  try {
+    const state = api.getState();
+    const gameVersion = await getOwnGameVersion(state);
+    const patch7 = '4.58.49';
+    const patch6 = '4.50.22';
+    if (semver.gte(gameVersion, patch7)) {
+      _FORMAT = 'v7';
+    } else if (semver.gte(gameVersion, patch6)) {
+      _FORMAT = 'v6';
+    } else {
+      _FORMAT = 'pre-v6';
+    }
+  }
+  catch (err) {
+    log('warn', 'failed to get game version', err);
+  }
+
+  return _FORMAT;
+}
+
+export async function getDefaultModSettings(api: types.IExtensionApi): Promise<string> {
+  if (_FORMAT === null) {
+    _FORMAT = await getDefaultModSettingsFormat(api);
+  }
+  return {
+    'v7': DEFAULT_MOD_SETTINGS_V7,
+    'v6': DEFAULT_MOD_SETTINGS_V6,
+    'pre-v6': DEFAULT_MOD_SETTINGS_V6
+  }[_FORMAT];
+}
+
+export async function convertV6toV7(v6Xml: string): Promise<string> {
+  const v6Json = await parseStringPromise(v6Xml);
+  v6Json.save.version[0].$.major = '4';
+  v6Json.save.version[0].$.minor = '7';
+  v6Json.save.version[0].$.revision = '1';
+  v6Json.save.version[0].$.build = '3';
+
+  const moduleSettingsChildren = v6Json.save.region[0].node[0].children[0].node;
+  const modOrderIndex = moduleSettingsChildren.findIndex((n: any) => n.$.id === 'ModOrder');
+  if (modOrderIndex !== -1) {
+    // Remove the 'ModOrder' node if it exists
+    moduleSettingsChildren.splice(modOrderIndex, 1);
+  }
+
+  // Find the 'Mods' node to modify attributes
+  const modsNode = moduleSettingsChildren.find((n: any) => n.$.id === 'Mods');
+
+  if (modsNode) {
+    for (let i = 0; i < modsNode.children[0].node.length; i++) {
+      const moduleShortDescNode = modsNode.children[0].node[i];
+
+      if (moduleShortDescNode) {
+        // Update the 'UUID' attribute type from 'FixedString' to 'guid'
+        const uuidAttribute = moduleShortDescNode.attribute.find((attr: any) => attr.$.id === 'UUID');
+        if (uuidAttribute) {
+          uuidAttribute.$.type = 'guid';
+        }
+
+        const publishHandleAtt = moduleShortDescNode.attribute.find((attr: any) => attr.$.id === 'PublishHandle');
+        if (publishHandleAtt === undefined) {
+          moduleShortDescNode.attribute.push({
+            $: { id: 'publishHandle', type: 'uint64', value: '0' }
+          })
+        }
+
+        // Might need to expand on this later (removing useless attributes, etc)
+      } 
+    }
+  }
+
+  const builder = new Builder();
+  const v7Xml = builder.buildObject(v6Json);
+
+  return v7Xml;
 }
 
 export function getLatestLSLibMod(api: types.IExtensionApi) {
@@ -266,9 +350,10 @@ export async function writeModSettings(api: types.IExtensionApi, data: IModSetti
     return;
   }
 
-  const settingsPath = (bg3profile !== 'global') 
+  const globalProfile = await globalProfilePath(api);
+  const settingsPath = (bg3profile !== 'global')
     ? path.join(profilesPath(), bg3profile, 'modsettings.lsx')
-    : path.join(globalProfilePath(), 'modsettings.lsx');
+    : path.join(globalProfile, 'modsettings.lsx');
 
   const builder = new Builder();
   const xml = builder.buildObject(data);
@@ -283,19 +368,25 @@ export async function writeModSettings(api: types.IExtensionApi, data: IModSetti
   }
 }
 
+export async function parseLSXFile(lsxPath: string): Promise<IModSettings> {
+  const dat = await fs.readFileAsync(lsxPath, { encoding: 'utf8' });
+  return parseStringPromise(dat);
+}
+
 export async function readModSettings(api: types.IExtensionApi): Promise<IModSettings> {
   const bg3profile: string = await getActivePlayerProfile(api);
   const playerProfiles = getPlayerProfiles();
   if (playerProfiles.length === 0) {
     storedLO = [];
-    return;
+    const settingsPath = path.join(profilesPath(), 'Public', 'modsettings.lsx');
+    return parseLSXFile(settingsPath);
   }
 
+  const globalProfile = await globalProfilePath(api);
   const settingsPath = (bg3profile !== 'global')
     ? path.join(profilesPath(), bg3profile, 'modsettings.lsx')
-    : path.join(globalProfilePath(), 'modsettings.lsx');
-  const dat = await fs.readFileAsync(settingsPath);
-  return parseStringPromise(dat);
+    : path.join(globalProfile, 'modsettings.lsx');
+  return parseLSXFile(settingsPath);
 }
 
 export async function readStoredLO(api: types.IExtensionApi) {
@@ -320,9 +411,9 @@ export async function readStoredLO(api: types.IExtensionApi) {
     if ((lastWrite !== undefined) && (lastWrite.count > 1)) {
       api.showDialog('info', '"modsettings.lsx" file was reset', {
         text: 'The game reset the list of active mods and ran without them.\n'
-            + 'This happens when an invalid or incompatible mod is installed. '
-            + 'The game will not load any mods if one of them is incompatible, unfortunately '
-            + 'there is no easy way to find out which one caused the problem.',
+          + 'This happens when an invalid or incompatible mod is installed. '
+          + 'The game will not load any mods if one of them is incompatible, unfortunately '
+          + 'there is no easy way to find out which one caused the problem.',
       }, [
         { label: 'Continue' },
       ]);
