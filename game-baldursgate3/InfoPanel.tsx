@@ -86,10 +86,32 @@ function InfoPanel(props: any) {
 
   return isLsLibInstalled() ? (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginRight: '16px' }}>
+      <Alert bsStyle='warning' style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         <div>
-          {t(`A backup is made of the game's modsettings.lsx file before anything is changed.
-        This can be found at %APPDATA%\\Local\\Larian Studios\\Baldur's Gate 3\\PlayerProfiles\\Public\\modsettings.lsx.backup`)}
+          {t('To successfully switch between different game versions/patches please follow these steps:')}
+          <ul>
+            <li>
+              {t('Purge your mods')}
+            </li>
+            <li>
+              {t('Run the game so that the modsettings.lsx file gets reset to the default values')}
+            </li>
+            <li>
+              {t('Close the game')}
+            </li>
+            <li>
+              {t('Deploy your mods')}
+            </li>
+            <li>
+              {t('Run the game again - your load order will be maintained')}
+            </li>
+          </ul>
         </div>
+      </Alert>
+      <div>
+        {t(`A backup is made of the game's modsettings.lsx file before anything is changed.
+        This can be found at %APPDATA%\\Local\\Larian Studios\\Baldur's Gate 3\\PlayerProfiles\\Public\\modsettings.lsx.backup`)}
+      </div>
       <div>
         {t(`Drag and Drop PAK files to reorder how the game loads them. Please note, some mods contain multiple PAK files.`)}
       </div>

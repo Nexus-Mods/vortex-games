@@ -161,6 +161,8 @@ export function getLatestInstalledLSLibVer(api: types.IExtensionApi) {
 }
 
 let _FORMAT: LOFormat = null;
+const PATCH_7 = '4.58.49';
+const PATCH_6 = '4.50.22';
 export async function getDefaultModSettingsFormat(api: types.IExtensionApi): Promise<LOFormat> {
   if (_FORMAT !== null) {
     return _FORMAT;
@@ -169,11 +171,10 @@ export async function getDefaultModSettingsFormat(api: types.IExtensionApi): Pro
   try {
     const state = api.getState();
     const gameVersion = await getOwnGameVersion(state);
-    const patch7 = '4.58.49';
-    const patch6 = '4.50.22';
-    if (semver.gte(gameVersion, patch7)) {
+    const coerced = gameVersion ? semver.coerce(gameVersion) : PATCH_7;
+    if (semver.gte(coerced, PATCH_7)) {
       _FORMAT = 'v7';
-    } else if (semver.gte(gameVersion, patch6)) {
+    } else if (semver.gte(coerced, PATCH_6)) {
       _FORMAT = 'v6';
     } else {
       _FORMAT = 'pre-v6';

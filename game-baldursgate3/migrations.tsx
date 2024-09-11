@@ -1,5 +1,5 @@
 import * as semver from 'semver';
-import { fs, types, util } from 'vortex-api';
+import { actions, fs, types, util } from 'vortex-api';
 import { importModSettingsGame } from './loadOrder';
 import path from 'path';
 
@@ -11,7 +11,7 @@ export async function migrate(api: types.IExtensionApi): Promise<void> {
   const bg3ProfileId = await getActivePlayerProfile(api);
   const settingsPath: string = path.join(profilesPath(), bg3ProfileId, 'modsettings.lsx');
   const backupPath = settingsPath + '.backup';
-  const currentVersion = util.getSafe(api.getState(), ['settings', 'baldursgate3','extensionVersion'], '0.0.0');
+  const currentVersion = util.getSafe(api.getState(), ['settings', 'baldursgate3', 'extensionVersion'], '0.0.0');
 
   try {
     await fs.statAsync(backupPath); // if it doesn't exist, make a backup
@@ -53,24 +53,31 @@ export async function migrate15(api: types.IExtensionApi, oldVersion: string): P
 
   await importModSettingsGame(api);
   const t = api.translate;
+  const batched: any = [setBG3ExtensionVersion(newVersion)];
   api.sendNotification({
     id: 'bg3-patch7-info',
     type: 'info',
     message: 'Baldur\'s Gate 3 patch 7',
+    allowSuppress: true,
     actions: [{
       title: 'More',
       action: (dismiss) => {
         api.showDialog('info', 'Baldur\'s Gate 3 patch 7', {
           bbcode: t('As of Baldur\'s Gate 3 patch 7, the "ModFixer" mod is no longer required. Please feel free to disable it.{{bl}}'
-                  + 'Additional information about patch 7 troubleshooting can be found here: [url]{{url}}[/url]', { replace: {
+                  + 'Additional information about patch 7 troubleshooting can be found here: [url]{{url}}[/url]{{bl}}'
+                  + 'Please note - if you switch between different game versions/patches - make sure to purge your mods and run the game at least once '
+                  + 'so that the game can regenerate your "modsettings.lsx" file.', { replace: {
             bl: '[br][/br][br][/br]',
             url: 'https://wiki.bg3.community/en/Tutorials/patch7-troubleshooting',
           } }),
-        }, [ { label: 'Close', action: () => dismiss() } ]);
+        }, [ { label: 'Close', action: () => {
+          batched.push(actions.suppressNotification('bg3-patch7-info', true));
+          dismiss();
+        }}]);
       }
     }],
   })
-  api.store.dispatch(setBG3ExtensionVersion(newVersion));
+  util.batchDispatch(api.store, batched);
 }
 
 export async function migrate13(api: types.IExtensionApi, oldVersion: string): Promise<void> {

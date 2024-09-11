@@ -5,13 +5,13 @@ import * as semver from 'semver';
 import Bluebird from 'bluebird';
 
 import { GAME_ID, LO_FILE_NAME, NOTIF_IMPORT_ACTIVITY } from './common';
-import { BG3Pak, IModNode, IModSettings, IProps } from './types';
+import { BG3Pak, IModNode, IModSettings, IProps, IRootNode } from './types';
 import { Builder, parseStringPromise } from 'xml2js';
 import { LockedState } from 'vortex-api/lib/extensions/file_based_loadorder/types/types';
 import { IOpenOptions, ISaveOptions } from 'vortex-api/lib/types/IExtensionContext';
 
 import { DivineExecMissing } from './divineWrapper';
-import { convertV6toV7, findNode, forceRefresh, getActivePlayerProfile, getDefaultModSettingsFormat, getPlayerProfiles, logDebug, modsPath, profilesPath } from './util';
+import { findNode, forceRefresh, getActivePlayerProfile, getDefaultModSettingsFormat, getPlayerProfiles, logDebug, modsPath, profilesPath } from './util';
 
 import PakInfoCache, { ICacheEntry } from './cache';
 
@@ -72,7 +72,7 @@ export async function deserialize(context: types.IExtensionContext): Promise<typ
     try {
       loadOrder = JSON.parse(fileData);
     } catch (err) {
-
+      log('error', 'Corrupt load order file', err);
       await new Promise<void>((resolve, reject) => {
         props.api.showDialog('error', 'Corrupt load order file', {
           bbcode: props.api.translate('The load order file is in a corrupt state. You can try to fix it yourself '
@@ -80,8 +80,9 @@ export async function deserialize(context: types.IExtensionContext): Promise<typ
                                       '(Will only affect load order items you added manually, if any).')
         }, [
           { label: 'Cancel', action: () => reject(err) },
-          { label: 'Regenerate File', action: () => {
-            loadOrder = [];
+          { label: 'Regenerate File', action: async () => {
+              await fs.removeAsync(loFilePath).catch({ code: 'ENOENT' }, () => Promise.resolve());
+              loadOrder = [];
               return resolve();
             }
           }
@@ -93,7 +94,7 @@ export async function deserialize(context: types.IExtensionContext): Promise<typ
     logDebug('deserialize loadOrder=', loadOrder);
 
     // filter out any pak files that no longer exist
-    const filteredLoadOrder:types.LoadOrder = loadOrder.filter(entry => paks.find(pak => pak.fileName === entry.id));
+    const filteredLoadOrder: types.LoadOrder = loadOrder.filter(entry => paks.find(pak => pak.fileName === entry.id));
 
     logDebug('deserialize filteredLoadOrder=', filteredLoadOrder);
 
@@ -280,8 +281,10 @@ export async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
     let loNode = format === 'v7' ? modsNode : modsOrderNode !== undefined ? modsOrderNode : modsNode;
 
     // get nice string array, in order, of mods from the load order section
-    let uuidArray:string[] = loNode.children[0].node.map((loEntry) => loEntry.attribute.find(attr => (attr.$.id === 'UUID')).$.value);
-    
+    let uuidArray:string[] = loNode?.children !== undefined
+      ? loNode.children[0].node.map((loEntry) => loEntry.attribute.find(attr => (attr.$.id === 'UUID')).$.value)
+      : [];
+
     logDebug(`processLsxFile uuidArray=`, uuidArray);
 
     // are there any duplicates? if so...
@@ -427,12 +430,13 @@ async function exportTo(api: types.IExtensionApi, filepath: string) {
   try {
     // read the game bg3 modsettings.lsx so that we get the default game gustav thing?
     const modSettings = await readModSettings(api);
+    const modSettingsFormat = await getDefaultModSettingsFormat(api);
 
     // buildup object from xml
     const region = findNode(modSettings?.save?.region, 'ModuleSettings');
     const root = findNode(region?.node, 'root');
     const modsNode = findNode(root?.children?.[0]?.node, 'Mods');
-    
+
     if ((modsNode.children === undefined) || ((modsNode.children[0] as any) === '')) {
       modsNode.children = [{ node: [] }];
     }
@@ -460,20 +464,54 @@ async function exportTo(api: types.IExtensionApi, filepath: string) {
         <attribute id="Version64" type="int64" value="36028797018963970"/>
       */
 
+      const attributes = (modSettingsFormat === 'v7')
+        ? [
+          { $: { id: 'Folder', type: 'LSString', value: entry.data.folder } },
+          { $: { id: 'Name', type: 'LSString', value: entry.data.name } },
+          { $: { id: 'PublishHandle', type: 'uint64', value: 0 } },
+          { $: { id: 'Version64', type: 'int64', value: entry.data.version } },
+          { $: { id: 'UUID', type: 'guid', value: entry.data.uuid } },
+        ] : [
+          { $: { id: 'Folder', type: 'LSWString', value: entry.data.folder } },
+          { $: { id: 'Name', type: 'FixedString', value: entry.data.name } },
+          { $: { id: 'UUID', type: 'FixedString', value: entry.data.uuid } },
+          { $: { id: 'Version', type: 'int32', value: entry.data.version } },
+        ];
+
       descriptionNodes.push({
         $: { id: 'ModuleShortDesc' },
         attribute: [
-          { $: { id: 'Folder', type: 'LSString', value: entry.data.folder } },
+          ...attributes,
           { $: { id: 'MD5', type: 'LSString', value: entry.data.md5 } },
-          { $: { id: 'Name', type: 'LSString', value: entry.data.name } },
-          { $: { id: 'PublishHandle', type: 'uint64', value: 0 } },
-          { $: { id: 'UUID', type: 'guid', value: entry.data.uuid } },
-          { $: { id: 'Version64', type: 'int64', value: entry.data.version } },
         ],
       });
     }
 
+    const loadOrderNodes = filteredPaks
+      //.sort((lhs, rhs) => lhs.pos - rhs.pos) // don't know if we need this now
+      .map((entry): IModNode => ({
+        $: { id: 'Module' },
+        attribute: [
+          { $: { id: 'UUID', type: 'FixedString', value: entry.data.uuid } },
+        ],
+      }));
+
     modsNode.children[0].node = descriptionNodes;
+    if (modSettingsFormat !== 'v7') {
+      let modOrderNode: IRootNode = findNode(root?.children?.[0]?.node, 'ModOrder');
+      let insertNode = false;
+      if (!modOrderNode) {
+        insertNode = true;
+        modOrderNode = { $: { id: 'ModOrder' }, children: [{ node: [] }] }
+      }
+      if ((modOrderNode.children === undefined) || ((modOrderNode.children[0] as any) === '')) {
+        modOrderNode.children = [{ node: [] }];
+      }
+      modOrderNode.children[0].node = loadOrderNodes;
+      if (insertNode && !!root?.children?.[0]?.node) {
+        root?.children?.[0]?.node.splice(0, 0, modOrderNode);
+      }
+    }
 
     writeModSettings(api, modSettings, filepath);
     
