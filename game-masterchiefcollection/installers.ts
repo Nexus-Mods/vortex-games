@@ -40,7 +40,7 @@ export async function installPlugAndPlay(files: string[], destinationPath: strin
   }
 
   const infoSegments = modInfo.split(path.sep);
-  const modFolderIndex = infoSegments.length >= 2 ? infoSegments.length - 2 : 0;
+  const modFolderIndex = infoSegments.length >= 1 ? infoSegments.length - 1 : 0;
   const filtered = files.filter(file => path.extname(path.basename(file)) !== '');
   const instructions: types.IInstruction[] = filtered.map(file => {
     const segments = file.split(path.sep);
