@@ -133,7 +133,7 @@ async function prepareForModding(context: types.IExtensionContext,
     }
     await fs.ensureDirWritableAsync(path.join(directory, 'Mods'));
     const launcher = DEFAULT_LAUNCHER_SETTINGS;
-    launcher.DefaultRunConfig.AdditionalParameters = `-UserDataFolder=${directory}`;
+    launcher.DefaultRunConfig.AdditionalParameters = `-UserDataFolder=${directory}"`;
     const launcherData = JSON.stringify(launcher, null, 2);
     await fs.writeFileAsync(launcherSettings, launcherData, { encoding: 'utf8' });
     context.api.store.dispatch(setUDF(directory));
