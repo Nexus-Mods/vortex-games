@@ -1,7 +1,7 @@
 import path from 'path';
-export const DEFAULT_MOD_SETTINGS_V7 = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+export const DEFAULT_MOD_SETTINGS_V7 = `<?xml version="1.0" encoding="UTF-8"?>
 <save>
-  <version major="4" minor="7" revision="1" build="3"/>
+  <version major="4" minor="7" revision="1" build="200"/>
   <region id="ModuleSettings">
     <node id="root">
       <children>
