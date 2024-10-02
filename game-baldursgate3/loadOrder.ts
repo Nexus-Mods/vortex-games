@@ -6,7 +6,7 @@ import Bluebird from 'bluebird';
 
 import { GAME_ID, LO_FILE_NAME, NOTIF_IMPORT_ACTIVITY } from './common';
 import { BG3Pak, IModNode, IModSettings, IProps, IRootNode } from './types';
-import { Builder, parseStringPromise } from 'xml2js';
+import { Builder, parseStringPromise, RenderOptions } from 'xml2js';
 import { LockedState } from 'vortex-api/lib/extensions/file_based_loadorder/types/types';
 import { IOpenOptions, ISaveOptions } from 'vortex-api/lib/types/IExtensionContext';
 
@@ -464,6 +464,7 @@ async function exportTo(api: types.IExtensionApi, filepath: string) {
         <attribute id="Version64" type="int64" value="36028797018963970"/>
       */
 
+      const attributeOrder = ['Folder', 'MD5', 'Name', 'PublishHandle', 'UUID', 'Version64', 'Version'];
       const attributes = (modSettingsFormat === 'v7')
         ? [
           { $: { id: 'Folder', type: 'LSString', value: entry.data.folder } },
@@ -480,10 +481,8 @@ async function exportTo(api: types.IExtensionApi, filepath: string) {
 
       descriptionNodes.push({
         $: { id: 'ModuleShortDesc' },
-        attribute: [
-          ...attributes,
-          { $: { id: 'MD5', type: 'LSString', value: entry.data.md5 } },
-        ],
+        attribute: [].concat(attributes, [{ $: { id: 'MD5', type: 'LSString', value: entry.data.md5 } }])
+          .sort( (a, b) => attributeOrder.indexOf(a.$.id) - attributeOrder.indexOf(b.$.id)),
       });
     }
 
@@ -606,7 +605,10 @@ async function readLsxFile(lsxPath: string): Promise<IModSettings> {
 }
 
 async function writeModSettings(api: types.IExtensionApi, data: IModSettings, filepath: string): Promise<void> {
-  const builder = new Builder();
+  const format = await getDefaultModSettingsFormat(api);
+  const builder = (format === 'v7')
+    ? new Builder({ renderOpts: { pretty: true, indent: '    ' }})
+    : new Builder();
   const xml = builder.buildObject(data);
   try {
     await fs.ensureDirWritableAsync(path.dirname(filepath));
