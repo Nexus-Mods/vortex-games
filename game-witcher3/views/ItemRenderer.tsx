@@ -161,7 +161,7 @@ function renderDraggable(props: IProps): JSX.Element {
       <LoadOrderIndexInput
         className='load-order-index'
         api={context.api}
-        item={item}
+        item={item.loEntry}
         currentPosition={currentPosition(props)}
         lockedEntriesCount={lockedEntriesCount(props)}
         loadOrder={loadOrder}
