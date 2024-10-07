@@ -6,8 +6,8 @@ const { fs, util } = require('vortex-api');
 const { default: IniParser, WinapiFormat } = require('vortex-parse-ini');
 
 const GAME_ID = 'vampirebloodlines';
-const STEAM_ID = 2600;
-const GOG_ID = 1207659240;
+const STEAM_ID = '2600';
+const GOG_ID = '1207659240';
 
 function readRegistryKey(hive, key, name) {
   try {
@@ -31,7 +31,7 @@ function requiresLauncher(gamePath) {
 }
 
 function findGame() {
-  return util.steam.findByAppId(STEAM_ID.toString())
+  return util.GameStoreHelper.findByAppId([STEAM_ID, GOG_ID])
     .then(game => game.gamePath)
     .catch(() => readRegistryKey('HKEY_LOCAL_MACHINE',
       `SOFTWARE\\WOW6432Node\\GOG.com\\Games\\${GOG_ID}`,
@@ -74,6 +74,7 @@ function main(context) {
   context.registerGame({
     id: GAME_ID,
     name: 'Vampire the Masquerade\tBloodlines',
+    shortName: 'VTMB',
     logo: 'gameart.jpg',
     mergeMods: true,
     queryPath: findGame,
@@ -85,10 +86,10 @@ function main(context) {
       'Vampire.exe'
     ],
     environment: {
-      SteamAPPId: STEAM_ID.toString(),
+      SteamAPPId: STEAM_ID,
     },
     details: {
-      steamAppId: STEAM_ID,
+      steamAppId: +STEAM_ID,
     },
     setup: prepareForModding,
   });
