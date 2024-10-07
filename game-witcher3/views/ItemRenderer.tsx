@@ -3,9 +3,13 @@ import { Checkbox, ListGroupItem } from 'react-bootstrap';
 import { useTranslation } from 'react-i18next';
 import { useDispatch, useSelector } from 'react-redux';
 
-import { actions, Icon, tooltip, selectors, types, util, MainContext } from 'vortex-api';
+import { actions, Icon, LoadOrderIndexInput, tooltip, selectors, types, util, MainContext } from 'vortex-api';
 import { I18N_NAMESPACE, GAME_ID } from '../common';
 import { IItemRendererProps } from '../types';
+
+interface IActionProps {
+  onSetLoadOrder: (profileId: string, loadOrder: types.LoadOrder) => void;
+}
 
 interface IConnectedProps {
   modState: any;
@@ -19,14 +23,21 @@ interface IBaseProps {
   item: IItemRendererProps;
 }
 
-type IProps = IBaseProps & IConnectedProps;
+type IProps = IBaseProps & IConnectedProps & IActionProps;
 
 export function ItemRenderer(props: IBaseProps) {
   if (props?.item?.loEntry === undefined) {
     return null;
   }
   const stateProps = useSelector(mapStateToProps);
-  return renderDraggable({ ...props, ...stateProps });
+  const dispatch = useDispatch();
+  const onSetLoadOrder = React.useCallback(
+    (profileId: string, loadOrder: types.LoadOrder) => {
+      dispatch(actions.setFBLoadOrder(profileId, loadOrder));
+    },
+    [dispatch, stateProps.profile.id, stateProps.loadOrder]
+  )
+  return renderDraggable({ ...props, ...stateProps, onSetLoadOrder });
 }
 
 function renderValidationError(props: IProps): JSX.Element {
@@ -86,6 +97,7 @@ function renderExternalBanner(item: types.ILoadOrderEntry): JSX.Element {
 function renderDraggable(props: IProps): JSX.Element {
   const { loadOrder, className, item, profile } = props;
   const key = !!item?.loEntry?.name ? `${item.loEntry.name}` : `${item.loEntry.id}`;
+  const context = React.useContext(MainContext);
   const dispatch = useDispatch();
   const position = loadOrder.findIndex(entry => entry.id === item.loEntry.id) + 1;
 
@@ -104,6 +116,23 @@ function renderDraggable(props: IProps): JSX.Element {
       enabled: evt.target.checked,
     };
     dispatch(actions.setFBLoadOrderEntry(profile.id, entry))
+  }, [dispatch, profile, item]);
+
+  const onApplyIndex = React.useCallback((idx: number) => {
+    const { item, onSetLoadOrder, profile, loadOrder } = props;
+    const currentIdx = currentPosition(props);
+    if (currentIdx === idx) {
+      return;
+    }
+  
+    const entry = {
+      ...item.loEntry,
+      index: idx,
+    };
+  
+    const newLO = loadOrder.filter((entry) => entry.id !== item.loEntry.id);
+    newLO.splice(idx - 1, 0, entry);
+    onSetLoadOrder(profile.id, newLO);
   }, [dispatch, profile, item]);
 
   const checkBox = () => (item.displayCheckboxes)
@@ -129,7 +158,16 @@ function renderDraggable(props: IProps): JSX.Element {
       ref={props.item.setRef}
     >
       <Icon className='drag-handle-icon' name='drag-handle' />
-      <p className='load-order-index'>{position}</p>
+      <LoadOrderIndexInput
+        className='load-order-index'
+        api={context.api}
+        item={item.loEntry}
+        currentPosition={currentPosition(props)}
+        lockedEntriesCount={lockedEntriesCount(props)}
+        loadOrder={loadOrder}
+        isLocked={isLocked}
+        onApplyIndex={onApplyIndex}
+      />
       {renderValidationError(props)}
       <p className='load-order-name'>{key}</p>
       {renderExternalBanner(item.loEntry)}
@@ -146,6 +184,17 @@ function isLocked(item: types.ILoadOrderEntry): boolean {
 
 function isExternal(item: types.ILoadOrderEntry): boolean {
   return (item.modId !== undefined) ? false : true;
+}
+
+const currentPosition = (props: IProps): number => {
+  const { item, loadOrder } = props;
+  return loadOrder.findIndex(entry => entry.id === item.loEntry.id) + 1;
+}
+
+const lockedEntriesCount = (props: { loadOrder: types.LoadOrder }): number => {
+  const { loadOrder } = props;
+  const locked = loadOrder.filter(item => isLocked(item));
+  return locked.length;
 }
 
 const empty = {};
