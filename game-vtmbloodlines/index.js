@@ -42,7 +42,7 @@ function findGame() {
 }
 
 function prepareForModding(discovery) {
-  return fs.ensureDirWritableAsync(path.join(discovery.path, 'Vampire'), () => Promise.resolve());
+  return Promise.all(['Vampire', 'Unofficial_Patch'].map((modPath) => fs.ensureDirWritableAsync(path.join(discovery.path,modPath))));
 }
 
 function getUnofficialModPath(api) {
@@ -52,8 +52,10 @@ function getUnofficialModPath(api) {
 }
 
 function isUPModType(api, instructions) {
-  return fs.statAsync(getUnofficialModPath(api))
-    .then(() => Promise.resolve(true))
+  return fs.readdirAsync(getUnofficialModPath(api))
+    .then((dirEntries) => (dirEntries.length > 0)
+      ? Promise.resolve(true)
+      : Promise.resolve(false))
     .catch(() => Promise.resolve(false));
 }
 
