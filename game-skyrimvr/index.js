@@ -161,6 +161,7 @@ function main(context) {
       steamAppId: 611670,
       compatibleDownloads: ['skyrimse'],
       supportsESL: () => isESLSupported(context.api),
+      nexusPageId: 'skyrimspecialedition',
     }
   });
 
