@@ -113,7 +113,8 @@ async function prepareForModding(context: types.IExtensionContext,
     const res = await context.api.showDialog('info', 'Choose User Defined Folder', {
       text: 'The modding pattern for 7DTD is changing. The Mods path inside the game directory '
           + 'is being deprecated and mods located in the old path will no longer work in the near '
-          + 'future. Please select your User Defined Folder (UDF) - Vortex will deploy to this new location.',
+          + 'future. Please select your User Defined Folder (UDF) - Vortex will deploy to this new location. '
+          + 'Please NEVER set your UDF path to Vortex\'s staging folder.',
     },
     [
       { label: 'Cancel' },
@@ -130,6 +131,15 @@ async function prepareForModding(context: types.IExtensionContext,
     });
     if (!directory) {
       return Promise.reject(new util.ProcessCanceled('Cannot proceed without UFD'));
+    }
+
+    const segments = directory.toLowerCase().split(path.sep);
+    if (segments.includes('vortex')) {
+      return context.api.showDialog('info', 'Invalid User Defined Folder', {
+        text: 'The UDF cannot be set inside Vortex directories. Please select a different folder.',
+      }, [
+        { label: 'Try Again' }
+      ]).then(() => prepareForModding(context, discovery));
     }
     await fs.ensureDirWritableAsync(path.join(directory, 'Mods'));
     const launcher = DEFAULT_LAUNCHER_SETTINGS;
