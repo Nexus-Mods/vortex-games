@@ -91,7 +91,7 @@ async function findGame() {
 
 function parseAdditionalParameters(parameters: string) {
   const udfParam = parameters.split('-').find(param => param.startsWith('UserDataFolder='));
-  const udf = udfParam ? udfParam.split('=')?.[1]?.trimEnd() : undefined;
+  const udf = udfParam ? udfParam.split('=')?.[1]?.trimEnd?.()?.replace?.(/\"/g, '') : undefined;
   return (udf && path.isAbsolute(udf)) ? udf : undefined;
 }
 
@@ -317,7 +317,6 @@ function main(context: types.IExtensionContext) {
     logo: 'gameart.jpg',
     executable: gameExecutable,
     requiredFiles: [
-      gameExecutable(),
     ],
     requiresLauncher,
     setup: toBlue((discovery) => prepareForModding(context, discovery)),
