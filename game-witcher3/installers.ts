@@ -79,7 +79,7 @@ export function installMenuMod(files: string[], destinationPath: string) {
   const inputFileDestination = CONFIG_MATRIX_REL_PATH;
 
   // Get the mod's root folder.
-  const binIdx = uniqueInput[0].split(path.sep).indexOf('bin');
+  const binIdx = uniqueInput?.[0]?.toLowerCase()?.split(path.sep)?.indexOf?.('bin');
 
   // Refers to files located inside the archive's 'Mods' directory.
   //  This array can very well be empty if a mods folder doesn't exist
@@ -217,7 +217,7 @@ export function testDLCMod(files: string[], gameId: string): Promise<types.ISupp
     return Promise.resolve({ supported: false, requiredFiles: [] });
   }
 
-  const nonDlcFile = files.find(file => !file.startsWith('dlc'));
+  const nonDlcFile = files.find(file => !file.toLowerCase().startsWith('dlc'));
   return (nonDlcFile !== undefined)
     ? Promise.resolve({ supported: false, requiredFiles: [] })
     : Promise.resolve({ supported: true, requiredFiles: [] });
