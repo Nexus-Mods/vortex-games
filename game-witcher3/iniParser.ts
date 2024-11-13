@@ -57,8 +57,8 @@ export default class IniStructure {
         return accum;
       }
 
-      const LOEntry = (loadOrder || []).find(iter => iter.modId === key);
-      const idxOfEntry = (loadOrder || []).findIndex(iter => iter.name === name || iter.modId === key);
+      const idxOfEntry = (loadOrder || []).findIndex(iter => iter.id === name);
+      const LOEntry = loadOrder.at(idxOfEntry);
       if (idx === 0) {
         this.mPriorityManager?.resetMaxPriority(totalLocked.length);
       }
