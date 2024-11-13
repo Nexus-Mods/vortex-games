@@ -158,7 +158,8 @@ function convertFilePath(filePath, installPath) {
     log('error', 'unexpected menu mod filepath', filePath);
     return filePath;
   }
-  const relPath = segments.slice(idx + 1).join(path.sep);
+  // We slice off everything up to the GAME_ID and the 'mods' folder.
+  const relPath = segments.slice(idx + 2).join(path.sep);
   return path.join(installPath, relPath);
 }
 
