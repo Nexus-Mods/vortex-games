@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { ISDVModManifest } from './types';
 import turbowalk from 'turbowalk';
 import { log, types, selectors, util } from 'vortex-api';
@@ -39,11 +40,12 @@ export default class DependencyManager {
     const staging = selectors.installPathForGame(state, GAME_ID);
     const profileId = selectors.lastActiveProfileForGame(state, GAME_ID);
     const profile = selectors.profileById(state, profileId);
+    const isInstalled = (mod: types.IMod) => mod?.state === 'installed';
     const isActive = (modId: string) => util.getSafe(profile, ['modState', modId, 'enabled'], false);
     const mods: { [modId: string]: types.IMod } = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
     const manifests = await Object.values(mods).reduce(async (accumP, iter) => {
       const accum = await accumP;      
-      if (!isActive(iter.id)) {
+      if (!isInstalled(iter) || !isActive(iter.id)) {
         return Promise.resolve(accum);
       }
       const modPath = path.join(staging, iter.installationPath);
