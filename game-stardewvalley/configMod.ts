@@ -266,6 +266,9 @@ export async function onWillEnableMods(api: types.IExtensionApi, profileId: stri
   const mods: { [modId: string]: types.IMod } = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
   for (const id of relevant) {
     const mod = mods[id];
+    if (!mod?.installationPath) {
+      continue;
+    }
     const modPath = path.join(installPath, mod.installationPath);
     const files: IEntry[] = await walkPath(modPath, { skipLinks: true, skipHidden: true, skipInaccessible: true });
     const manifestFile = files.find(file => path.basename(file.filePath) === MOD_MANIFEST);
