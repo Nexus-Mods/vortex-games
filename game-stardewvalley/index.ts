@@ -333,12 +333,16 @@ async function install(api,
   await dependencyManager.scanManifests(true);
   let mods: IModInfo[] = await Promise.all(manifestFiles.map(async manifestFile => {
     const rootFolder = path.dirname(manifestFile);
+    const rootSegments = rootFolder.toLowerCase().split(path.sep);
     const manifestIndex = manifestFile.toLowerCase().indexOf(MANIFEST_FILE);
-    const filterFunc = (file) => (rootFolder !== '.')
-      ? ((file.indexOf(rootFolder) !== -1)
-        && (path.dirname(file) !== '.')
-        && !file.endsWith(path.sep))
-      : !file.endsWith(path.sep);
+    const filterFunc = (file: string) => {
+      const isFile = !file.endsWith(path.sep) && path.extname(path.basename(file)) !== '';
+      const fileSegments = file.toLowerCase().split(path.sep);
+      const isInRootFolder = (rootSegments.length > 0)
+        ? fileSegments?.[rootSegments.length - 1] === rootSegments[rootSegments.length - 1]
+        : true;
+      return isInRootFolder && isFile;
+    };
     try {
       const manifest: ISDVModManifest =
         await parseManifest(path.join(destinationPath, manifestFile));
