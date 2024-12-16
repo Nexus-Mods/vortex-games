@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.10]
+- Fixed inability to separate load order entries that are distributed by the same mod.
+
+## [1.6.9]
+
+- Fixed case sensitivity when installing mods with input.xml data
+- Fixed case sensitivity when installing dlc mods
+
 ## [1.6.8]
 
 - Fixed issue where some mods were not being assigned the correct mod type.

@@ -91,7 +91,7 @@ async function findGame() {
 
 function parseAdditionalParameters(parameters: string) {
   const udfParam = parameters.split('-').find(param => param.startsWith('UserDataFolder='));
-  const udf = udfParam ? udfParam.split('=')?.[1]?.trimEnd() : undefined;
+  const udf = udfParam ? udfParam.split('=')?.[1]?.trimEnd?.()?.replace?.(/\"/g, '') : undefined;
   return (udf && path.isAbsolute(udf)) ? udf : undefined;
 }
 
@@ -113,7 +113,8 @@ async function prepareForModding(context: types.IExtensionContext,
     const res = await context.api.showDialog('info', 'Choose User Defined Folder', {
       text: 'The modding pattern for 7DTD is changing. The Mods path inside the game directory '
           + 'is being deprecated and mods located in the old path will no longer work in the near '
-          + 'future. Please select your User Defined Folder (UDF) - Vortex will deploy to this new location.',
+          + 'future. Please select your User Defined Folder (UDF) - Vortex will deploy to this new location. '
+          + 'Please NEVER set your UDF path to Vortex\'s staging folder.',
     },
     [
       { label: 'Cancel' },
@@ -131,9 +132,18 @@ async function prepareForModding(context: types.IExtensionContext,
     if (!directory) {
       return Promise.reject(new util.ProcessCanceled('Cannot proceed without UFD'));
     }
+
+    const segments = directory.toLowerCase().split(path.sep);
+    if (segments.includes('vortex')) {
+      return context.api.showDialog('info', 'Invalid User Defined Folder', {
+        text: 'The UDF cannot be set inside Vortex directories. Please select a different folder.',
+      }, [
+        { label: 'Try Again' }
+      ]).then(() => prepareForModding(context, discovery));
+    }
     await fs.ensureDirWritableAsync(path.join(directory, 'Mods'));
     const launcher = DEFAULT_LAUNCHER_SETTINGS;
-    launcher.DefaultRunConfig.AdditionalParameters = `-UserDataFolder=${directory}`;
+    launcher.DefaultRunConfig.AdditionalParameters = `-UserDataFolder="${directory}"`;
     const launcherData = JSON.stringify(launcher, null, 2);
     await fs.writeFileAsync(launcherSettings, launcherData, { encoding: 'utf8' });
     context.api.store.dispatch(setUDF(directory));
@@ -317,7 +327,6 @@ function main(context: types.IExtensionContext) {
     logo: 'gameart.jpg',
     executable: gameExecutable,
     requiredFiles: [
-      gameExecutable(),
     ],
     requiresLauncher,
     setup: toBlue((discovery) => prepareForModding(context, discovery)),

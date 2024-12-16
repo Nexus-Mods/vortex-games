@@ -54,4 +54,8 @@ export interface ISMAPIResult {
   };
   errors: string[];
 }
- 
+
+export interface IFileEntry {
+  filePath: string;
+  candidates: string[];
+}
