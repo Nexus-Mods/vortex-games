@@ -386,7 +386,7 @@ export async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
     //logDebug('processLsxFile loadOrder=', loadOrder);
 
     // manualy set load order?
-    api.store.dispatch(actions.setLoadOrder(profileId, newLoadOrder));
+    api.store.dispatch(actions.setFBLoadOrder(profileId, newLoadOrder));
 
     //util.setSafe(api.getState(), ['persistent', 'loadOrder', profileId], newLoadOrder);
 
