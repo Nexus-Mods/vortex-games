@@ -157,8 +157,16 @@ async function requiresLauncher(gamePath, store) {
     }
   };
 
+  const epicSettings = {
+    launcher: 'epic',
+    addInfo: {
+      appId: EPIC_ID,
+    }
+  };
+
   if (store !== undefined) {
     if (store === 'xbox') return xboxSettings;
+    if (store === 'epic') return epicSettings;
     else return undefined;
   }
 
