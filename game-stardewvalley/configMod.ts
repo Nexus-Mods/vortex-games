@@ -6,7 +6,7 @@ import { setMergeConfigs } from './actions';
 import { IFileEntry } from './types';
 import { walkPath, defaultModsRelPath, deleteFolder } from './util';
 
-import { findSMAPIMod } from './SMAPI';
+import { findSMAPIMod, findSMAPITool } from './SMAPI';
 import { IEntry } from 'turbowalk';
 
 const syncWrapper = (api: types.IExtensionApi) => {
@@ -26,8 +26,12 @@ export function registerConfigMod(context: types.IExtensionContext) {
 async function onSyncModConfigurations(api: types.IExtensionApi, silent?: boolean): Promise<void> {
   const state = api.getState();
   const profile = selectors.activeProfile(state);
-  const smapi = findSMAPIMod(api);
-  if (profile?.gameId !== GAME_ID || smapi === undefined) {
+  if (profile?.gameId !== GAME_ID) {
+    return;
+  }
+  const smapiTool: types.IDiscoveredTool = findSMAPITool(api);
+  if (!smapiTool?.path) {
+    api.showErrorNotification('SMAPI is not installed/configured', 'This feature requires Vortex to know the location of SMAPI. Please ensure that SMAPI is at least configured as a tool in Vortex.', { allowReport: false });
     return;
   }
   const mergeConfigs = util.getSafe(state, ['settings', 'SDV', 'mergeConfigs', profile.id], false);
@@ -138,22 +142,24 @@ export async function addModConfig(api: types.IExtensionApi, files: IFileEntry[]
   const discovery = selectors.discoveryByGame(state, GAME_ID);
   const isInstallPath = modsPath !== undefined;
   modsPath = modsPath ?? path.join(discovery.path, defaultModsRelPath());
-  const smapi = findSMAPIMod(api);
-  if (smapi === undefined) {
+  const smapiTool: types.IDiscoveredTool = findSMAPITool(api);
+  if (smapiTool === undefined) {
     return;
   }
   const configModAttributes: string[] = extractConfigModAttributes(state, configMod.mod.id);
   let newConfigAttributes = Array.from(new Set(configModAttributes));
   for (const file of files) {
+    const segments = file.filePath.toLowerCase().split(path.sep).filter(seg => !!seg);
+    if (segments.includes('smapi_internal')) {
+      // Don't touch the internal SMAPI configuration files.
+      continue;
+    }
     api.sendNotification({
       type: 'activity',
       id: NOTIF_ACTIVITY_CONFIG_MOD,
       title: 'Importing config files...',
       message: file.candidates[0],
     });
-    if (file.candidates.includes(smapi?.installationPath)) {
-      continue;
-    }
     
     if (!configModAttributes.includes(file.candidates[0])) {
       newConfigAttributes.push(file.candidates[0]);
@@ -330,11 +336,19 @@ export async function onAddedFiles(api: types.IExtensionApi, profileId: string, 
     return;
   }
 
-  const mods: { [modId: string]: types.IMod } = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
-  const isSMAPI = (file: IFileEntry) => file.candidates.find(candidate => mods[candidate].type === 'SMAPI') !== undefined;
+  const smapiTool: types.IDiscoveredTool = findSMAPITool(api);
+  if (smapiTool === undefined) {
+    // Very important not to add any files if Vortex has no knowledge of SMAPI's location.
+    //  this is to avoid pulling SMAPI configuration files into one of the mods installed by Vortex.
+    return;
+  }
+  const isSMAPIFile = (file: IFileEntry) => {
+    const segments = file.filePath.toLowerCase().split(path.sep).filter(seg => !!seg);
+    return segments.includes('smapi_internal');
+  };
   const mergeConfigs = util.getSafe(state, ['settings', 'SDV', 'mergeConfigs', profile.id], false);
   const result = files.reduce((accum, file) => {
-    if (mergeConfigs && !isSMAPI(file) && path.basename(file.filePath).toLowerCase() === MOD_CONFIG) {
+    if (mergeConfigs && !isSMAPIFile(file) && path.basename(file.filePath).toLowerCase() === MOD_CONFIG) {
       accum.configs.push(file);
     } else {
       accum.regulars.push(file);
