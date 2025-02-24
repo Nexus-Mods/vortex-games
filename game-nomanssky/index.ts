@@ -92,12 +92,18 @@ async function testDeprecatedPakMod(instructions: types.IInstruction[]): Promise
   return Promise.resolve(hasPak);
 }
 
+async function getGameVersion(gamePath: string) {
+  const exeVersion = require('exe-version');
+  return Promise.resolve(exeVersion.getProductVersionLocalized(path.join(gamePath, 'Binaries', 'NMS.exe')));
+}
+
 function main(context: types.IExtensionContext) {
   context.registerGame({
     id: GAME_ID,
     name: 'No Man\'s Sky',
     mergeMods: true,
     queryPath: findGame,
+    getGameVersion,
     queryModPath: modPath,
     logo: 'gameart.jpg',
     executable: () => 'Binaries/NMS.exe',
