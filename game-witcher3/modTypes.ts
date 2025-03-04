@@ -18,8 +18,8 @@ export function testTL(instructions: types.IInstruction[]) {
   }
 
   const hasModsDir = instructions.some(instr => destHasRootDir(instr, 'mods'));
-  const hasInvalidStructure = instructions.some(instr => !destHasRootDir(instr, 'mods'));
-  return Promise.resolve(hasModsDir && !hasInvalidStructure);
+  const hasBinDir = instructions.some(instr => destHasRootDir(instr, 'bin'));
+  return Promise.resolve(hasModsDir || hasBinDir);
 }
 
 export function testDLC(instructions: types.IInstruction[]) {

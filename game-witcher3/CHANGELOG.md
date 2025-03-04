@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.6.11]
 - Added dx12user.settings merging capability (using the .part.txt suffix pattern)
+- Fixed TL mod type not assigned when installing binary mods.
 
 ## [1.6.10]
 - Fixed inability to separate load order entries that are distributed by the same mod.
