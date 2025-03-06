@@ -10,7 +10,7 @@ import { getMergedModNames } from './mergeInventoryParsing';
 
 import turbowalk, { IEntry, IWalkOptions } from 'turbowalk';
 
-import { GAME_ID, LOCKED_PREFIX, I18N_NAMESPACE, UNI_PATCH, ACTIVITY_ID_IMPORTING_LOADORDER } from './common';
+import { GAME_ID, LOCKED_PREFIX, I18N_NAMESPACE, ACTIVITY_ID_IMPORTING_LOADORDER } from './common';
 import { IDeployedFile, IDeployment, PrefixType } from './types';
 
 export async function getDeployment(api: types.IExtensionApi,
@@ -328,4 +328,10 @@ export function suppressEventHandlers(api: types.IExtensionApi) {
 
 export function toBlue<T>(func: (...args: any[]) => Promise<T>): (...args: any[]) => Bluebird<T> {
   return (...args: any[]) => Bluebird.resolve(func(...args));
+}
+
+export async function fileExists(filePath: string): Promise<boolean> {
+  return fs.statAsync(filePath)
+    .then(() => true)
+    .catch(() => false);
 }
