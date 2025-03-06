@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added dx12user.settings merging capability (using the .part.txt suffix pattern)
 - Fixed TL mod type not assigned when installing binary mods.
 - Fixed collection data view not displaying exported load order entries.
+- Fixed merged menu mods raising the external changes dialog when nothing changed.
 - Modernised and improved XML configuration merging (all native .xml files are now mergeable)
 
 ## [1.6.10]
