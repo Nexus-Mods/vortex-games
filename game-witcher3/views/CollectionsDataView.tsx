@@ -9,17 +9,18 @@ import { ComponentEx, EmptyPlaceholder, FlexLayout, Icon,
 
 import { IExtendedInterfaceProps, ILoadOrder, ILoadOrderEntry } from '../collections/types';
 import { genCollectionLoadOrder } from '../collections/util';
+import { IFBLOLoadOrderEntry } from 'vortex-api/lib/types/api';
 
 const NAMESPACE: string = 'generic-load-order-extension';
 
 interface IBaseState {
-  sortedMods: types.LoadOrder;
+  sortedMods: types.IFBLOLoadOrderEntry[];
 }
 
 interface IConnectedProps {
   gameId: string;
   mods: { [modId: string]: types.IMod };
-  loadOrder: types.LoadOrder;
+  loadOrder: types.IFBLOLoadOrderEntry[];
   profile: types.IProfile;
 }
 
@@ -49,7 +50,7 @@ class CollectionsDataView extends ComponentEx<IProps, IComponentState> {
   public render(): JSX.Element {
     const { t } = this.props;
     const { sortedMods } = this.state;
-    return (!!sortedMods && Object.keys(sortedMods).length !== 0)
+    return (!!sortedMods && sortedMods.length !== 0)
       ? (
         <div style={{ overflow: 'auto' }}>
           <h4>{t('Witcher 3 Merged Data')}</h4>
@@ -75,7 +76,7 @@ class CollectionsDataView extends ComponentEx<IProps, IComponentState> {
           </p>
           {this.renderLoadOrderEditInfo()}
           <ListGroup id='collections-load-order-list'>
-            {Object.keys(sortedMods).map(this.renderModEntry)}
+            {sortedMods.map(this.renderModEntry)}
           </ListGroup>
         </div>
     ) : this.renderPlaceholder();
@@ -130,10 +131,12 @@ class CollectionsDataView extends ComponentEx<IProps, IComponentState> {
     );
   }
 
-  private renderModEntry = (modId: string) => {
-    const loEntry: ILoadOrderEntry = this.state.sortedMods[modId];
-    const key = modId + JSON.stringify(loEntry);
-    const name = util.renderModName(this.props.mods[modId]) || modId;
+  private renderModEntry = (loEntry: IFBLOLoadOrderEntry, index: number) => {
+    const key = loEntry.modId + JSON.stringify(loEntry);
+    const name = loEntry.modId
+      ? `${util.renderModName(this.props.mods[loEntry.modId]) ?? loEntry.id} (${loEntry.name})`
+      : loEntry.name ?? loEntry.id;
+
     const classes = ['load-order-entry', 'collection-tab'];
     return (
       <ListGroupItem
@@ -141,7 +144,7 @@ class CollectionsDataView extends ComponentEx<IProps, IComponentState> {
         className={classes.join(' ')}
       >
         <FlexLayout type='row'>
-          <p className='load-order-index'>{loEntry.pos}</p>
+          <p className='load-order-index'>{index + 1}</p>
           <p>{name}</p>
         </FlexLayout>
       </ListGroupItem>

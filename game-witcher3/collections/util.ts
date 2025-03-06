@@ -33,15 +33,15 @@ export function isModInCollection(collectionMod: types.IMod, mod: types.IMod) {
     util.testModReference(mod, rule.reference)) !== undefined;
 }
 
-export function genCollectionLoadOrder(loadOrder: types.LoadOrder,
+export function genCollectionLoadOrder(loadOrder: types.IFBLOLoadOrderEntry[],
                                        mods: { [modId: string]: types.IMod },
                                        collection?: types.IMod): types.LoadOrder {
   const sortedMods = loadOrder.filter(entry => {
-      const isLocked = entry.modId.includes(LOCKED_PREFIX);
-      return isLocked || ((collection !== undefined)
-        ? isValidMod(mods[entry.modId]) && (isModInCollection(collection, mods[entry.modId]))
-        : isValidMod(mods[entry.modId]));
-    })
+    const isLocked = entry.modId.includes(LOCKED_PREFIX);
+    return isLocked || ((collection !== undefined)
+      ? isValidMod(mods[entry.modId]) && (isModInCollection(collection, mods[entry.modId]))
+      : isValidMod(mods[entry.modId]));
+  })
     .sort((lhs, rhs) => lhs.data.prefix - rhs.data.prefix)
     .reduce((accum, iter, idx) => {
       accum.push(iter);
@@ -55,9 +55,9 @@ export async function walkDirPath(dirPath: string): Promise<IEntry[]> {
   await turbowalk(dirPath, (entries: IEntry[]) => {
     fileEntries = fileEntries.concat(entries);
   })
-  .catch({ systemCode: 3 }, () => Promise.resolve())
-  .catch(err => ['ENOTFOUND', 'ENOENT'].includes(err.code)
-    ? Promise.resolve() : Promise.reject(err));
+    .catch({ systemCode: 3 }, () => Promise.resolve())
+    .catch(err => ['ENOTFOUND', 'ENOENT'].includes(err.code)
+      ? Promise.resolve() : Promise.reject(err));
 
   return fileEntries;
 }

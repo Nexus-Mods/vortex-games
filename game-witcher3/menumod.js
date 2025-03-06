@@ -16,7 +16,8 @@ const { GAME_ID, INPUT_XML_FILENAME, PART_SUFFIX } = require('./common');
 // most of these are invalid on windows only but it's not worth the effort allowing them elsewhere
 const INVALID_CHARS = /[:/\\*?"<>|]/g;
 const INPUT_SETTINGS_FILENAME = 'input.settings';
-const USER_SETTINGS_FILENAME = 'user.settings';
+const DX_11_USER_SETTINGS_FILENAME = 'user.settings';
+const DX_12_USER_SETTINGS_FILENAME = 'dx12user.settings';
 const BACKUP_TAG = '.vortex_backup';
 
 // We're going to save per mod ini settings for each
@@ -458,7 +459,8 @@ async function writeCacheToFiles(api, profile) {
     .catch(err => {
       if (err.code === 'ENOENT') {
         const paths = [path.join(docModPath, INPUT_SETTINGS_FILENAME),
-                       path.join(docModPath, USER_SETTINGS_FILENAME)];
+                       path.join(docModPath, DX_11_USER_SETTINGS_FILENAME),
+                       path.join(docModPath, DX_12_USER_SETTINGS_FILENAME)];
 
         if (paths.includes(err.path)) {
           const error = new util.DataInvalid('Required setting files are missing - please run the game at least once and try again.');
