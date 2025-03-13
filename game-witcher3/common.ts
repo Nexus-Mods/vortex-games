@@ -134,6 +134,8 @@ export const MERGE_INV_MANIFEST = 'MergeInventory.xml';
 export const LOAD_ORDER_FILENAME = 'mods.settings';
 export const I18N_NAMESPACE = 'game-witcher3';
 export const CONFIG_MATRIX_REL_PATH = path.join('bin', 'config', 'r4game', 'user_config_matrix', 'pc');
+export const CONFIG_MATRIX_FILES = ['audio', 'display', 'gameplay', 'gamma', 'graphics',
+  'graphicsdx11', 'hdr', 'hidden', 'hud', 'input', 'localization'];
 
 export const W3_TEMP_DATA_DIR = path.join(util.getVortexPath('temp'), 'W3TempData');
 

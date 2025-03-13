@@ -10,7 +10,7 @@ import { getMergedModNames } from './mergeInventoryParsing';
 
 import turbowalk, { IEntry, IWalkOptions } from 'turbowalk';
 
-import { GAME_ID, LOCKED_PREFIX, I18N_NAMESPACE, ACTIVITY_ID_IMPORTING_LOADORDER } from './common';
+import { GAME_ID, LOCKED_PREFIX, I18N_NAMESPACE, ACTIVITY_ID_IMPORTING_LOADORDER, PART_SUFFIX } from './common';
 import { IDeployedFile, IDeployment, PrefixType } from './types';
 
 export async function getDeployment(api: types.IExtensionApi,
@@ -319,6 +319,20 @@ export function validateProfile(profileId: string, state: types.IState) {
 
   return activeProfile;
 };
+
+export function isXML(filePath: string) {
+  return ['.xml'].includes(path.extname(filePath).toLowerCase());
+}
+
+export function isSettingsFile(filePath: string) {
+  return ['.settings', PART_SUFFIX].some(ext => filePath.toLowerCase().endsWith(ext)
+    && path.basename(filePath).toLowerCase() !== 'mods.settings');
+}
+
+// export function isSettingsMergeSuppressed(api: types.IExtensionApi) {
+//   const state = api.getState();
+//   return util.getSafe(state, ['settings', 'witcher3', 'suppressSettingsMerge'], true);
+// }
 
 export function suppressEventHandlers(api: types.IExtensionApi) {
   // This isn't cool, but meh.

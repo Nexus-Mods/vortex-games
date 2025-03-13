@@ -343,7 +343,7 @@ export function installMixed(files: string[]) {
     },
     {
       type: 'setmodtype',
-      value: 'dinput',
+      value: 'witcher3menumodroot',
     }
   ]);
   return Promise.resolve({ instructions });

@@ -8,7 +8,7 @@ import {
   INPUT_XML_FILENAME, SCRIPT_MERGER_ID, I18N_NAMESPACE
 } from './common';
 
-import menuMod from './menumod';
+import * as menuMod from './menumod';
 import { storeToProfile, restoreFromProfile } from './mergeBackup';
 import { validateProfile, forceRefresh, suppressEventHandlers, notifyMissingScriptMerger } from './util';
 import { PriorityManager } from './priorityManager';
@@ -118,10 +118,10 @@ export const onDidDeploy = (api: types.IExtensionApi) => {
     const menuModPromise = () => {
       if (docFiles.length === 0) {
         // If there are no menu mods deployed - remove the mod.
-        return menuMod.removeMod(api, activeProfile);
+        return menuMod.removeMenuMod(api, activeProfile);
       } else {
         return menuMod.onDidDeploy(api, deployment, activeProfile)
-          .then(async modId => {
+          .then(async (modId: string) => {
             if (modId === undefined) {
               return Promise.resolve();
             }
