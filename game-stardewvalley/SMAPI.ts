@@ -3,6 +3,13 @@ import { GAME_ID } from './common';
 import { gte } from 'semver';
 import { SMAPI_MOD_ID, SMAPI_URL } from './constants';
 
+export function findSMAPITool(api: types.IExtensionApi): types.IDiscoveredTool | undefined {
+  const state = api.getState();
+  const discovery = selectors.discoveryByGame(state, GAME_ID);
+  const tool = discovery?.tools?.['smapi'];
+  return !!tool?.path ? tool : undefined;
+}
+
 export function findSMAPIMod(api: types.IExtensionApi): types.IMod {
   const state = api.getState();
   const profileId = selectors.lastActiveProfileForGame(state, GAME_ID);
