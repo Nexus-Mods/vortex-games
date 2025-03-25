@@ -144,7 +144,7 @@ export const LOCKED_PREFIX = 'mod0000_';
 
 export const DO_NOT_DISPLAY = ['communitypatch-base'];
 // minimatch is supposed to be case-insensitive, but it's not working for some reason...
-export const DO_NOT_DEPLOY = ['README.TXT'];
+export const DO_NOT_DEPLOY = ['README.TXT', `**/*${PART_SUFFIX.toUpperCase()}`];
 export const SCRIPT_MERGER_FILES = ['WitcherScriptMerger.exe'];
 
 export const NON_SORTABLE = ['witcher3menumoddocuments', 'collection'];

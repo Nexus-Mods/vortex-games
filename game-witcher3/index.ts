@@ -127,7 +127,6 @@ function prepareForModding(api: types.IExtensionApi) {
   }
 }
 
-let loadOrder: TW3LoadOrder;
 let priorityManager: PriorityManager;
 const getPriorityManager = () => priorityManager;
 // let modLimitPatcher: ModLimitPatcher;
@@ -234,11 +233,6 @@ function main(context: types.IExtensionContext) {
     priorityManager = new PriorityManager(context.api, 'prefix-based');
     IniStructure.getInstance(context.api, getPriorityManager);
     // modLimitPatcher = new ModLimitPatcher(context.api);
-    loadOrder = new TW3LoadOrder({
-      api: context.api,
-      getPriorityManager,
-      onToggleModsState: toggleModsState
-    });
 
     context.api.events.on('gamemode-activated', onGameModeActivation(context.api));
     context.api.events.on('profile-will-change', onProfileWillChange(context.api));
