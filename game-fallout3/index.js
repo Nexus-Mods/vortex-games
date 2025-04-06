@@ -43,7 +43,7 @@ const tools = [
     executable: () => 'fose_loader.exe',
     requiredFiles: [
       'fose_loader.exe',
-      'Data/fallout3.esm',
+      'Fallout3.exe',
     ],
     relative: true,
     exclusive: true,
@@ -187,14 +187,14 @@ function main(context) {
       }
     },
     requiredFiles: [
-      'Data/fallout3.esm'
+      'fallout3.exe'
     ],
     environment: {
       SteamAPPId: '22300',
     },
     details: {
       steamAppId: 22300,
-      hashFiles: ['Data/Fallout3.esm'],
+      hashFiles: ['Fallout3.exe'],
     }
   });
 
