@@ -38,14 +38,16 @@ const statics_1 = require("./statics");
 const util_1 = require("./util");
 const I18N_NAMESPACE = `game-${statics_1.GAME_ID}`;
 const STEAM_APPID = '379430';
+const EPIC_APPID = 'Eel';
+const XBOX_APPID = 'DeepSilver.KingdomComeDeliverance';
+const XBOXEXECNAME = 'App';
 const _MODS_STATE = {
     enabled: [],
     disabled: [],
     display: [],
 };
 function findGame() {
-    return vortex_api_1.util.steam.findByAppId(STEAM_APPID)
-        .catch(() => vortex_api_1.util.epicGamesLauncher.findByAppId('Eel'))
+    return vortex_api_1.util.GameStoreHelper.findByAppId([STEAM_APPID, XBOX_APPID, EPIC_APPID])
         .then(game => game.gamePath);
 }
 function prepareForModding(context, discovery) {
@@ -239,6 +241,53 @@ function writeOrderFile(filePath, modList) {
         .then(() => vortex_api_1.fs.ensureFileAsync(filePath))
         .then(() => vortex_api_1.fs.writeFileAsync(filePath, modList.join('\n'), { encoding: 'utf8' }));
 }
+
+async function requiresLauncher(gamePath, store) {
+  if (store === 'xbox') {
+      return Promise.resolve({
+          launcher: 'xbox',
+          addInfo: {
+              appId: XBOX_APPID,
+              parameters: [{ appExecName: XBOXEXECNAME }],
+          },
+      });
+  }
+ if (store === 'epic') {
+    return Promise.resolve({
+        launcher: 'epic',
+        addInfo: {
+            appId: EPIC_APPID,
+        },
+    });
+  }
+  return Promise.resolve(undefined);
+}
+
+function getExecutable(discoveredPath) {
+  const steamPath = path_1.default.join('Bin', 'Win64', 'KingdomCome.exe');
+  const epicPath = path_1.default.join('Bin', 'Win64MasterMasterEpicPGO', 'KingdomCome.exe');
+  const xboxPath = path_1.default.join('gamelaunchhelper.exe');
+  const isCorrectExec = (exec) => {
+    try {
+      vortex_api_1.fs.statSync(path_1.default.join(discoveredPath, exec));
+      return true;
+    }
+    catch (err) {
+      return false;
+    }
+  };
+  if (isCorrectExec(epicPath) {
+    return epicPath;
+  };
+  if (isCorrectExec(xboxPath)) {
+    return xboxPath;
+  };
+  if (isCorrectExec(steamPath)) {
+    return steamPath;
+  };
+  return steamPath;
+}
+
 function main(context) {
     context.registerGame({
         id: statics_1.GAME_ID,
@@ -247,29 +296,21 @@ function main(context) {
         queryPath: findGame,
         queryModPath: modsPath,
         logo: 'gameart.jpg',
-        executable: (discoveredPath) => {
-            try {
-                const epicPath = path_1.default.join('Bin', 'Win64MasterMasterEpicPGO', 'KingdomCome.exe');
-                vortex_api_1.fs.statSync(path_1.default.join(discoveredPath, epicPath));
-                return epicPath;
-            }
-            catch (err) {
-                return path_1.default.join('Bin', 'Win64', 'KingdomCome.exe');
-            }
-        },
+        executable: getExecutable,
         requiredFiles: [
             'Data/Levels/rataje/level.pak',
         ],
         setup: (discovery) => prepareForModding(context, discovery),
-        requiresLauncher: () => vortex_api_1.util.epicGamesLauncher.isGameInstalled('Eel')
-            .then(epic => epic
-            ? { launcher: 'epic', addInfo: 'Eel' }
-            : undefined),
+        requiresLauncher: requiresLauncher,
         environment: {
             SteamAPPId: STEAM_APPID,
+            XboxAPPId: XBOX_APPID,
+            EpicAPPId: EPIC_APPID,
         },
         details: {
             steamAppId: +STEAM_APPID,
+            xboxAppId: XBOX_APPID,
+            epicAppId: EPIC_APPID,
         },
     });
     context.registerMainPage('sort-none', 'Load Order', LoadOrder, {
