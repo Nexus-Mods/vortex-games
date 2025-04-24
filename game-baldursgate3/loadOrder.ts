@@ -443,7 +443,7 @@ async function exportTo(api: types.IExtensionApi, filepath: string) {
 
     // drop all nodes except for the game entry
     const descriptionNodes = modsNode?.children?.[0]?.node?.filter?.(iter =>
-      iter.attribute.find(attr => (attr.$.id === 'Name') && (attr.$.value === 'GustavDev'))) ?? [];
+      iter.attribute.find(attr => (attr.$.id === 'Name') && (attr.$.value.startsWith('Gustav')))) ?? [];
 
     const filteredPaks = loadOrder.filter(entry => !!entry.data?.uuid
                     && entry.enabled
