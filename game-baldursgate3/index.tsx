@@ -31,6 +31,7 @@ import {
   getActivePlayerProfile,
   profilesPath,
   convertV6toV7,
+  convertToV8,
 } from './util';
 
 import {
@@ -87,7 +88,7 @@ async function prepareForModding(api: types.IExtensionApi, discovery) {
   const mp = modsPath();  
 
   const format = await getDefaultModSettingsFormat(api);
-  if (format !== 'v7') {
+  if (!['v7', 'v8'].includes(format)) {
     showFullReleaseModFixerRecommendation(api);
   }
   
@@ -179,10 +180,12 @@ async function onGameModeActivated(api: types.IExtensionApi, gameId: string) {
       modsNode.children = [{ node: [] }];
     }
 
+
     const format = await getDefaultModSettingsFormat(api);
-    if (format === 'v7' && modsOrderNode !== undefined) {
-      const dat = await fs.readFileAsync(gameSettingsPath, { encoding: 'utf8' });
-      const newData = await convertV6toV7(dat);
+    if (modsOrderNode === undefined && ['v7', 'v8'].includes(format)) {
+      const convFunc = format === 'v7' ? convertV6toV7 : convertToV8;
+      const data = await fs.readFileAsync(gameSettingsPath, { encoding: 'utf8' });
+      const newData = await convFunc(data);
       await fs.removeAsync(gameSettingsPath).catch(err => Promise.resolve());
       await fs.writeFileAsync(gameSettingsPath, newData, { encoding: 'utf8' });
     }
@@ -209,7 +212,6 @@ async function onGameModeActivated(api: types.IExtensionApi, gameId: string) {
   if (latestVer === '0.0.0') {
     await gitHubDownloader.downloadDivine(api);
   }
-
 }
 
 function main(context: types.IExtensionContext) {

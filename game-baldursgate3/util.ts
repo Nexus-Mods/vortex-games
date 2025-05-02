@@ -5,7 +5,7 @@ import { generate as shortid } from 'shortid';
 import walk from 'turbowalk';
 import { actions, fs, types, selectors, log, util } from 'vortex-api';
 import { Builder, parseStringPromise } from 'xml2js';
-import { DEBUG, MOD_TYPE_LSLIB, GAME_ID, DEFAULT_MOD_SETTINGS_V7, DEFAULT_MOD_SETTINGS_V6 } from './common';
+import { DEBUG, MOD_TYPE_LSLIB, GAME_ID, DEFAULT_MOD_SETTINGS_V8, DEFAULT_MOD_SETTINGS_V7, DEFAULT_MOD_SETTINGS_V6 } from './common';
 import { extractPak } from './divineWrapper';
 import { IModSettings, IPakInfo, IModNode, IXmlNode, LOFormat } from './types';
 
@@ -161,18 +161,21 @@ export function getLatestInstalledLSLibVer(api: types.IExtensionApi) {
 }
 
 let _FORMAT: LOFormat = null;
+const PATCH_8 = '4.67.58';
 const PATCH_7 = '4.58.49';
 const PATCH_6 = '4.50.22';
 export async function getDefaultModSettingsFormat(api: types.IExtensionApi): Promise<LOFormat> {
   if (_FORMAT !== null) {
     return _FORMAT;
   }
-  _FORMAT = 'v7';
+  _FORMAT = 'v8';
   try {
     const state = api.getState();
     const gameVersion = await getOwnGameVersion(state);
-    const coerced = gameVersion ? semver.coerce(gameVersion) : PATCH_7;
-    if (semver.gte(coerced, PATCH_7)) {
+    const coerced = gameVersion ? semver.coerce(gameVersion) : PATCH_8;
+    if (semver.gte(coerced, PATCH_8)) {
+      _FORMAT = 'v8';
+    } else if (semver.gte(coerced, PATCH_7)) {
       _FORMAT = 'v7';
     } else if (semver.gte(coerced, PATCH_6)) {
       _FORMAT = 'v6';
@@ -192,10 +195,45 @@ export async function getDefaultModSettings(api: types.IExtensionApi): Promise<s
     _FORMAT = await getDefaultModSettingsFormat(api);
   }
   return {
+    'v8': DEFAULT_MOD_SETTINGS_V8,
     'v7': DEFAULT_MOD_SETTINGS_V7,
     'v6': DEFAULT_MOD_SETTINGS_V6,
     'pre-v6': DEFAULT_MOD_SETTINGS_V6
   }[_FORMAT];
+}
+
+export async function convertToV8(someXml: string): Promise<string> {
+  // Make sure we convert v6 to v7 first
+  // This is a bit of a hack but meh.
+  const v7Xml = await convertV6toV7(someXml);
+  const v7Json = await parseStringPromise(v7Xml);
+  v7Json.save.version[0].$.major = '4';
+  v7Json.save.version[0].$.minor = '8';
+  v7Json.save.version[0].$.revision = '0';
+  v7Json.save.version[0].$.build = '10';
+
+  const moduleSettingsChildren = v7Json.save.region[0].node[0].children[0].node;
+  const modsNode = moduleSettingsChildren.find((n: any) => n.$.id === 'Mods');
+  if (modsNode) {
+    var gustavEntry = modsNode.children[0].node.find((n: any) => 
+      n.attribute.some((attr: any) => attr.$.id === 'Name' && attr.$.value === 'GustavDev'));
+    if (gustavEntry) {
+      // This is the old Gustav Entry - we need to update it to the new one
+      gustavEntry.attribute = [
+        { $: { id: 'Folder', type: 'LSString', value: 'GustavX' } },
+        { $: { id: 'MD5', type: 'LSString', value: '' } },
+        { $: { id: 'Name', type: 'LSString', value: 'GustavX' } },
+        { $: { id: 'PublishHandle', type: 'uint64', value: '0' } },
+        { $: { id: 'UUID', type: 'guid', value: 'cb555efe-2d9e-131f-8195-a89329d218ea' } },
+        { $: { id: 'Version64', type: 'int64', value: '36028797018963968' } }
+      ];
+    }
+  }
+
+  const builder = new Builder();
+  const v8Xml = builder.buildObject(v7Json);
+
+  return v8Xml;
 }
 
 export async function convertV6toV7(v6Xml: string): Promise<string> {
@@ -424,7 +462,7 @@ export async function readStoredLO(api: types.IExtensionApi) {
   storedLO = modNodes
     .map(node => parseModNode(node))
     // Gustav is the core game
-    .filter(entry => entry.id === 'Gustav')
+    .filter(entry => !entry.id.startsWith('Gustav'))
     // sort by the index of each mod in the modOrder list
     .sort((lhs, rhs) => modOrder
       .findIndex(i => i === lhs.data) - modOrder.findIndex(i => i === rhs.data));

@@ -278,7 +278,7 @@ export async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
     }
 
     const format = await getDefaultModSettingsFormat(api);
-    let loNode = format === 'v7' ? modsNode : modsOrderNode !== undefined ? modsOrderNode : modsNode;
+    let loNode = ['v7', 'v8'].includes(format) ? modsNode : modsOrderNode !== undefined ? modsOrderNode : modsNode;
 
     // get nice string array, in order, of mods from the load order section
     let uuidArray:string[] = loNode?.children !== undefined
@@ -386,7 +386,7 @@ export async function processLsxFile(api: types.IExtensionApi, lsxPath:string) {
     //logDebug('processLsxFile loadOrder=', loadOrder);
 
     // manualy set load order?
-    api.store.dispatch(actions.setLoadOrder(profileId, newLoadOrder));
+    api.store.dispatch(actions.setFBLoadOrder(profileId, newLoadOrder));
 
     //util.setSafe(api.getState(), ['persistent', 'loadOrder', profileId], newLoadOrder);
 
@@ -443,7 +443,7 @@ async function exportTo(api: types.IExtensionApi, filepath: string) {
 
     // drop all nodes except for the game entry
     const descriptionNodes = modsNode?.children?.[0]?.node?.filter?.(iter =>
-      iter.attribute.find(attr => (attr.$.id === 'Name') && (attr.$.value === 'GustavDev'))) ?? [];
+      iter.attribute.find(attr => (attr.$.id === 'Name') && (attr.$.value.startsWith('Gustav')))) ?? [];
 
     const filteredPaks = loadOrder.filter(entry => !!entry.data?.uuid
                     && entry.enabled
@@ -465,7 +465,7 @@ async function exportTo(api: types.IExtensionApi, filepath: string) {
       */
 
       const attributeOrder = ['Folder', 'MD5', 'Name', 'PublishHandle', 'UUID', 'Version64', 'Version'];
-      const attributes = (modSettingsFormat === 'v7')
+      const attributes = (['v7', 'v8'].includes(modSettingsFormat))
         ? [
           { $: { id: 'Folder', type: 'LSString', value: entry.data.folder } },
           { $: { id: 'Name', type: 'LSString', value: entry.data.name } },
@@ -496,7 +496,7 @@ async function exportTo(api: types.IExtensionApi, filepath: string) {
       }));
 
     modsNode.children[0].node = descriptionNodes;
-    if (modSettingsFormat !== 'v7') {
+    if (!['v7', 'v8'].includes(modSettingsFormat)) {
       let modOrderNode: IRootNode = findNode(root?.children?.[0]?.node, 'ModOrder');
       let insertNode = false;
       if (!modOrderNode) {
@@ -606,7 +606,7 @@ async function readLsxFile(lsxPath: string): Promise<IModSettings> {
 
 async function writeModSettings(api: types.IExtensionApi, data: IModSettings, filepath: string): Promise<void> {
   const format = await getDefaultModSettingsFormat(api);
-  const builder = (format === 'v7')
+  const builder = (['v7', 'v8'].includes(format))
     ? new Builder({ renderOpts: { pretty: true, indent: '    ' }})
     : new Builder();
   const xml = builder.buildObject(data);
