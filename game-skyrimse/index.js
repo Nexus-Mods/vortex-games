@@ -6,7 +6,6 @@ const GAME_ID = 'skyrimse';
 const GOG_ID = '1711230643';
 const MS_ID = 'BethesdaSoftworks.SkyrimSE-PC';
 const EPIC_ID = 'ac82db5035584c7f8a2c548d98c86b2c';
-const STEAM_ID = '489830';
 
 const tools = [
   {
@@ -84,22 +83,11 @@ function requiresLauncher(gamePath, store) {
     }
   };
 
-   const epicSettings = {
-    launcher: 'epic',
-    addInfo: {
-      appId: EPIC_ID,
-    }
-  };
-
   if (store !== undefined) {
     // early out if the app gave us the storeid
     if (store === 'xbox') {
       return Promise.resolve(xboxSettings);
-    } 
-    if (store === 'epic') {
-      return Promise.resolve(epicSettings);
-    } 
-    else {
+    } else {
       return Promise.resolve(undefined);
     }
   }
@@ -171,16 +159,10 @@ function main(context) {
     requiresLauncher,
     getGameVersion: (gamePath, exePath) => getGameVersion(context.api, gamePath, exePath),
     environment: {
-      SteamAPPId: STEAM_ID,
-      GogAPPId: GOG_ID,
-      XboxAPPId: MS_ID,
-      EpicAPPId: EPIC_ID,
+      SteamAPPId: '489830',
     },
     details: {
-      steamAppId: STEAM_ID,
-      gogAppId: GOG_ID,
-      xboxAppId: MS_ID,
-      epicAppId: EPIC_ID,
+      steamAppId: 489830,
       nexusPageId: 'skyrimspecialedition',
       hashFiles: [
         'appxmanifest.xml',
