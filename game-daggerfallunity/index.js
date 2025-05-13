@@ -75,11 +75,23 @@ function install(files, destinationPath) {
   filtered.forEach(file => {
     if (dfmods.indexOf(path.basename(file)) !== -1) {
       if (path.dirname(file).toLowerCase().indexOf('windows') !== -1) {
+        let targetPath;
+
+        //Check if the mod targets the DFU mods folder
+        if(path.dirname(file).toLowerCase().indexOf('mods') !== -1)
+        {
+          targetPath = path.basename(file);
+        }
+        else //mod is in root of the .zip, which is wrong
+        {
+          targetPath = path.join('Mods', path.basename(file));
+        }
+        
         // This is the dfmod we want to install.
         result.instructions.push({
           type: 'copy',
           source: file,
-          destination: path.basename(file),
+          destination: targetPath,
         });
       }
     } else {
