@@ -6,19 +6,18 @@ import winapi from 'winapi-bindings';
 
 import { getPersistentLoadOrder, migrate148 } from './migrations';
 
-import { Builder, parseStringPromise } from 'xml2js';
-
 import { genCollectionsData, parseCollectionsData } from './collections/collections';
 import { IW3CollectionsData } from './collections/types';
 import CollectionsDataView from './views/CollectionsDataView';
 
 import { downloadScriptMerger, getScriptMergerDir, setMergerConfig } from './scriptmerger';
 
-import { DO_NOT_DEPLOY, GAME_ID, getLoadOrderFilePath, INPUT_XML_FILENAME,
-  LOCKED_PREFIX, SCRIPT_MERGER_ID,
+import { DO_NOT_DEPLOY, GAME_ID, getLoadOrderFilePath,
+  LOCKED_PREFIX, SCRIPT_MERGER_ID
 } from './common';
 
 import { testDLC, testTL } from './modTypes';
+import { canMergeXML, doMergeXML, canMergeSettings, doMergeSettings } from './mergers';
 
 import { registerActions } from './iconbarActions';
 import { PriorityManager } from './priorityManager';
@@ -45,8 +44,6 @@ const GOG_WH_GOTY = '1640424747';
 const STEAM_ID = '499450';
 const STEAM_ID_WH = '292030';
 const EPIC_ID = '725a22e15ed74735bb0d6a19f3cc82d0';
-
-const CONFIG_MATRIX_REL_PATH = path.join('bin', 'config', 'r4game', 'user_config_matrix', 'pc');
 
 const tools: types.ITool[] = [
   {
@@ -113,7 +110,6 @@ function prepareForModding(api: types.IExtensionApi) {
         }
       }
     };
-  
     const ensurePath = (dirpath) =>
       fs.ensureDirWritableAsync(dirpath)
         .catch(err => (err.code === 'EEXIST')
@@ -131,112 +127,6 @@ function prepareForModding(api: types.IExtensionApi) {
   }
 }
 
-
-
-function canMerge(game, gameDiscovery) {
-  if (game.id !== GAME_ID) {
-    return undefined;
-  }
-
-  return ({
-    baseFiles: () => [
-      {
-        in: path.join(gameDiscovery.path, CONFIG_MATRIX_REL_PATH, INPUT_XML_FILENAME),
-        out: path.join(CONFIG_MATRIX_REL_PATH, INPUT_XML_FILENAME),
-      },
-    ],
-    filter: filePath => filePath.endsWith(INPUT_XML_FILENAME),
-  });
-}
-
-function readInputFile(context, mergeDir) {
-  const state = context.api.store.getState();
-  const discovery = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID], undefined);
-  const gameInputFilepath = path.join(discovery.path, CONFIG_MATRIX_REL_PATH, INPUT_XML_FILENAME);
-  return (!!discovery?.path)
-    ? fs.readFileAsync(path.join(mergeDir, CONFIG_MATRIX_REL_PATH, INPUT_XML_FILENAME))
-      .catch(err => (err.code === 'ENOENT')
-        ? fs.readFileAsync(gameInputFilepath)
-        : Promise.reject(err))
-    : Promise.reject({ code: 'ENOENT', message: 'Game is not discovered' });
-}
-
-const emptyXml = '<?xml version="1.0" encoding="UTF-8"?><metadata></metadata>';
-function merge(filePath, mergeDir, context) {
-  let modData;
-  return fs.readFileAsync(filePath)
-    .then(async xmlData => {
-      try {
-        modData = await parseStringPromise(xmlData);
-        return Promise.resolve();
-      } catch (err) {
-        // The mod itself has invalid xml data.
-        context.api.showErrorNotification('Invalid mod XML data - inform mod author',
-        { path: filePath, error: err.message }, { allowReport: false });
-        modData = emptyXml;
-        return Promise.resolve();
-      }
-    })
-    .then(() => readInputFile(context, mergeDir))
-    .then(async mergedData => {
-      try {
-        const merged = await parseStringPromise(mergedData);
-        return Promise.resolve(merged);
-      } catch (err) {
-        // This is the merged file - if it's invalid chances are we messed up
-        //  somehow, reason why we're going to allow this error to get reported.
-        const state = context.api.store.getState();
-        const activeProfile = selectors.activeProfile(state);
-        const loadOrder = getPersistentLoadOrder(context.api);
-        context.api.showErrorNotification('Invalid merged XML data', err, {
-          allowReport: true,
-          attachments: [
-            { id: '__merged/input.xml', type: 'data', data: mergedData,
-              description: 'Witcher 3 menu mod merged data' },
-            { id: `${activeProfile.id}_loadOrder`, type: 'data', data: loadOrder,
-              description: 'Current load order' },
-          ],
-        });
-        return Promise.reject(new util.DataInvalid('Invalid merged XML data'));
-      }
-    })
-    .then(gameIndexFile => {
-      const modGroups = modData?.UserConfig?.Group;
-      for (let i = 0; i < modGroups.length; i++) {
-        const gameGroups = gameIndexFile?.UserConfig?.Group;
-        const iter = modGroups[i];
-        const modVars = iter?.VisibleVars?.[0]?.Var;
-        const gameGroupIdx = gameGroups.findIndex(group => group?.$?.id === iter?.$?.id);
-        if (gameGroupIdx !== -1) {
-          const gameGroup = gameGroups[gameGroupIdx];
-          const gameVars = gameGroup?.VisibleVars?.[0]?.Var;
-          for (let j = 0; j < modVars.length; j++) {
-            const modVar = modVars[j];
-            const id = modVar?.$?.id;
-            const gameVarIdx = gameVars.findIndex(v => v?.$?.id === id);
-            if (gameVarIdx !== -1) {
-              gameIndexFile.UserConfig.Group[gameGroupIdx].VisibleVars[0].Var[gameVarIdx] = modVar;
-            } else {
-              gameIndexFile.UserConfig.Group[gameGroupIdx].VisibleVars[0].Var.push(modVar);
-            }
-          }
-        } else {
-          gameIndexFile.UserConfig.Group.push(modGroups[i]);
-        }
-      }
-      const builder = new Builder();
-      const xml = builder.buildObject(gameIndexFile);
-      return fs.writeFileAsync(
-        path.join(mergeDir, CONFIG_MATRIX_REL_PATH, INPUT_XML_FILENAME),
-        xml);
-    })
-    .catch(err => {
-      log('error', 'input.xml merge failed', err);
-      return Promise.resolve();
-    });
-}
-
-let loadOrder: TW3LoadOrder;
 let priorityManager: PriorityManager;
 const getPriorityManager = () => priorityManager;
 // let modLimitPatcher: ModLimitPatcher;
@@ -281,8 +171,8 @@ function main(context: types.IExtensionContext) {
     { deploymentEssential: false, name: 'Mod Limit Patcher Mod Type' });
   context.registerModType('witcher3menumoddocuments', 60, isTW3(context.api), getDocumentsPath, () => Bluebird.resolve(false));
 
-  context.registerMerge(canMerge,
-    (filePath, mergeDir) => merge(filePath, mergeDir, context), 'witcher3menumodroot');
+  context.registerMerge(canMergeXML(context.api), doMergeXML(context.api) as any, 'witcher3menumodroot');
+  // context.registerMerge(canMergeSettings(context.api), doMergeSettings(context.api) as any, 'witcher3menumoddocuments');
 
   context.registerMigration((oldVersion) => (migrate148(context, oldVersion) as any));
 
@@ -343,11 +233,6 @@ function main(context: types.IExtensionContext) {
     priorityManager = new PriorityManager(context.api, 'prefix-based');
     IniStructure.getInstance(context.api, getPriorityManager);
     // modLimitPatcher = new ModLimitPatcher(context.api);
-    loadOrder = new TW3LoadOrder({
-      api: context.api,
-      getPriorityManager,
-      onToggleModsState: toggleModsState
-    });
 
     context.api.events.on('gamemode-activated', onGameModeActivation(context.api));
     context.api.events.on('profile-will-change', onProfileWillChange(context.api));
