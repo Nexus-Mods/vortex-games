@@ -1,4 +1,4 @@
-import { CONFIG_MATRIX_REL_PATH } from './common';
+import { CONFIG_MATRIX_REL_PATH, PART_SUFFIX } from './common';
 import path from 'path';
 import { types } from 'vortex-api';
 
@@ -11,15 +11,17 @@ const destHasRootDir = (instruction: types.IInstruction, dir: string) => {
 }
 
 export function testTL(instructions: types.IInstruction[]) {
-  const menuModFiles = instructions.filter(instr => !!instr.destination
-    && instr.destination.indexOf(CONFIG_MATRIX_REL_PATH) !== -1);
-  if (menuModFiles.length > 0) {
+  const hasConfigMatrix = instructions.some(instr => !!instr.source
+    && instr.source.indexOf(CONFIG_MATRIX_REL_PATH) !== -1);
+  const hasSettingsConfig = instructions.some(instr =>
+    instr?.source?.toLowerCase?.()?.endsWith?.(PART_SUFFIX));
+  if (hasConfigMatrix || hasSettingsConfig) {
     return Promise.resolve(false);
   }
 
   const hasModsDir = instructions.some(instr => destHasRootDir(instr, 'mods'));
-  const hasInvalidStructure = instructions.some(instr => !destHasRootDir(instr, 'mods'));
-  return Promise.resolve(hasModsDir && !hasInvalidStructure);
+  const hasBinDir = instructions.some(instr => destHasRootDir(instr, 'bin'));
+  return Promise.resolve(hasModsDir || hasBinDir);
 }
 
 export function testDLC(instructions: types.IInstruction[]) {

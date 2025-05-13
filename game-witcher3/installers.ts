@@ -28,9 +28,11 @@ export function scriptMergerDummyInstaller() {
 
 export function testMenuModRoot(instructions: any[], gameId: string): Promise<types.ISupportedResult | boolean> {
   // This function can test for both installers and modTypes
+  const hasMenuModPattern = (filePath: string) => [CONFIG_MATRIX_REL_PATH, PART_SUFFIX].some(pattern =>
+    filePath.toLowerCase().indexOf(pattern) !== -1);
   const predicate = (instr) => (!!gameId)
-    ? ((GAME_ID === gameId) && (instr.toLowerCase().indexOf(CONFIG_MATRIX_REL_PATH) !== -1))
-    : ((instr.type === 'copy') && (instr.destination.toLowerCase().indexOf(CONFIG_MATRIX_REL_PATH) !== -1));
+    ? ((GAME_ID === gameId) && (hasMenuModPattern(instr))) // Test for installer
+    : ((instr.type === 'copy') && (hasMenuModPattern(instr.source))); // Test for modType
 
   return (!!gameId)
     ? Promise.resolve({
@@ -181,7 +183,7 @@ export function installContent(files: string[], destinationPath: string) {
 }
 
 export function testSupportedTL(files: string[], gameId: string) {
-  const supported = (gameId === 'witcher3')
+  const supported = (gameId === GAME_ID)
     && (files.find(file =>
       file.toLowerCase().split(path.sep).indexOf('mods') !== -1) !== undefined);
   return Promise.resolve({
@@ -343,7 +345,7 @@ export function installMixed(files: string[]) {
     },
     {
       type: 'setmodtype',
-      value: 'dinput',
+      value: 'witcher3menumodroot',
     }
   ]);
   return Promise.resolve({ instructions });

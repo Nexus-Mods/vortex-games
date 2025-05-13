@@ -1,47 +1,141 @@
-const { fs, log, util } = require('vortex-api');
-
-const path = require('path');
-
-function findGame() {
-  return util.steam.findByName('No Man\'s Sky')
-      .then(game => game.gamePath);
-}
-
-function modPath() {
-  return path.join('GAMEDATA', 'PCBANKS', 'MODS');
-}
-
-function prepareForModding(discovery) {
-  const pcbanks = path.join(discovery.path, 'GAMEDATA', 'PCBANKS');
-  return fs.ensureDirAsync(path.join(discovery.path, modPath()))
-    .then(() => fs.renameAsync(path.join(pcbanks, 'DISABLEMODS.TXT'), path.join(pcbanks, 'ENABLEMODS.TXT'))
-      .catch(err => err.code === 'ENOENT' ? Promise.resolve() : Promise.reject(err)));
-}
-
-function main(context) {
-  context.registerGame({
-    id: 'nomanssky',
-    name: 'No Man\'s Sky',
-    mergeMods: true,
-    queryPath: findGame,
-    queryModPath: modPath,
-    logo: 'gameart.jpg',
-    executable: () => 'Binaries/NMS.exe',
-    requiredFiles: [
-      'Binaries/NMS.exe',
-    ],
-    setup: prepareForModding,
-    environment: {
-      SteamAPPId: '275850',
-    },
-    details: {
-      steamAppId: 275850,
-    },
-  });
-
-  return true;
-}
-
-module.exports = {
-  default: main,
+"use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const path_1 = __importDefault(require("path"));
+const semver_1 = __importDefault(require("semver"));
+const vortex_api_1 = require("vortex-api");
+const GAME_ID = 'nomanssky';
+const STEAMAPP_ID = '275850';
+const XBOX_ID = 'HelloGames.NoMansSky';
+const MODTYPE_DEPRECATED_PAK = 'nomanssky-deprecated-pak';
+function purge(api) {
+    return __awaiter(this, void 0, void 0, function* () {
+        return new Promise((resolve, reject) => api.events.emit('purge-mods', true, (err) => err ? reject(err) : resolve()));
+    });
+}
+function deploy(api) {
+    return __awaiter(this, void 0, void 0, function* () {
+        return new Promise((resolve, reject) => api.events.emit('deploy-mods', (err) => err ? reject(err) : resolve()));
+    });
+}
+function findGame() {
+    return vortex_api_1.util.GameStoreHelper.findByAppId([STEAMAPP_ID, XBOX_ID])
+        .then(game => game.gamePath);
+}
+function deprecatedModPath() {
+    return path_1.default.join('GAMEDATA', 'PCBANKS', 'MODS');
+}
+function modPath() {
+    return path_1.default.join('GAMEDATA', 'MODS');
+}
+function migrate101(api, oldVersion) {
+    return __awaiter(this, void 0, void 0, function* () {
+        if (semver_1.default.gte(oldVersion, '1.0.1')) {
+            return Promise.resolve();
+        }
+        const state = api.getState();
+        const mods = vortex_api_1.util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
+        const modIds = Object.keys(mods).filter(modId => mods[modId].type !== 'nomanssky-deprecated-pak');
+        const batched = modIds.map(modId => vortex_api_1.actions.setModType(GAME_ID, modId, MODTYPE_DEPRECATED_PAK));
+        if (batched.length > 0) {
+            try {
+                (0, vortex_api_1.log)('info', 'Migrating mods to deprecated PAK type.', { mods: batched.length });
+                yield api.awaitUI();
+                yield purge(api);
+                vortex_api_1.util.batchDispatch(api.store, batched);
+                yield new Promise(resolve => setTimeout(resolve, 1000));
+                yield deploy(api);
+            }
+            catch (err) {
+                (0, vortex_api_1.log)('error', 'Failed to migrate mods to deprecated PAK type.', { err });
+            }
+        }
+        return Promise.resolve();
+    });
+}
+function prepareForModding(api, discovery) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const pcbanks = path_1.default.join(discovery.path, 'GAMEDATA', 'PCBANKS');
+        const ensureDir = (dir) => vortex_api_1.fs.ensureDirWritableAsync(path_1.default.join(discovery.path, dir));
+        return Promise.all([ensureDir(modPath()), ensureDir(deprecatedModPath())])
+            .then(() => vortex_api_1.fs.renameAsync(path_1.default.join(pcbanks, 'DISABLEMODS.TXT'), path_1.default.join(pcbanks, 'ENABLEMODS.TXT'))
+            .catch(err => err.code === 'ENOENT' ? Promise.resolve() : Promise.reject(err)));
+    });
+}
+function requiresLauncher(gamePath, store) {
+    return __awaiter(this, void 0, void 0, function* () {
+        if (store === 'xbox') {
+            return Promise.resolve({
+                launcher: 'xbox',
+                addInfo: {
+                    appId: XBOX_ID,
+                    parameters: [{ appExecName: 'NoMansSky' }],
+                },
+            });
+        }
+        else {
+            return Promise.resolve(undefined);
+        }
+    });
+}
+function getPakPath(api, game) {
+    const discovery = api.getState().settings.gameMode.discovered[game.id];
+    if (!discovery || !discovery.path) {
+        return '.';
+    }
+    const dataPath = path_1.default.join(discovery.path, deprecatedModPath());
+    return dataPath;
+}
+function testDeprecatedPakMod(instructions) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const hasPak = instructions.some(inst => inst.source && inst.source.match(/\.pak$/i));
+        return Promise.resolve(hasPak);
+    });
+}
+function getGameVersion(gamePath) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const exeVersion = require('exe-version');
+        return Promise.resolve(exeVersion.getProductVersionLocalized(path_1.default.join(gamePath, 'Binaries', 'NMS.exe')));
+    });
+}
+function main(context) {
+    context.registerGame({
+        id: GAME_ID,
+        name: 'No Man\'s Sky',
+        mergeMods: true,
+        queryPath: findGame,
+        getGameVersion,
+        queryModPath: modPath,
+        logo: 'gameart.jpg',
+        executable: () => 'Binaries/NMS.exe',
+        requiredFiles: [
+            'Binaries/NMS.exe',
+        ],
+        requiresLauncher: requiresLauncher,
+        setup: (discovery) => prepareForModding(context.api, discovery),
+        environment: {
+            SteamAPPId: STEAMAPP_ID,
+        },
+        details: {
+            steamAppId: +STEAMAPP_ID,
+        },
+    });
+    context.registerModType(MODTYPE_DEPRECATED_PAK, 100, (gameId) => GAME_ID === gameId, (game) => getPakPath(context.api, game), testDeprecatedPakMod, { deploymentEssential: false, name: 'Deprecated PAK' });
+    context.registerMigration(old => migrate101(context.api, old));
+    return true;
+}
+module.exports = {
+    default: main,
+};
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiaW5kZXguanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyJpbmRleC50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiOzs7Ozs7Ozs7Ozs7OztBQUNBLGdEQUF3QjtBQUN4QixvREFBNEI7QUFDNUIsMkNBQTJEO0FBRTNELE1BQU0sT0FBTyxHQUFHLFdBQVcsQ0FBQztBQUM1QixNQUFNLFdBQVcsR0FBRyxRQUFRLENBQUM7QUFDN0IsTUFBTSxPQUFPLEdBQUcsc0JBQXNCLENBQUM7QUFDdkMsTUFBTSxzQkFBc0IsR0FBRywwQkFBMEIsQ0FBQztBQUUxRCxTQUFlLEtBQUssQ0FBQyxHQUF3Qjs7UUFDM0MsT0FBTyxJQUFJLE9BQU8sQ0FBTyxDQUFDLE9BQU8sRUFBRSxNQUFNLEVBQUUsRUFBRSxDQUMzQyxHQUFHLENBQUMsTUFBTSxDQUFDLElBQUksQ0FBQyxZQUFZLEVBQUUsSUFBSSxFQUFFLENBQUMsR0FBRyxFQUFFLEVBQUUsQ0FBQyxHQUFHLENBQUMsQ0FBQyxDQUFDLE1BQU0sQ0FBQyxHQUFHLENBQUMsQ0FBQyxDQUFDLENBQUMsT0FBTyxFQUFFLENBQUMsQ0FBQyxDQUFDO0lBQ2pGLENBQUM7Q0FBQTtBQUVELFNBQWUsTUFBTSxDQUFDLEdBQXdCOztRQUM1QyxPQUFPLElBQUksT0FBTyxDQUFPLENBQUMsT0FBTyxFQUFFLE1BQU0sRUFBRSxFQUFFLENBQzNDLEdBQUcsQ0FBQyxNQUFNLENBQUMsSUFBSSxDQUFDLGFBQWEsRUFBRSxDQUFDLEdBQUcsRUFBRSxFQUFFLENBQUMsR0FBRyxDQUFDLENBQUMsQ0FBQyxNQUFNLENBQUMsR0FBRyxDQUFDLENBQUMsQ0FBQyxDQUFDLE9BQU8sRUFBRSxDQUFDLENBQUMsQ0FBQztJQUM1RSxDQUFDO0NBQUE7QUFFRCxTQUFTLFFBQVE7SUFDZixPQUFPLGlCQUFJLENBQUMsZUFBZSxDQUFDLFdBQVcsQ0FBQyxDQUFDLFdBQVcsRUFBRSxPQUFPLENBQUMsQ0FBQztTQUM1RCxJQUFJLENBQUMsSUFBSSxDQUFDLEVB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RUFBRSxFQUFFLENBQUMsT0FBTyxLQUFLLE1BQU0sRUFDOUIsQ0FBQyxJQUFpQixFQUFFLEVBQUUsQ0FBQyxVQUFVLENBQUMsT0FBTyxDQUFDLEdBQUcsRUFBRSxJQUFJLENBQUMsRUFDcEQsb0JBQTJCLEVBQzNCLEVBQUUsbUJBQW1CLEVBQUUsS0FBSyxFQUFFLElBQUksRUFBRSxnQkFBZ0IsRUFBRSxDQUN2RCxDQUFDO0lBRUYsT0FBTyxDQUFDLGlCQUFpQixDQUFDLEdBQUcsQ0FBQyxFQUFFLENBQUMsVUFBVSxDQUFDLE9BQU8sQ0FBQyxHQUFHLEVBQUUsR0FBRyxDQUFRLENBQUMsQ0FBQztJQUV0RSxPQUFPLElBQUksQ0FBQztBQUNkLENBQUM7QUFFRCxNQUFNLENBQUMsT0FBTyxHQUFHO0lBQ2YsT0FBTyxFQUFFLElBQUk7Q0FDZCxDQUFDIiwic291cmNlc0NvbnRlbnQiOlsiLyogZXNsaW50LWRpc2FibGUgKi9cclxuaW1wb3J0IHBhdGggZnJvbSAncGF0aCc7XHJcbmltcG9ydCBzZW12ZXIgZnJvbSAnc2VtdmVyJztcclxuaW1wb3J0IHsgYWN0aW9ucywgZnMsIGxvZywgdHlwZXMsIHV0aWwgfSBmcm9tICd2b3J0ZXgtYXBpJztcclxuXHJcbmNvbnN0IEdBTUVfSUQgPSAnbm9tYW5zc2t5JztcclxuY29uc3QgU1RFQU1BUFBfSUQgPSAnMjc1ODUwJztcclxuY29uc3QgWEJPWF9JRCA9ICdIZWxsb0dhbWVzLk5vTWFuc1NreSc7XHJcbmNvbnN0IE1PRFRZUEVfREVQUkVDQVRFRF9QQUsgPSAnbm9tYW5zc2t5LWRlcHJlY2F0ZWQtcGFrJztcclxuXHJcbmFzeW5jIGZ1bmN0aW9uIHB1cmdlKGFwaTogdHlwZXMuSUV4dGVuc2lvbkFwaSk6IFByb21pc2U8dm9pZD4ge1xyXG4gIHJldHVybiBuZXcgUHJvbWlzZTx2b2lkPigocmVzb2x2ZSwgcmVqZWN0KSA9PlxyXG4gICAgYXBpLmV2ZW50cy5lbWl0KCdwdXJnZS1tb2RzJywgdHJ1ZSwgKGVycikgPT4gZXJyID8gcmVqZWN0KGVycikgOiByZXNvbHZlKCkpKTtcclxufVxyXG5cclxuYXN5bmMgZnVuY3Rpb24gZGVwbG95KGFwaTogdHlwZXMuSUV4dGVuc2lvbkFwaSk6IFByb21pc2U8dm9pZD4ge1xyXG4gIHJldHVybiBuZXcgUHJvbWlzZTx2b2lkPigocmVzb2x2ZSwgcmVqZWN0KSA9PlxyXG4gICAgYXBpLmV2ZW50cy5lbWl0KCdkZXBsb3ktbW9kcycsIChlcnIpID0+IGVyciA/IHJlamVjdChlcnIpIDogcmVzb2x2ZSgpKSk7XHJcbn1cclxuXHJcbmZ1bmN0aW9uIGZpbmRHYW1lKCkge1xyXG4gIHJldHVybiB1dGlsLkdhbWVTdG9yZUhlbHBlci5maW5kQnlBcHBJZChbU1RFQU1BUFBfSUQsIFhCT1hfSURdKVxyXG4gICAgLnRoZW4oZ2FtZSA9PiBnYW1lLmdhbWVQYXRoKTtcclxufVxyXG5cclxuZnVuY3Rpb24gZGVwcmVjYXRlZE1vZFBhdGgoKSB7XHJcbiAgcmV0dXJuIHBhdGguam9pbignR0FNRURBVEEnLCAnUENCQU5LUycsICdNT0RTJyk7XHJcbn1cclxuXHJcbmZ1bmN0aW9uIG1vZFBhdGgoKSB7XHJcbiAgcmV0dXJuIHBhdGguam9pbignR0FNRURBVEEnLCAnTU9EUycpO1xyXG59XHJcblxyXG5hc3luYyBmdW5jdGlvbiBtaWdyYXRlMTAxKGFwaTogdHlwZXMuSUV4dGVuc2lvbkFwaSwgb2xkVmVyc2lvbjogc3RyaW5nKTogUHJvbWlzZTx2b2lkPiB7XHJcbiAgaWYgKHNlbXZlci5ndGUob2xkVmVyc2lvbiwgJzEuMC4xJykpIHtcclxuICAgIHJldHVybiBQcm9taXNlLnJlc29sdmUoKTtcclxuICB9XHJcblxyXG4gIGNvbnN0IHN0YXRlID0gYXBpLmdldFN0YXRlKCk7XHJcbiAgY29uc3QgbW9kczogeyBbbW9kSWQ6IHN0cmluZ106IHR5cGVzLklNb2QgfSA9IHV0aWwuZ2V0U2FmZShzdGF0ZSwgWydwZXJzaXN0ZW50JywgJ21vZHMnLCBHQU1FX0lEXSwge30pO1xyXG4gIGNvbnN0IG1vZElkcyA9IE9iamVjdC5rZXlzKG1vZHMpLmZpbHRlcihtb2RJZCA9PiBtb2RzW21vZElkXS50eXBlICE9PSAnbm9tYW5zc2t5LWRlcHJlY2F0ZWQtcGFrJyk7XHJcbiAgY29uc3QgYmF0Y2hlZCA9IG1vZElkcy5tYXAobW9kSWQgPT4gYWN0aW9ucy5zZXRNb2RUeXBlKEdBTUVfSUQsIG1vZElkLCBNT0RUWVBFX0RFUFJFQ0FURURfUEFLKSk7XHJcbiAgaWYgKGJhdGNoZWQubGVuZ3RoID4gMCkge1xyXG4gICAgdHJ5IHtcclxuICAgICAgbG9nKCdpbmZvJywgJ01pZ3JhdGluZyBtb2RzIHRvIGRlcHJlY2F0ZWQgUEFLIHR5cGUuJywgeyBtb2RzOiBiYXRjaGVkLmxlbmd0aCB9KTtcclxuICAgICAgYXdhaXQgYXBpLmF3YWl0VUkoKTtcclxuICAgICAgYXdhaXQgcHVyZ2UoYXBpKTtcclxuICAgICAgdXRpbC5iYXRjaERpc3BhdGNoKGFwaS5zdG9yZSwgYmF0Y2hlZCk7XHJcbiAgICAgIC8vIEhhY2t5IGJ1dCBuZWNlc3NhcnkgdG8gZW5zdXJlIHdlIHdhaXQgZm9yIHRoZSBzdGF0ZSB0byB1cGRhdGUuXHJcbiAgICAgIGF3YWl0IG5ldyBQcm9taXNlPHZvaWQ+KHJlc29sdmUgPT4gc2V0VGltZW91dChyZXNvbHZlLCAxMDAwKSk7XHJcbiAgICAgIGF3YWl0IGRlcGxveShhcGkpO1xyXG4gICAgfSBjYXRjaCAoZXJyKSB7XHJcbiAgICAgIGxvZygnZXJyb3InLCAnRmFpbGVkIHRvIG1pZ3JhdGUgbW9kcyB0byBkZXByZWNhdGVkIFBBSyB0eXBlLicsIHsgZXJyIH0pO1xyXG4gICAgfVxyXG4gIH1cclxuICByZXR1cm4gUHJvbWlzZS5yZXNvbHZlKCk7XHJcbn1cclxuXHJcbmFzeW5jIGZ1bmN0aW9uIHByZXBhcmVGb3JNb2RkaW5nKGFwaTogdHlwZXMuSUV4dGVuc2lvbkFwaSwgZGlzY292ZXJ5OiB0eXBlcy5JRGlzY292ZXJ5UmVzdWx0KSB7XHJcbiAgY29uc3QgcGNiYW5rcyA9IHBhdGguam9pbihkaXNjb3ZlcnkucGF0aCwgJ0dBTUVEQVRBJywgJ1BDQkFOS1MnKTtcclxuICBjb25zdCBlbnN1cmVEaXIgPSAoZGlyOiBzdHJpbmcpID0+IGZzLmVuc3VyZURpcldyaXRhYmxlQXN5bmMocGF0aC5qb2luKGRpc2NvdmVyeS5wYXRoLCBkaXIpKTtcclxuICByZXR1cm4gUHJvbWlzZS5hbGwoW2Vuc3VyZURpcihtb2RQYXRoKCkpLCBlbnN1cmVEaXIoZGVwcmVjYXRlZE1vZFBhdGgoKSldKVxyXG4gICAgLnRoZW4oKCkgPT4gZnMucmVuYW1lQXN5bmMocGF0aC5qb2luKHBjYmFua3MsICdESVNBQkxFTU9EUy5UWFQnKSwgcGF0aC5qb2luKHBjYmFua3MsICdFTkFCTEVNT0RTLlRYVCcpKVxyXG4gICAgICAuY2F0Y2goZXJyID0+IGVyci5jb2RlID09PSAnRU5PRU5UJyA/IFByb21pc2UucmVzb2x2ZSgpIDogUHJvbWlzZS5yZWplY3QoZXJyKSkpO1xyXG59XHJcblxyXG5hc3luYyBmdW5jdGlvbiByZXF1aXJlc0xhdW5jaGVyKGdhbWVQYXRoOiBzdHJpbmcsIHN0b3JlPzogc3RyaW5nKSB7XHJcbiAgaWYgKHN0b3JlID09PSAneGJveCcpIHtcclxuICAgIHJldHVybiBQcm9taXNlLnJlc29sdmUoe1xyXG4gICAgICBsYXVuY2hlcjogJ3hib3gnLFxyXG4gICAgICBhZGRJbmZvOiB7XHJcbiAgICAgICAgYXBwSWQ6IFhCT1hfSUQsXHJcbiAgICAgICAgcGFyYW1ldGVyczogW3sgYXBwRXhlY05hbWU6ICdOb01hbnNTa3knIH1dLFxyXG4gICAgICB9LFxyXG4gICAgfSk7XHJcbiAgfSBlbHNlIHtcclxuICAgIHJldHVybiBQcm9taXNlLnJlc29sdmUodW5kZWZpbmVkKTtcclxuICB9XHJcbn1cclxuXHJcbmZ1bmN0aW9uIGdldFBha1BhdGgoYXBpOiB0eXBlcy5JRXh0ZW5zaW9uQXBpLCBnYW1lOiB0eXBlcy5JR2FtZSkge1xyXG4gIGNvbnN0IGRpc2NvdmVyeSA9IGFwaS5nZXRTdGF0ZSgpLnNldHRpbmdzLmdhbWVNb2RlLmRpc2NvdmVyZWRbZ2FtZS5pZF07XHJcbiAgaWYgKCFkaXNjb3ZlcnkgfHwgIWRpc2NvdmVyeS5wYXRoKSB7XHJcbiAgICByZXR1cm4gJy4nO1xyXG4gIH1cclxuICBjb25zdCBkYXRhUGF0aCA9IHBhdGguam9pbihkaXNjb3ZlcnkucGF0aCwgZGVwcmVjYXRlZE1vZFBhdGgoKSk7XHJcbiAgcmV0dXJuIGRhdGFQYXRoO1xyXG59XHJcblxyXG5hc3luYyBmdW5jdGlvbiB0ZXN0RGVwcmVjYXRlZFBha01vZChpbnN0cnVjdGlvbnM6IHR5cGVzLklJbnN0cnVjdGlvbltdKTogUHJvbWlzZTxib29sZWFuPiB7XHJcbiAgY29uc3QgaGFzUGFrID0gaW5zdHJ1Y3Rpb25zLnNvbWUoaW5zdCA9PiBpbnN0LnNvdXJjZSAmJiBpbnN0LnNvdXJjZS5tYXRjaCgvXFwucGFrJC9pKSk7XHJcbiAgcmV0dXJuIFByb21pc2UucmVzb2x2ZShoYXNQYWspO1xyXG59XHJcblxyXG5hc3luYyBmdW5jdGlvbiBnZXRHYW1lVmVyc2lvbihnYW1lUGF0aDogc3RyaW5nKSB7XHJcbiAgY29uc3QgZXhlVmVyc2lvbiA9IHJlcXVpcmUoJ2V4ZS12ZXJzaW9uJyk7XHJcbiAgcmV0dXJuIFByb21pc2UucmVzb2x2ZShleGVWZXJzaW9uLmdldFByb2R1Y3RWZXJzaW9uTG9jYWxpemVkKHBhdGguam9pbihnYW1lUGF0aCwgJ0JpbmFyaWVzJywgJ05NUy5leGUnKSkpO1xyXG59XHJcblxyXG5mdW5jdGlvbiBtYWluKGNvbnRleHQ6IHR5cGVzLklFeHRlbnNpb25Db250ZXh0KSB7XHJcbiAgY29udGV4dC5yZWdpc3RlckdhbWUoe1xyXG4gICAgaWQ6IEdBTUVfSUQsXHJcbiAgICBuYW1lOiAnTm8gTWFuXFwncyBTa3knLFxyXG4gICAgbWVyZ2VNb2RzOiB0cnVlLFxyXG4gICAgcXVlcnlQYXRoOiBmaW5kR2FtZSxcclxuICAgIGdldEdhbWVWZXJzaW9uLFxyXG4gICAgcXVlcnlNb2RQYXRoOiBtb2RQYXRoLFxyXG4gICAgbG9nbzogJ2dhbWVhcnQuanBnJyxcclxuICAgIGV4ZWN1dGFibGU6ICgpID0+ICdCaW5hcmllcy9OTVMuZXhlJyxcclxuICAgIHJlcXVpcmVkRmlsZXM6IFtcclxuICAgICAgJ0JpbmFyaWVzL05NUy5leGUnLFxyXG4gICAgXSxcclxuICAgIHJlcXVpcmVzTGF1bmNoZXI6IHJlcXVpcmVzTGF1bmNoZXIgYXMgYW55LFxyXG4gICAgc2V0dXA6IChkaXNjb3Zlcnk6IHR5cGVzLklEaXNjb3ZlcnlSZXN1bHQpID0+IHByZXBhcmVGb3JNb2RkaW5nKGNvbnRleHQuYXBpLCBkaXNjb3ZlcnkpIGFzIGFueSxcclxuICAgIGVudmlyb25tZW50OiB7XHJcbiAgICAgIFN0ZWFtQVBQSWQ6IFNURUFNQVBQX0lELFxyXG4gICAgfSxcclxuICAgIGRldGFpbHM6IHtcclxuICAgICAgc3RlYW1BcHBJZDogK1NURUFNQVBQX0lELFxyXG4gICAgfSxcclxuICB9KTtcclxuXHJcbiAgY29udGV4dC5yZWdpc3Rlck1vZFR5cGUoXHJcbiAgICBNT0RUWVBFX0RFUFJFQ0FURURfUEFLLFxyXG4gICAgMTAwLFxyXG4gICAgKGdhbWVJZCkgPT4gR0FNRV9JRCA9PT0gZ2FtZUlkLFxyXG4gICAgKGdhbWU6IHR5cGVzLklHYW1lKSA9PiBnZXRQYWtQYXRoKGNvbnRleHQuYXBpLCBnYW1lKSxcclxuICAgIHRlc3REZXByZWNhdGVkUGFrTW9kIGFzIGFueSxcclxuICAgIHsgZGVwbG95bWVudEVzc2VudGlhbDogZmFsc2UsIG5hbWU6ICdEZXByZWNhdGVkIFBBSycgfVxyXG4gICk7XHJcblxyXG4gIGNvbnRleHQucmVnaXN0ZXJNaWdyYXRpb24ob2xkID0+IG1pZ3JhdGUxMDEoY29udGV4dC5hcGksIG9sZCkgYXMgYW55KTtcclxuXHJcbiAgcmV0dXJuIHRydWU7XHJcbn1cclxuXHJcbm1vZHVsZS5leHBvcnRzID0ge1xyXG4gIGRlZmF1bHQ6IG1haW4sXHJcbn07XHJcbiJdfQ==

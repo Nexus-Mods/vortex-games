@@ -120,6 +120,10 @@ export const GAME_ID = 'witcher3';
 // File used by some mods to define hotkey/input mapping
 export const INPUT_XML_FILENAME = 'input.xml';
 
+// The original file is backed up on deployment - we will use the backup
+//  during merges if it exists.
+export const VORTEX_BACKUP_TAG = '.vortex_backup';
+
 // The W3MM menu mod pattern seems to enforce a modding pattern
 //  where {filename}.part.txt holds a diff of what needs to be
 //  added to the original file - we're going to use this pattern as well.
@@ -130,6 +134,8 @@ export const MERGE_INV_MANIFEST = 'MergeInventory.xml';
 export const LOAD_ORDER_FILENAME = 'mods.settings';
 export const I18N_NAMESPACE = 'game-witcher3';
 export const CONFIG_MATRIX_REL_PATH = path.join('bin', 'config', 'r4game', 'user_config_matrix', 'pc');
+export const CONFIG_MATRIX_FILES = ['audio', 'display', 'gameplay', 'gamma', 'graphics',
+  'graphicsdx11', 'hdr', 'hidden', 'hud', 'input', 'localization'];
 
 export const W3_TEMP_DATA_DIR = path.join(util.getVortexPath('temp'), 'W3TempData');
 
@@ -138,7 +144,7 @@ export const LOCKED_PREFIX = 'mod0000_';
 
 export const DO_NOT_DISPLAY = ['communitypatch-base'];
 // minimatch is supposed to be case-insensitive, but it's not working for some reason...
-export const DO_NOT_DEPLOY = ['README.TXT'];
+export const DO_NOT_DEPLOY = ['README.TXT', `**/*${PART_SUFFIX.toUpperCase()}`];
 export const SCRIPT_MERGER_FILES = ['WitcherScriptMerger.exe'];
 
 export const NON_SORTABLE = ['witcher3menumoddocuments', 'collection'];
