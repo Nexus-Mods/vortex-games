@@ -92,6 +92,8 @@ function requiresLauncher(gamePath, store) {
   if (store !== undefined) { // early out if the app gave us the storeid
     if (store === 'xbox') {
       return Promise.resolve(xboxSettings);
+    if (store === 'epic') {
+      return Promise.resolve(epicSettings);
     } else {
       return Promise.resolve(undefined);
     }
