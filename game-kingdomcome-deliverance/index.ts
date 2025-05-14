@@ -14,6 +14,9 @@ import { transformId } from './util';
 const I18N_NAMESPACE = `game-${GAME_ID}`;
 
 const STEAM_APPID = '379430';
+const EPIC_APPID = 'Eel';
+const XBOX_APPID = 'DeepSilver.KingdomComeDeliverance';
+const XBOXEXECNAME = 'App';
 
 const _MODS_STATE = {
   enabled: [],
@@ -22,10 +25,56 @@ const _MODS_STATE = {
 }
 
 function findGame() {
-  return util.steam.findByAppId(STEAM_APPID)
-    .catch(() => util.epicGamesLauncher.findByAppId('Eel'))
+  return vortex_api_1.util.GameStoreHelper.findByAppId([STEAM_APPID, XBOX_APPID, EPIC_APPID])
     .then(game => game.gamePath);
 }
+
+async function requiresLauncher(gamePath, store) {
+  if (store === 'xbox') {
+      return Promise.resolve({
+          launcher: 'xbox',
+          addInfo: {
+              appId: XBOX_APPID,
+              parameters: [{ appExecName: XBOXEXECNAME }],
+          },
+      });
+  }
+ if (store === 'epic') {
+    return Promise.resolve({
+        launcher: 'epic',
+        addInfo: {
+            appId: EPIC_APPID,
+        },
+    });
+  }
+  return Promise.resolve(undefined);
+}
+
+function getExecutable(discoveredPath) {
+  const steamPath = path_1.default.join('Bin', 'Win64', 'KingdomCome.exe');
+  const epicPath = path_1.default.join('Bin', 'Win64MasterMasterEpicPGO', 'KingdomCome.exe');
+  const xboxPath = path_1.default.join('gamelaunchhelper.exe');
+  const isCorrectExec = (exec) => {
+    try {
+      vortex_api_1.fs.statSync(path_1.default.join(discoveredPath, exec));
+      return true;
+    }
+    catch (err) {
+      return false;
+    }
+  };
+  if (isCorrectExec(epicPath) {
+    return epicPath;
+  };
+  if (isCorrectExec(xboxPath)) {
+    return xboxPath;
+  };
+  if (isCorrectExec(steamPath)) {
+    return steamPath;
+  };
+  return steamPath;
+}
+
 
 function prepareForModding(context, discovery) {
   const state = context.api.store.getState();
@@ -285,30 +334,23 @@ function main(context: types.IExtensionContext) {
     queryPath: findGame,
     queryModPath: modsPath,
     logo: 'gameart.jpg',
-    executable: (discoveredPath) => {
-      try {
-        const epicPath = path.join('Bin', 'Win64MasterMasterEpicPGO', 'KingdomCome.exe')
-        fs.statSync(path.join(discoveredPath, epicPath));
-        return epicPath;
-      } catch (err) {
-        return path.join('Bin', 'Win64', 'KingdomCome.exe');
-      }
-    },
+    executable: getExecutable,
     requiredFiles: [
       'Data/Levels/rataje/level.pak',
     ],
     setup: (discovery) => prepareForModding(context, discovery),
     //requiresCleanup: true, // Theoretically not needed, as we look for several file extensions when
                              //  checking whether a mod is valid or not. This may change.
-    requiresLauncher: () => util.epicGamesLauncher.isGameInstalled('Eel')
-      .then(epic => epic
-        ? { launcher: 'epic', addInfo: 'Eel' }
-        : undefined),
+    requiresLauncher: requiresLauncher,
     environment: {
       SteamAPPId: STEAM_APPID,
+      XboxAPPId: XBOX_APPID,
+      EpicAPPId: EPIC_APPID,
     },
     details: {
       steamAppId: +STEAM_APPID,
+      xboxAppId: XBOX_APPID,
+      epicAppId: EPIC_APPID,
     },
   });
 
