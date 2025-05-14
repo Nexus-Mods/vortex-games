@@ -76,19 +76,19 @@ async function requiresLauncher(gamePath, store) {
     }
   };
   if (store !== undefined) {
-    if (store === 'xbox') return xboxSettings;
-    if (store === 'epic') return epicSettings;
-    else return undefined;
+    if (store === 'xbox') return Promise.resolve(xboxSettings);
+    if (store === 'epic') return Promise.resolve(epicSettings);
+    else return Promise.resolve(undefined);
   }
   // Store type isn't detected. Try and match the Xbox path. 
   try {
     const game = await util.GameStoreHelper.findByAppId([MS_ID], 'xbox');
     const normalizeFunc = await util.getNormalizeFunc(gamePath);
-    if (normalizeFunc(game.gamePath) === normalizeFunc(gamePath)) return xboxSettings;
-    else return undefined;
+    if (normalizeFunc(game.gamePath) === normalizeFunc(gamePath)) return Promise.resolve(xboxSettings);
+    else return Promise.resolve(undefined);
   }
   catch(err) {
-    return undefined;
+    return Promise.resolve(undefined);
   }
 }
 
