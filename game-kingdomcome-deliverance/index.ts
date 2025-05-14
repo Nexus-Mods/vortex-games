@@ -25,7 +25,7 @@ const _MODS_STATE = {
 }
 
 function findGame() {
-  return vortex_api_1.util.GameStoreHelper.findByAppId([STEAM_APPID, XBOX_APPID, EPIC_APPID])
+  return util.GameStoreHelper.findByAppId([STEAM_APPID, XBOX_APPID, EPIC_APPID])
     .then(game => game.gamePath);
 }
 
@@ -51,12 +51,12 @@ async function requiresLauncher(gamePath, store) {
 }
 
 function getExecutable(discoveredPath) {
-  const steamPath = path_1.default.join('Bin', 'Win64', 'KingdomCome.exe');
-  const epicPath = path_1.default.join('Bin', 'Win64MasterMasterEpicPGO', 'KingdomCome.exe');
-  const xboxPath = path_1.default.join('gamelaunchhelper.exe');
+  const steamPath = path.join('Bin', 'Win64', 'KingdomCome.exe');
+  const epicPath = path.join('Bin', 'Win64MasterMasterEpicPGO', 'KingdomCome.exe');
+  const xboxPath = path.join('gamelaunchhelper.exe');
   const isCorrectExec = (exec) => {
     try {
-      vortex_api_1.fs.statSync(path_1.default.join(discoveredPath, exec));
+      fs.statSync(path.join(discoveredPath, exec));
       return true;
     }
     catch (err) {
