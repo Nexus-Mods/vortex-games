@@ -11,8 +11,8 @@ const _DIRECTORY_STRUCT = [];
 const GOG_ID = '1450711444';
 const STEAM_ID = '262060';
 
-const GOG_EXE = '_windowsnosteam/Darkest.exe';
-const STEAM_EXE = '_windows/Darkest.exe';
+const GOG_EXE = '_windowsnosteam/win64/Darkest.exe';
+const STEAM_EXE = '_windows/win64/Darkest.exe';
 
 // Nexus Mods id for the game.
 const GAME_ID = 'darkestdungeon';
