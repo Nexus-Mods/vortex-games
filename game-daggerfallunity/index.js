@@ -45,19 +45,11 @@ function testSupported(files, gameId) {
   const notSupported = () => Promise.resolve({ supported: false, requiredFiles: [], });
   const dfmods = files.filter(file => path.extname(file) === DFMOD_EXT);
 
-  // No point proceeding if we only find 0-1 dfmods.
-  if (dfmods.length < 2)
+  // No point proceeding if we find 0 dfmods.
+  if (dfmods.length < 1)
     return notSupported();
 
-  // Game extension only supports Windows currently, so if we are able to find
-  //  the 'windows' substring within the filepath, we assume that's the mod
-  //  copy that's supposed to be deployed.
-  if (dfmods.find(mod => path.dirname(mod).toLowerCase().indexOf('windows') !== -1) === undefined)
-    return notSupported();
-
-  const supported = ((dfmods.length > 1) && (gameId === GAME_ID))
-    ? (new Set(dfmods.map(mod => path.basename(mod))).size !== dfmods.length)
-    : false;
+  const supported = dfmods.length > 0 && gameId === GAME_ID
   
   return Promise.resolve({
     supported,
@@ -69,35 +61,33 @@ function install(files, destinationPath) {
   const result = {
     instructions: [],
   };
+
   const dfmods = files.filter(file => path.extname(file) === DFMOD_EXT)
                       .map(mod => path.basename(mod));
   let filtered = files.filter(file => !file.endsWith(path.sep));
-  filtered.forEach(file => {
-    if (dfmods.indexOf(path.basename(file)) !== -1) {
-      if (path.dirname(file).toLowerCase().indexOf('windows') !== -1) {
-        let targetPath;
 
-        //Check if the mod targets the DFU mods folder
-        if(path.dirname(file).toLowerCase().indexOf('mods') !== -1)
-        {
-          targetPath = path.basename(file);
-        }
-        else //mod is in root of the .zip, which is wrong
-        {
-          targetPath = path.join('Mods', path.basename(file));
-        }
-        
+  filtered.forEach(file => {
+    let pathLower = path.dirname(file).toLowerCase();
+
+    const isWindows = pathLower.indexOf('windows') !== -1;
+    const isLinux = pathLower.indexOf('linux') !== -1;
+    const isOSX = pathLower.indexOf('osx') !== -1;
+
+    // Only handle files that are either in a Windows folder or in no OS specific folder
+    const doProcessForWindows = isWindows || (!isLinux && !isOSX);
+
+    if (dfmods.indexOf(path.basename(file)) !== -1) {
+      if (doProcessForWindows) {
         // This is the dfmod we want to install.
         result.instructions.push({
           type: 'copy',
           source: file,
-          destination: targetPath,
+          destination: path.join('Mods', path.basename(file)),
         });
       }
     } else {
-      // Non-dfmod file, might be needed - going to include it just in case
-      //  (also only if it's inside the windows folder)
-      if (path.dirname(file).toLowerCase().indexOf('windows') !== -1) {
+      // Non-dfmod file, most likely other resources like texture overrides or quest packs etc.
+      if (doProcessForWindows) {
         result.instructions.push({
           type: 'copy',
           source: file,
