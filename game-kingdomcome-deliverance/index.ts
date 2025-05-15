@@ -63,7 +63,7 @@ function getExecutable(discoveredPath) {
       return false;
     }
   };
-  if (isCorrectExec(epicPath) {
+  if (isCorrectExec(epicPath)) {
     return epicPath;
   };
   if (isCorrectExec(xboxPath)) {
@@ -341,7 +341,7 @@ function main(context: types.IExtensionContext) {
     setup: (discovery) => prepareForModding(context, discovery),
     //requiresCleanup: true, // Theoretically not needed, as we look for several file extensions when
                              //  checking whether a mod is valid or not. This may change.
-    requiresLauncher: requiresLauncher,
+    requiresLauncher: requiresLauncher as any,
     environment: {
       SteamAPPId: STEAM_APPID,
       XboxAPPId: XBOX_APPID,
