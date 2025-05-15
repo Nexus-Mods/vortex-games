@@ -172,7 +172,7 @@ function main(context) {
       EpicAPPId: EPIC_ID,
     },
     details: {
-      steamAppId: STEAM_ID,
+      steamAppId: +STEAM_ID,
       gogAppId: GOG_ID,
       xboxAppId: MS_ID,
       epicAppId: EPIC_ID,
