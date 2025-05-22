@@ -4,14 +4,15 @@ import { actions, fs, selectors, types, util } from 'vortex-api';
 
 import * as React from 'react';
 
-import { setPrefixOffset, setUDF } from './actions';
+import { setPrefixOffset } from './actions';
 import { reducer } from './reducers';
 
 import { GAME_ID, gameExecutable, MOD_INFO, launcherSettingsFilePath, DEFAULT_LAUNCHER_SETTINGS } from './common';
 import { deserialize, serialize, validate } from './loadOrder';
 import { migrate020, migrate100, migrate1011 } from './migrations';
 import { ILoadOrderEntry, IProps } from './types';
-import { ensureLOFile, genProps, getModName, makePrefix, reversePrefix, toBlue } from './util';
+import { genProps, getModName, getModsPath, makePrefix, reversePrefix, selectUDF, toBlue } from './util';
+import Settings from './Settings';
 
 const STEAM_ID = '251570';
 const STEAM_DLL = 'steamclient64.dll';
@@ -89,84 +90,11 @@ async function findGame() {
     .then(game => game.gamePath);
 }
 
-function parseAdditionalParameters(parameters: string) {
-  const udfParam = parameters.split('-').find(param => param.startsWith('UserDataFolder='));
-  const udf = udfParam ? udfParam.split('=')?.[1]?.trimEnd?.()?.replace?.(/\"/g, '') : undefined;
-  return (udf && path.isAbsolute(udf)) ? udf : undefined;
-}
-
 async function prepareForModding(context: types.IExtensionContext,
                                  discovery: types.IDiscoveryResult) {
-  const requiresRestart = util.getSafe(context.api.getState(),
-    ['settings', '7daystodie', 'udf'], undefined) === undefined;
-  const launcherSettings = launcherSettingsFilePath();
-  const relaunchExt = () => {
-    return context.api.showDialog('info', 'Restart Required', {
-      text: 'The extension requires a restart to complete the UDF setup. '
-          + 'The extension will now exit - please re-activate it via the games page or dashboard.',
-    }, [ { label: 'Restart Extension' } ])
-    .then(() => {
-      return Promise.reject(new util.ProcessCanceled('Restart required'));
-    });
-  }
-  const selectUDF = async () => {
-    const res = await context.api.showDialog('info', 'Choose User Defined Folder', {
-      text: 'The modding pattern for 7DTD is changing. The Mods path inside the game directory '
-          + 'is being deprecated and mods located in the old path will no longer work in the near '
-          + 'future. Please select your User Defined Folder (UDF) - Vortex will deploy to this new location. '
-          + 'Please NEVER set your UDF path to Vortex\'s staging folder.',
-    },
-    [
-      { label: 'Cancel' },
-      { label: 'Select UDF' },
-    ]);
-    if (res.action !== 'Select UDF') {
-      return Promise.reject(new util.ProcessCanceled('Cannot proceed without UFD'));
-    }
-    await fs.ensureDirWritableAsync(path.dirname(launcherSettings));
-    await ensureLOFile(context);
-    const directory = await context.api.selectDir({
-      title: 'Select User Data Folder',
-      defaultPath: path.join(path.dirname(launcherSettings)),
-    });
-    if (!directory) {
-      return Promise.reject(new util.ProcessCanceled('Cannot proceed without UFD'));
-    }
-
-    const segments = directory.toLowerCase().split(path.sep);
-    if (segments.includes('vortex')) {
-      return context.api.showDialog('info', 'Invalid User Defined Folder', {
-        text: 'The UDF cannot be set inside Vortex directories. Please select a different folder.',
-      }, [
-        { label: 'Try Again' }
-      ]).then(() => prepareForModding(context, discovery));
-    }
-    await fs.ensureDirWritableAsync(path.join(directory, 'Mods'));
-    const launcher = DEFAULT_LAUNCHER_SETTINGS;
-    launcher.DefaultRunConfig.AdditionalParameters = `-UserDataFolder="${directory}"`;
-    const launcherData = JSON.stringify(launcher, null, 2);
-    await fs.writeFileAsync(launcherSettings, launcherData, { encoding: 'utf8' });
-    context.api.store.dispatch(setUDF(directory));
-    return (requiresRestart) ? relaunchExt() : Promise.resolve();
-  };
-
-  try {
-    const data = await fs.readFileAsync(launcherSettings, { encoding: 'utf8' });
-    const settings = JSON.parse(data);
-    if (settings?.DefaultRunConfig?.AdditionalParameters !== undefined) {
-      const udf = parseAdditionalParameters(settings.DefaultRunConfig.AdditionalParameters);
-      if (!!udf) {
-        await fs.ensureDirWritableAsync(path.join(udf, 'Mods'));
-        await ensureLOFile(context);
-        context.api.store.dispatch(setUDF(udf));
-        return (requiresRestart) ? relaunchExt() : Promise.resolve();
-      } else {
-        return selectUDF();
-      }
-    }
-  } catch (err) {
-    return selectUDF();
-  }
+  const isUDFSet = util.getSafe(context.api.getState(),
+    ['settings', '7daystodie', 'udf'], undefined) != null;
+  return (!isUDFSet) ? selectUDF(context) : Promise.resolve();
 }
 
 async function installContent(files: string[],
@@ -311,19 +239,13 @@ function InfoPanelWrap(props: { api: types.IExtensionApi, profileId: string }) {
 function main(context: types.IExtensionContext) {
   context.registerReducer(['settings', '7daystodie'], reducer);
 
-  const getModsPath = () => {
-    const state = context.api.getState();
-    const udf = util.getSafe(state, ['settings', '7daystodie', 'udf'], undefined);
-    return udf !== undefined ? path.join(udf, 'Mods') : 'Mods';
-  }
-
   context.registerGame({
     id: GAME_ID,
     name: '7 Days to Die',
     mergeMods: (mod) => toLOPrefix(context, mod),
     queryPath: toBlue(findGame),
     supportedTools: [],
-    queryModPath: getModsPath,
+    queryModPath: () => getModsPath(context.api),
     logo: 'gameart.jpg',
     executable: gameExecutable,
     requiredFiles: [
@@ -355,6 +277,14 @@ function main(context: types.IExtensionContext) {
         <InfoPanelWrap api={context.api} profileId={profileId} />
       );
     }) as any,
+  });
+
+  context.registerSettings('Mods', Settings, () => ({
+    onSelectUDF: () => selectUDF(context).catch(() => null),
+  }), () => {
+    const state = context.api.getState();
+    const activeGame = selectors.activeGameId(state);
+    return activeGame === GAME_ID;
   });
 
   context.registerAction('fb-load-order-icons', 150, 'loot-sort', {},
