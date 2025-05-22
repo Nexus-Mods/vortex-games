@@ -1,13 +1,93 @@
 import Bluebird from 'bluebird';
 import path from 'path';
 import turbowalk from 'turbowalk';
-import { fs, selectors, types, util } from 'vortex-api';
+import { actions, fs, selectors, types, util } from 'vortex-api';
 import { Parser } from 'xml2js';
 
-import { GAME_ID, MOD_INFO, loadOrderFilePath } from './common';
+import { setUDF } from './actions';
+
+import { DEFAULT_LAUNCHER_SETTINGS, GAME_ID, MOD_INFO, launcherSettingsFilePath, loadOrderFilePath } from './common';
 import { IProps } from './types';
 
-const PARSER = new Parser({explicitRoot: false});
+const PARSER = new Parser({ explicitRoot: false });
+
+export async function purge(api: types.IExtensionApi): Promise<void> {
+  return new Promise<void>((resolve, reject) =>
+    api.events.emit('purge-mods', true, (err) => err ? reject(err) : resolve()));
+}
+
+export async function deploy(api: types.IExtensionApi): Promise<void> {
+  return new Promise<void>((resolve, reject) =>
+    api.events.emit('deploy-mods', (err) => err ? reject(err) : resolve()));
+}
+
+export const relaunchExt = (api: types.IExtensionApi) => {
+  return api.showDialog('info', 'Restart Required', {
+    text: 'The extension requires a restart to complete the UDF setup. '
+        + 'The extension will now exit - please re-activate it via the games page or dashboard.',
+  }, [ { label: 'Restart Extension' } ])
+  .then(async () => {
+    await purge(api);
+    const batched = [
+      actions.setDeploymentNecessary(GAME_ID, true),
+      actions.setNextProfile(undefined),
+    ];
+    util.batchDispatch(api.store, batched);
+  });
+}
+
+export const selectUDF = async (context: types.IExtensionContext) => {
+  const launcherSettings = launcherSettingsFilePath();
+  const res = await context.api.showDialog('info', 'Choose User Data Folder', {
+    text: 'The modding pattern for 7DTD is changing. The Mods path inside the game directory '
+      + 'is being deprecated and mods located in the old path will no longer work in the near '
+      + 'future. Please select your User Data Folder (UDF) - Vortex will deploy to this new location. '
+      + 'Please NEVER set your UDF path to Vortex\'s staging folder.',
+  },
+    [
+      { label: 'Cancel' },
+      { label: 'Select UDF' },
+    ]);
+  if (res.action !== 'Select UDF') {
+    return Promise.reject(new util.ProcessCanceled('Cannot proceed without UDF'));
+  }
+  await fs.ensureDirWritableAsync(path.dirname(launcherSettings));
+  await ensureLOFile(context);
+  let directory = await context.api.selectDir({
+    title: 'Select User Data Folder',
+    defaultPath: path.join(path.dirname(launcherSettings)),
+  });
+  if (!directory) {
+    return Promise.reject(new util.ProcessCanceled('Cannot proceed without UDF'));
+  }
+
+  const segments = directory.split(path.sep);
+  const lowered = segments.map(seg => seg.toLowerCase());
+  if (lowered[lowered.length - 1] === 'mods') {
+    segments.pop();
+    directory = segments.join(path.sep);
+  }
+  if (lowered.includes('vortex')) {
+    return context.api.showDialog('info', 'Invalid User Data Folder', {
+      text: 'The UDF cannot be set inside Vortex directories. Please select a different folder.',
+    }, [
+      { label: 'Try Again' }
+    ]).then(() => selectUDF(context));
+  }
+  await fs.ensureDirWritableAsync(path.join(directory, 'Mods'));
+  const launcher = DEFAULT_LAUNCHER_SETTINGS;
+  launcher.DefaultRunConfig.AdditionalParameters = `-UserDataFolder="${directory}"`;
+  const launcherData = JSON.stringify(launcher, null, 2);
+  await fs.writeFileAsync(launcherSettings, launcherData, { encoding: 'utf8' });
+  context.api.store.dispatch(setUDF(directory));
+  return relaunchExt(context.api);
+};
+
+export function getModsPath(api: types.IExtensionApi): string {
+  const state = api.getState();
+  const udf = util.getSafe(state, ['settings', '7daystodie', 'udf'], undefined);
+  return udf !== undefined ? path.join(udf, 'Mods') : 'Mods';
+}
 
 // We _should_ just export this from vortex-api, but I guess it's not wise to make it
 //  easy for users since we want to move away from bluebird in the future ?
@@ -37,8 +117,8 @@ export function genProps(context: types.IExtensionContext, profileId?: string): 
 }
 
 export async function ensureLOFile(context: types.IExtensionContext,
-                                   profileId?: string,
-                                   props?: IProps): Promise<string> {
+                      profileId?: string,
+                      props?: IProps): Promise<string> {
   if (props === undefined) {
     props = genProps(context, profileId);
   }
@@ -102,8 +182,8 @@ export async function getModName(modInfoPath): Promise<any> {
     const xmlData = await fs.readFileAsync(modInfoPath);
     modInfo = await PARSER.parseStringPromise(xmlData);
     const modName = modInfo?.DisplayName?.[0]?.$?.value
-                 || modInfo?.ModInfo?.[0]?.Name?.[0]?.$?.value
-                 || modInfo?.Name?.[0]?.$?.value;
+      || modInfo?.ModInfo?.[0]?.Name?.[0]?.$?.value
+      || modInfo?.Name?.[0]?.$?.value;
     return (modName !== undefined)
       ? Promise.resolve(modName)
       : Promise.reject(new util.DataInvalid('Unexpected modinfo.xml format'));
@@ -119,12 +199,12 @@ export async function getModInfoFiles(basePath: string): Promise<string[]> {
       !entry.isDirectory && path.basename(entry.filePath) === MOD_INFO);
     filePaths = filePaths.concat(filtered.map(entry => entry.filePath));
   }, { recurse: true, skipLinks: true })
-  .catch(err => ['ENOENT', 'ENOTFOUND'].includes(err.code)
-    ? Promise.resolve() : Promise.reject(err))
-  .then(() => Promise.resolve(filePaths));
+    .catch(err => ['ENOENT', 'ENOTFOUND'].includes(err.code)
+      ? Promise.resolve() : Promise.reject(err))
+    .then(() => Promise.resolve(filePaths));
 }
 
-export interface IAttribute extends IXmlNode<{ id: string, type: string, value: string }> {}
+export interface IAttribute extends IXmlNode<{ id: string, type: string, value: string }> { }
 export interface IXmlNode<AttributeT extends object> {
   $: AttributeT;
 }
