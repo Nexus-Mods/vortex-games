@@ -62,6 +62,7 @@ export async function walkPath(dirPath: string, walkOptions?: IWalkOptions): Pro
 export async function deleteFolder(dirPath: string, walkOptions?: IWalkOptions): Promise<void> {
   try {
     const entries = await walkPath(dirPath, walkOptions);
+    entries.sort((a, b) => b.filePath.length - a.filePath.length);
     for (const entry of entries) {
       await fs.removeAsync(entry.filePath);
     }
