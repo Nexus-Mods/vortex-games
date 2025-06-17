@@ -61,8 +61,11 @@ export const doMergeXML = (api: types.IExtensionApi) => async (modFilePath: stri
     await fs.ensureDirWritableAsync(path.join(targetMergeDir, CONFIG_MATRIX_REL_PATH));
     return fs.writeFileAsync(path.join(targetMergeDir, CONFIG_MATRIX_REL_PATH, path.basename(modFilePath)), xml);
   } catch (err) {
-    const state = api.store.getState();
-    const activeProfile = selectors.activeProfile(state);
+    const activeProfile = selectors.activeProfile(api.store.getState());
+    if (!activeProfile?.id) {
+      api.showErrorNotification('Failed to merge XML data', 'No active profile found', { allowReport: false });
+      return Promise.resolve();
+    }
     const loadOrder = getPersistentLoadOrder(api);
     const extendedErr = util.deepMerge({ modFilePath, targetMergeDir, message: err.message, stack: err.stack }, err);
     api.showErrorNotification('Failed to merge XML data', extendedErr, {
