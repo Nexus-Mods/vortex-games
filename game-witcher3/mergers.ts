@@ -37,6 +37,10 @@ export const doMergeXML = (api: types.IExtensionApi) => async (modFilePath: stri
       return Promise.resolve();
     }
     const currentInputFile = await readXMLInputFile(api, modFilePath, targetMergeDir);
+    if (!currentInputFile) {
+      // If the current input file is not found, we cannot merge, so we just return.
+      return Promise.resolve();
+    }
     const mergedXmlData = await parseStringPromise(currentInputFile);
     modGroups.forEach(modGroup => {
       const gameGroups = mergedXmlData?.UserConfig?.Group;
@@ -111,25 +115,22 @@ async function readXMLInputFile(api: types.IExtensionApi, modFilePath: string, m
   const mergedFilePath = path.join(mergeDirPath, CONFIG_MATRIX_REL_PATH, path.basename(modFilePath));
   const backupFilePath = gameInputFilepath + VORTEX_BACKUP_TAG;
   try {
+    let inputFileData;
     if (await fileExists(mergedFilePath)) {
-      return fs.readFileAsync(mergedFilePath);
+      inputFileData = fs.readFileAsync(mergedFilePath);
+    } else if (await fileExists(backupFilePath)) {
+      inputFileData = fs.readFileAsync(backupFilePath);
+    } else {
+      inputFileData = fs.readFileAsync(gameInputFilepath);
     }
-    if (await fileExists(backupFilePath)) {
-      return fs.readFileAsync(backupFilePath);
-    }
-    return fs.readFileAsync(gameInputFilepath);
+    return inputFileData;
   } catch (err) {
     const res = await api.showDialog('error', 'Failed to read merged/native xml file', {
-      text: 'The original/native XML file is missing. Would you like to use the mod file instead?',
+      text: 'A native XML file is missing. Please verify your game files through the game store client.',
     }, [
-      { label: 'Use Mod File' },
-      { label: 'Skip', default: true },
+      { label: 'Close', default: true },
     ], 'w3-xml-merge-fail');
-    if (res.action === 'Use Mod File') {
-      return fs.readFileAsync(modFilePath);
-    } else {
-      return Promise.resolve('');
-    }
+    return Promise.resolve(null);
   }
 }
 
