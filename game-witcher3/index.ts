@@ -17,7 +17,7 @@ import { DO_NOT_DEPLOY, GAME_ID, getLoadOrderFilePath,
 } from './common';
 
 import { testDLC, testTL } from './modTypes';
-import { canMergeXML, doMergeXML, canMergeSettings, doMergeSettings } from './mergers';
+import { canMergeXML, doMergeXML } from './mergers';
 
 import { registerActions } from './iconbarActions';
 import { PriorityManager } from './priorityManager';
