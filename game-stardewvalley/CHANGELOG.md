@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 
 ## [0.3.6] - 2025-08-12
 
-- Added Xbox (Game Pass) app ID to discovery
+- Added Xbox (Game Pass) app ID to discovery - ChemBoy1
 
 ## [0.3.0] - 2024-04-25
 
