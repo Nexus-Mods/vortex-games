@@ -113,7 +113,7 @@ class StardewValley implements types.IGame {
    */
   public queryPath = toBlue(async () => {
     // check Steam
-    const game = await util.GameStoreHelper.findByAppId(['413150', '1453375253']);
+    const game = await util.GameStoreHelper.findByAppId(['413150', '1453375253', 'ConcernedApe.StardewValleyPC']);
     if (game)
       return game.gamePath;
 

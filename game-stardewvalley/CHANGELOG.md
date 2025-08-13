@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.3.6] - 2025-08-12
+
+- Added Xbox (Game Pass) app ID to discovery - ChemBoy1
+
 ## [0.3.0] - 2024-04-25
 
 - Improved detection of mod configuration files
