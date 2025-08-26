@@ -13,6 +13,7 @@ const IGNORED_FILES = [ path.join('**', 'PersistantSubgraphInfoAndOffsetData.txt
 const MS_ID = 'BethesdaSoftworks.Fallout4-PC';
 const GOG_ID = '1998527297';
 const EPIC_ID = '61d52ce4d09d41e48800c22784d13ae8';
+const STEAM_ID = '377160';
 
 let tools = [
   {
@@ -58,18 +59,37 @@ let tools = [
   }
 ];
 
-function requiresLauncher(gamePath) {
-  return util.GameStoreHelper.findByAppId([MS_ID], 'xbox')
-    .then(() => Promise.resolve({
-      launcher: 'xbox',
-      addInfo: {
-        appId: MS_ID,
-        parameters: [
-          { appExecName: 'Game' },
-        ],
-      }
-    }))
-    .catch(err => Promise.resolve(undefined));
+async function requiresLauncher(gamePath, store) {
+  const xboxSettings = {
+    launcher: 'xbox',
+    addInfo: {
+      appId: MS_ID,
+      parameters: [
+        { appExecName: 'Game' },
+      ],
+    }
+  };
+  const epicSettings = {
+    launcher: 'epic',
+    addInfo: {
+      appId: EPIC_ID,
+    }
+  };
+  if (store !== undefined) {
+    if (store === 'xbox') return Promise.resolve(xboxSettings);
+    if (store === 'epic') return Promise.resolve(epicSettings);
+    else return Promise.resolve(undefined);
+  }
+  // Store type isn't detected. Try and match the Xbox path. 
+  try {
+    const game = await util.GameStoreHelper.findByAppId([MS_ID], 'xbox');
+    const normalizeFunc = await util.getNormalizeFunc(gamePath);
+    if (normalizeFunc(game.gamePath) === normalizeFunc(gamePath)) return Promise.resolve(xboxSettings);
+    else return Promise.resolve(undefined);
+  }
+  catch(err) {
+    return Promise.resolve(undefined);
+  }
 }
 
 function main(context) {
@@ -93,11 +113,16 @@ function main(context) {
     ],
     requiresLauncher,
     environment: {
-      SteamAPPId: '377160',     
+      SteamAPPId: STEAM_ID,
+      GogAPPId: GOG_ID,
+      XboxAPPId: MS_ID,
+      EpicAPPId: EPIC_ID,   
     },
     details: {
-      steamAppId: 377160,
+      steamAppId: +STEAM_ID,
       gogAppId: GOG_ID,
+      xboxAppId: MS_ID,
+      epicAppId: EPIC_ID,
       ignoreConflicts: IGNORED_FILES,
       compatibleDownloads: ['fallout4london'],
       hashFiles: [
