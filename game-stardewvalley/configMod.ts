@@ -23,10 +23,19 @@ export function registerConfigMod(context: types.IExtensionContext) {
     });
 }
 
+const shouldSuppressSync = (api: types.IExtensionApi) => {
+  const state = api.getState();
+  const suppressOnActivities = ['installing_dependencies'];
+  const isActivityRunning = (activity: string) => util.getSafe(state, ['session', 'base', 'activity', activity], []).length > 0;
+  const suppressingActivities = suppressOnActivities.filter(activity => isActivityRunning(activity));
+  const suppressing = suppressingActivities.length > 0;
+  return suppressing;
+}
+
 async function onSyncModConfigurations(api: types.IExtensionApi, silent?: boolean): Promise<void> {
   const state = api.getState();
   const profile = selectors.activeProfile(state);
-  if (profile?.gameId !== GAME_ID) {
+  if (profile?.gameId !== GAME_ID || shouldSuppressSync(api)) {
     return;
   }
   const smapiTool: types.IDiscoveredTool = findSMAPITool(api);
