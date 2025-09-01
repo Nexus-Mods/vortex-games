@@ -31,7 +31,6 @@ async function onSyncModConfigurations(api: types.IExtensionApi, silent?: boolea
   }
   const smapiTool: types.IDiscoveredTool = findSMAPITool(api);
   if (!smapiTool?.path) {
-    api.showErrorNotification('SMAPI is not installed/configured', 'This feature requires Vortex to know the location of SMAPI. Please ensure that SMAPI is at least configured as a tool in Vortex.', { allowReport: false });
     return;
   }
   const mergeConfigs = util.getSafe(state, ['settings', 'SDV', 'mergeConfigs', profile.id], false);
