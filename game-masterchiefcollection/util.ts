@@ -40,6 +40,10 @@ export async function applyToManifest(api: types.IExtensionApi, apply: boolean) 
   } else if (!apply && hasStagingFolderEntry) {
     lines.splice(lines.indexOf(stagingPath), 1);
   }
-  await fs.ensureDirWritableAsync(path.dirname(MOD_MANIFEST_FILE_PATH));
-  await fs.writeFileAsync(MOD_MANIFEST_FILE_PATH, lines.filter(line => !!line).join('\r\n'));
+  try {
+    await fs.ensureDirWritableAsync(path.dirname(MOD_MANIFEST_FILE_PATH));
+    await fs.writeFileAsync(MOD_MANIFEST_FILE_PATH, lines.filter(line => !!line).join('\r\n'));
+  } catch (err) {
+    api.showErrorNotification('Failed to write mod manifest file', err, { allowReport: err.code !== 'EPERM' });
+  }
 }
