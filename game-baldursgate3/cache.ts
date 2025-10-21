@@ -7,8 +7,7 @@ import { listPackage } from './divineWrapper';
 import { IPakInfo } from './types';
 import { extractPakInfoImpl, logDebug } from './util';
 
-import LRU from 'lru-cache';
-import { setTimeout } from 'timers/promises';
+import { LRUCache } from 'lru-cache';
 
 export interface ICacheEntry {
   lastModified: number;
@@ -19,7 +18,7 @@ export interface ICacheEntry {
   mod?: types.IMod;
 }
 
-type IPakMap = LRU<string, ICacheEntry>;
+type IPakMap = LRUCache<string, ICacheEntry>;
 export default class PakInfoCache {
   private static instance: PakInfoCache = null;
   public static getInstance(api: types.IExtensionApi): PakInfoCache {
@@ -36,7 +35,7 @@ export default class PakInfoCache {
   constructor(api: types.IExtensionApi) {
     // 700 should be enough for everyone I hope.
     this.mApi = api;
-    this.mCache = new LRU<string, ICacheEntry>({ max: 700 });
+    this.mCache = new LRUCache<string, ICacheEntry>({ max: 700 });
     this.load(api);
   }
 
@@ -71,7 +70,7 @@ export default class PakInfoCache {
   }
 
   public reset() {
-    this.mCache = new LRU<string, ICacheEntry>({ max: 700 });
+    this.mCache = new LRUCache<string, ICacheEntry>({ max: 700 });
     this.save();
   }
 
@@ -86,7 +85,9 @@ export default class PakInfoCache {
     const cachePath = path.join(path.dirname(staging), 'cache', profileId + '.json');
     try {
       await fs.ensureDirWritableAsync(path.dirname(cachePath));
-      await util.writeFileAtomic(cachePath, JSON.stringify(this.mCache.dump()));
+      // Convert cache entries to array for serialization
+      const cacheData = Array.from(this.mCache.entries());
+      await util.writeFileAtomic(cachePath, JSON.stringify(cacheData));
     } catch (err) {
       log('error', 'failed to save cache', err);
       return;
@@ -101,7 +102,13 @@ export default class PakInfoCache {
     try {
       await fs.ensureDirWritableAsync(path.dirname(cachePath));
       const data = await fs.readFileAsync(cachePath, { encoding: 'utf8' });
-      this.mCache.load(JSON.parse(data));
+      const cacheData = JSON.parse(data);
+      // Restore cache entries from array
+      if (Array.isArray(cacheData)) {
+        for (const [key, value] of cacheData) {
+          this.mCache.set(key, value);
+        }
+      }
     } catch (err) {
       if (!['ENOENT'].includes(err.code)) {
         log('error', 'failed to load cache', err);

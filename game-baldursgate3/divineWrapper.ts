@@ -99,11 +99,12 @@ async function divine(api: types.IExtensionApi,
       if (!stdout && action !== 'list-package') {
         return resolve({ stdout: '', returnCode: 2 })
       }      
-      if (['error', 'fatal'].some(x => stdout.toLowerCase().startsWith(x))) {
+      const stdoutStr = typeof stdout === 'string' ? stdout : stdout?.toString?.() ?? '';
+      if (['error', 'fatal'].some(x => stdoutStr.toLowerCase().startsWith(x))) {
         // Really?
-        return reject(new Error(`divine.exe failed: ${stdout}`));
+        return reject(new Error(`divine.exe failed: ${stdoutStr}`));
       } else  {
-        return resolve({ stdout, returnCode: 0 });
+        return resolve({ stdout: stdoutStr, returnCode: 0 });
       }
     } catch (err) {
       if (err.code === 'ENOENT') {

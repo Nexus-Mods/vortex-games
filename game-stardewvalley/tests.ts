@@ -53,6 +53,6 @@ export async function testSMAPIOutdated(api: types.IExtensionApi,
       automaticFix: () => downloadSMAPI(api, true),
       onRecheck: () => isSmapiOutdated(),
       severity: 'warning' as types.ProblemSeverity,
-    })
+    }) as any
     : Promise.resolve(undefined);
 }

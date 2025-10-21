@@ -598,7 +598,7 @@ function updateConflictInfo(api: types.IExtensionApi,
 
   const now = Date.now();
 
-  if ((now - mod.attributes?.lastSMAPIQuery ?? 0) < SMAPI_QUERY_FREQUENCY) {
+  if ((now - (mod.attributes?.lastSMAPIQuery ?? 0)) < SMAPI_QUERY_FREQUENCY) {
     return Promise.resolve();
   }
 

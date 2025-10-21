@@ -13,7 +13,7 @@ const PARSER = new Parser({ explicitRoot: false });
 
 export async function purge(api: types.IExtensionApi): Promise<void> {
   return new Promise<void>((resolve, reject) =>
-    api.events.emit('purge-mods', true, (err) => err ? reject(err) : resolve()));
+    api.events.emit('purge-mods', false, (err) => err ? reject(err) : resolve()));
 }
 
 export async function deploy(api: types.IExtensionApi): Promise<void> {
@@ -27,12 +27,17 @@ export const relaunchExt = (api: types.IExtensionApi) => {
         + 'The extension will now exit - please re-activate it via the games page or dashboard.',
   }, [ { label: 'Restart Extension' } ])
   .then(async () => {
-    await purge(api);
-    const batched = [
-      actions.setDeploymentNecessary(GAME_ID, true),
-      actions.setNextProfile(undefined),
-    ];
-    util.batchDispatch(api.store, batched);
+    try {
+      await purge(api);
+      const batched = [
+        actions.setDeploymentNecessary(GAME_ID, true),
+        actions.setNextProfile(undefined),
+      ];
+      util.batchDispatch(api.store, batched);
+    } catch (err) {
+      api.showErrorNotification('Failed to set up UDF', err);
+      return Promise.resolve();
+    }
   });
 }
 
