@@ -110,7 +110,7 @@ async function testBinariesMod(instructions: types.IInstruction[]): Promise<bool
 
 async function getGameVersion(gamePath: string) {
   const exeVersion = require('exe-version');
-  return Promise.resolve(exeVersion.getProductVersionLocalized(path.join(gamePath, BIN_PATH, 'NMS.exe')));
+  return Promise.resolve(exeVersion.getProductVersionLocalized(path.join(gamePath, EXEC)));
 }
 
 function main(context: types.IExtensionContext) {
