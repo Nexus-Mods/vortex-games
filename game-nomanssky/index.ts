@@ -7,6 +7,8 @@ const GAME_ID = 'nomanssky';
 const STEAMAPP_ID = '275850';
 const XBOX_ID = 'HelloGames.NoMansSky';
 const MODTYPE_DEPRECATED_PAK = 'nomanssky-deprecated-pak';
+const BIN_PATH = 'Binaries'
+const EXEC = path.join(BIN_PATH, 'NMS.exe');
 
 async function purge(api: types.IExtensionApi): Promise<void> {
   return new Promise<void>((resolve, reject) =>
@@ -87,14 +89,28 @@ function getPakPath(api: types.IExtensionApi, game: types.IGame) {
   return dataPath;
 }
 
+function getBinariesPath(api: types.IExtensionApi, game: types.IGame) {
+  const discovery = api.getState().settings.gameMode.discovered[game.id];
+  if (!discovery || !discovery.path) {
+    return '.';
+  }
+  const dataPath = path.join(discovery.path, BIN_PATH);
+  return dataPath;
+}
+
 async function testDeprecatedPakMod(instructions: types.IInstruction[]): Promise<boolean> {
   const hasPak = instructions.some(inst => inst.source && inst.source.match(/\.pak$/i));
   return Promise.resolve(hasPak);
 }
 
+async function testBinariesMod(instructions: types.IInstruction[]): Promise<boolean> {
+  const hasDll = instructions.some(inst => inst.source && inst.source.match(/\.dll$/i));
+  return Promise.resolve(hasDll);
+}
+
 async function getGameVersion(gamePath: string) {
   const exeVersion = require('exe-version');
-  return Promise.resolve(exeVersion.getProductVersionLocalized(path.join(gamePath, 'Binaries', 'NMS.exe')));
+  return Promise.resolve(exeVersion.getProductVersionLocalized(path.join(gamePath, EXEC)));
 }
 
 function main(context: types.IExtensionContext) {
@@ -106,9 +122,9 @@ function main(context: types.IExtensionContext) {
     getGameVersion,
     queryModPath: modPath,
     logo: 'gameart.jpg',
-    executable: () => 'Binaries/NMS.exe',
+    executable: () => EXEC,
     requiredFiles: [
-      'Binaries/NMS.exe',
+      EXEC,
     ],
     requiresLauncher: requiresLauncher as any,
     setup: (discovery: types.IDiscoveryResult) => prepareForModding(context.api, discovery) as any,
@@ -127,6 +143,15 @@ function main(context: types.IExtensionContext) {
     (game: types.IGame) => getPakPath(context.api, game),
     testDeprecatedPakMod as any,
     { deploymentEssential: false, name: 'Deprecated PAK' }
+  );
+
+  context.registerModType(
+    `${GAME_ID}-binaries`,
+    90,
+    (gameId) => GAME_ID === gameId,
+    (game: types.IGame) => getBinariesPath(context.api, game),
+    testBinariesMod as any,
+    { name: 'Binaries (Engine Injector)' }
   );
 
   context.registerMigration(old => migrate101(context.api, old) as any);
