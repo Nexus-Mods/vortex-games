@@ -24,18 +24,10 @@ const GOG_ID = '1454587428';
 const MS_ID = 'BethesdaSoftworks.FalloutNewVegas';
 const EPIC_ID = '5daeb974a22a435988892319b3a4f476';
 
-const PATCH_4GB_MOD_ID = 62552;
-const PATCH_4GB_EXECUTABLES = ['FNVpatch.exe', 'FalloutNVpatch.exe'];
+const PATCH_4GB_EXECUTABLES = ['FNVpatch.exe', 'FalloutNVpatch.exe', 'Patcher.exe'];
 
 let selectedLanguage = undefined;
 let multipleLanguages = false;
-
-interface IPatchInfo {
-  offset: number;
-  original: number;
-  patched: number;
-  name: string;
-}
 
 const gameStoreIds: { [gameStoreId: string]: types.IStoreQuery[] } = {
   steam: [{ id: STEAMAPP_ID, prefer: 0 }, { id: STEAMAPP_ID2 }, { name: 'Fallout: New Vegas.*' }],
@@ -124,160 +116,6 @@ const tools = [
   }
 ];
 
-async function downloadAndInstall4GBPatch(api: types.IExtensionApi): Promise<void> {
-  let nxmUrl = 'https://www.nexusmods.com/newvegas/mods/62552?tab=files';
-  try {
-    if (api.ext?.ensureLoggedIn !== undefined) {
-      await api.ext.ensureLoggedIn();
-    }
-    const modFiles: IFileInfo[] = await api.ext.nexusGetModFiles(GAME_ID, PATCH_4GB_MOD_ID);
-
-    const file = modFiles
-      .filter(file => file.category_id === 1)
-      .sort((lhs, rhs) => semver.rcompare(util.coerceToSemver(lhs.version), util.coerceToSemver(rhs.version)))[0];
-
-    if (file === undefined) {
-      throw new util.ProcessCanceled('No 4GB patch main file found');
-    }
-
-    const dlInfo = {
-      game: GAME_ID,
-      name: '4GB Patch',
-    };
-
-    const existingDownload = selectors.getDownloadByIds(api.getState(), {
-      gameId: GAME_ID,
-      modId: PATCH_4GB_MOD_ID,
-      fileId: file.file_id,
-    });
-    nxmUrl = `nxm://${GAME_ID}/mods/${PATCH_4GB_MOD_ID}/files/${file.file_id}`;
-    const dlId = existingDownload
-      ? existingDownload.id
-      : await util.toPromise<string>(cb => api.events.emit('start-download', [nxmUrl], dlInfo, undefined, cb, 'never', { allowInstall: false }));
-    const existingMod = selectors.getMod(api.getState(), GAME_ID, PATCH_4GB_MOD_ID);
-    const modId = ((existingMod?.state === 'installed') && (existingMod.attributes?.fileId === file.file_id))
-      ? existingMod.id
-      : await util.toPromise<string>(cb => api.events.emit('start-install-download', dlId, { allowAutoEnable: false }, cb));
-    const profileId = selectors.lastActiveProfileForGame(api.getState(), GAME_ID);
-    await actions.setModsEnabled(api, profileId, [modId], true, {
-      allowAutoDeploy: false,
-      installed: true,
-    });
-    await api.emitAndAwait('deploy-single-mod', GAME_ID, modId);
-    await runInstaller4GBPatch(api, modId);
-  } catch (err) {
-    log('error', 'Failed to download patch', err);
-    util.opn(nxmUrl).catch(() => null);
-  }
-}
-
-async function runInstaller4GBPatch(api: types.IExtensionApi, modId: string): Promise<void> {
-  const state = api.getState();
-  const mod = selectors.getMod(state, GAME_ID, modId);
-  if (!mod?.installationPath) {
-    log('error', `Could not find mod ${modId} for 4GB patch installation`);
-    return;
-  }
-  const discovery = selectors.discoveryByGame(state, GAME_ID);
-  if (!discovery?.path) {
-    log('error', 'Could not find game path for 4GB patch installation');
-    return;
-  }
-  const installPath = selectors.getModInstallPath(state, GAME_ID, modId);
-  if (!installPath) {
-    log('error', 'Could not find installation path for 4GB patch mod');
-    return;
-  }
-  const files = await fs.readdirAsync(installPath);
-  const patchExec = files.find(f => PATCH_4GB_EXECUTABLES.includes(f));
-  if (!patchExec) {
-    log('error', 'Could not find 4GB patch executable');
-    return;
-  }
-  const patchPath = path.join(installPath, patchExec);
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const cp = spawn(patchPath, [], {
-        cwd: discovery.path,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-
-      cp.stdout?.on('data', (data) => {
-        const lines = data.toString().split('\n').map(l => l.trim()).filter(l => l);
-        const logLines = lines.map(l => `[4GB Patch Installer] ${l}`);
-        log('info', logLines.join('\n'));
-        if (logLines.map(l => l.toLowerCase()).some(l => l.includes('any key'))) {
-          cp.stdin?.write('\n');
-        }
-      });
-
-      cp.stderr?.on('data', (data) => {
-        log('warn', `[4GB Patch Installer] ${data.toString()}`);
-      });
-
-      cp.on('error', (error) => {
-        reject(error);
-      });
-
-      cp.on('close', (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`4GB patch installer exited with code ${code}`));
-        }
-      });
-    });
-    api.sendNotification({
-      type: 'success',
-      message: '4GB patch installed successfully',
-      displayMS: 3000,
-    });
-  } catch (err) {
-    log('error', 'Failed to run 4GB patch installer', err);
-    api.sendNotification({
-      type: 'error',
-      message: 'Failed to install 4GB patch',
-      displayMS: 5000,
-    });
-  }
-}
-
-async function testFor4GBPatch(api): Promise<types.ITestResult> {
-  const state = api.getState();
-  const activeGameId = selectors.activeGameId(state);
-  const discovery = state.settings.gameMode.discovered?.[GAME_ID];
-  if (activeGameId !== GAME_ID || !discovery?.path) {
-    return undefined;
-  }
-
-  const exePath = path.join(discovery.path, 'FalloutNV.exe');
-  const hasBackupFile = () => fs.statAsync(path.join(path.dirname(exePath), path.basename(exePath, '.exe') + '_backup.exe'))
-    .then(() => true)
-    .catch(() => false);
-  try {
-    const hasBackup = await hasBackupFile();
-    if (hasBackup) {
-      return undefined;
-    }
-    return {
-      description: {
-        short: 'FalloutNV.exe requires 4GB patch',
-        long: 'Fallout New Vegas requires the 4GB patch to work correctly with many mods. ' +
-              'The patch allows the game to use more than 2GB of RAM, preventing crashes and improving stability.',
-      },
-      severity: 'warning',
-      onRecheck: () => hasBackupFile() as any,
-      automaticFix: () => downloadAndInstall4GBPatch(api) as any,
-    };
-  } catch (err) {
-    // File doesn't exist or can't be read - not an error for this test
-    log('debug', 'Could not check 4GB patch status', err.message);
-    return undefined;
-  }
-
-  return undefined;
-}
-
 function prepareForModding(api, discovery) {
   const gameName = util.getGame(GAME_ID)?.name || 'This game';
 
@@ -360,17 +198,14 @@ function testInstaller4GBPatch(api: types.IExtensionApi) {
     }
     const lowered = files.map(f => f.toLowerCase());
     const hasPatchExe = PATCH_4GB_EXECUTABLES.some(execName => lowered.includes(execName.toLowerCase()));
-    if (hasPatchExe) {
-      return Promise.resolve({ supported: true, requiredFiles: [] });
-    }
-    return Promise.resolve({ supported: false, requiredFiles: [] });
+    return Promise.resolve({ supported: hasPatchExe, requiredFiles: [] });
   }
 }
 
 function applyInstaller4GBPatch(api: types.IExtensionApi) {
   return async (files: string[], destinationPath: string, gameId: string,
       progressDelegate: types.ProgressDelegate, choices?: any,
-      unattended?: boolean, archivePath?: string, options?: types.IInstallationDetails) : Promise<types.IInstallResult> => {
+      unattended?: boolean, archivePath?: string, details?: types.IInstallationDetails) : Promise<types.IInstallResult> => {
     const instructions: types.IInstruction[] = files.map(f => ({
       type: 'copy',
       source: f,
@@ -420,10 +255,6 @@ function main(context: types.IExtensionContext): boolean {
       ],
     }
   });
-
-  // Tests/Health checks
-  context.registerTest('falloutnv-4gb-patch', 'gamemode-activated',
-    () => testFor4GBPatch(context.api) as any);
 
   // Installers
   context.registerInstaller(
