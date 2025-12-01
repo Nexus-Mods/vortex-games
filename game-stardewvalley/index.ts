@@ -82,7 +82,7 @@ class StardewValley implements types.IGame {
     this.context = context;
     this.requiredFiles = process.platform == 'win32'
       ? ['Stardew Valley.exe']
-      : ['StardewValley', 'StardewValley.exe'];
+      : ['StardewValley'];
 
     // custom properties
     this.defaultPaths = [
