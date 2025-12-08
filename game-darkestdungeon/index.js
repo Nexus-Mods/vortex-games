@@ -365,9 +365,10 @@ function getExecutable(discoveryPath) {
 
   let execFile = GOG_EXE;
   try {
-    fs.statSync(path.join(discPath, GOG_EXE))
-  } catch (err) {
+    fs.statSync(path.join(discPath, STEAM_EXE)); //only use Steam exe if it exists
     execFile = STEAM_EXE;
+  } catch (err) {
+    //do nothing
   }
 
   return execFile;
