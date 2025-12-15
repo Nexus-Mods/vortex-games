@@ -23,6 +23,11 @@ export function identifyHaloGames(files: string[]): IHaloGame[] {
 }
 
 export async function applyToManifest(api: types.IExtensionApi, apply: boolean) {
+  const state = api.getState();
+  const activeGame = selectors.activeGameId(state);
+  if (activeGame !== GAME_ID) {
+    return;
+  }
   let manifestData = '';
   try {
     manifestData = await fs.readFileAsync(MOD_MANIFEST_FILE_PATH, { encoding: 'utf8' });
@@ -32,7 +37,7 @@ export async function applyToManifest(api: types.IExtensionApi, apply: boolean) 
       return;
     }
   }
-  const stagingPath = selectors.installPathForGame(api.getState(), GAME_ID);
+  const stagingPath = selectors.installPathForGame(state, GAME_ID);
   const lines = manifestData.split('\r\n');
   const hasStagingFolderEntry = lines.some(line => line.includes(stagingPath));
   if (apply && !hasStagingFolderEntry) {
