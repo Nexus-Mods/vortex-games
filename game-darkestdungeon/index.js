@@ -356,7 +356,7 @@ function getExecutable(discoveryPath) {
   }
 
   if ((discoveryPath === undefined) && (getDiscoveryPath() === undefined)) {
-    return STEAM_EXE;
+    return GOG_EXE; //use GOG on early return since it is present in both versions
   }
 
   const discPath = (discoveryPath !== undefined)
@@ -365,9 +365,10 @@ function getExecutable(discoveryPath) {
 
   let execFile = GOG_EXE;
   try {
-    fs.statSync(path.join(discPath, GOG_EXE))
-  } catch (err) {
+    fs.statSync(path.join(discPath, STEAM_EXE)); //only use Steam exe if it exists
     execFile = STEAM_EXE;
+  } catch (err) {
+    //do nothing
   }
 
   return execFile;
