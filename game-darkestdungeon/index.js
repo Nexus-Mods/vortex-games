@@ -2,26 +2,25 @@ const Promise = require('bluebird');
 const path = require('path');
 const winapi = require('winapi-bindings');
 const { parseStringPromise } = require('xml2js');
-const { fs, log, util } = require('vortex-api');
+const { fs, log, util, actions, selectors } = require('vortex-api');
 
 let _API;
 let _GAME_MODS_FOLDER;
 const _DIRECTORY_STRUCT = [];
 
+const GAME_ID = 'darkestdungeon';
 const GOG_ID = '1450711444';
 const STEAM_ID = '262060';
+const EPIC_ID = '36cbf259e631478eaac6ea244e55a709';
+//there is also an Xbox version, but not on Game Pass, so cannot evaluate support for it
+const DISCOVERY_IDS = [GOG_ID, STEAM_ID, EPIC_ID];
 
-const GOG_EXE = '_windowsnosteam/win64/Darkest.exe';
-const STEAM_EXE = '_windows/win64/Darkest.exe';
-
-// Nexus Mods id for the game.
-const GAME_ID = 'darkestdungeon';
+const GOG_EXE = path.join('_windowsnosteam', 'win64', 'Darkest.exe'); //Epic exe is same as GOG
+const STEAM_EXE = path.join('_windows', 'win64', 'Darkest.exe');
 
 const HERO_PORTRAIT_SUFFIX = '_portrait_roster.png';
 
-// We expect mods to have the project.xml file included.
-const PROJECT_FILE = 'project.xml';
-
+const PROJECT_FILE = 'project.xml'; // Mods should have the project.xml file included
 const PROJECT_TEMPLATE =
 `<?xml version="1.0" encoding="utf-8"?>
 <project>
@@ -83,7 +82,7 @@ function walkAsync(dir, gamePathIndex) {
         // The point of this function is to map out the game's
         //  directory structure - any errors raised during mapping
         //  simply signfies an unavailable path and therefore
-        //  shouldn't block the rest of the process (we log instead)
+        //  shouldn't block the rest of the process (log instead)
         log('warn', '[DD] unable to add file to dir struct', err);
         return Promise.resolve()
       })
@@ -105,7 +104,7 @@ function readRegistryKey(hive, key, name) {
 }
 
 function findGame() {
-  return util.steam.findByAppId(STEAM_ID)
+  return util.GameStoreHelper.findByAppId(DISCOVERY_IDS)
     .then(game => game.gamePath)
     .catch(() => readRegistryKey('HKEY_LOCAL_MACHINE',
       `SOFTWARE\\WOW6432Node\\GOG.com\\Games\\${GOG_ID}`,
@@ -113,6 +112,34 @@ function findGame() {
     .catch(() => readRegistryKey('HKEY_LOCAL_MACHINE',
       `SOFTWARE\\GOG.com\\Games\\${GOG_ID}`,
       'PATH'))
+}
+
+async function requiresLauncher(gamePath, store) {
+  /*if (store === 'xbox') {
+    return Promise.resolve({
+      launcher: 'xbox',
+      addInfo: {
+        appId: XBOX_ID,
+        parameters: [{ appExecName: XBOXEXECNAME }],
+      },
+    });
+  } //*/
+  //*
+  if (store === 'epic') {
+    return Promise.resolve({
+        launcher: 'epic',
+        addInfo: {
+          appId: EPIC_ID,
+        },
+    });
+  } //*/
+  /*
+  if (store === 'steam') {
+    return Promise.resolve({
+        launcher: 'steam',
+    });
+  } //*/
+  return Promise.resolve(undefined);
 }
 
 function prepareForModding(discovery) {
@@ -178,12 +205,6 @@ function installProject(files, destinationPath) {
 }
 
 function testSupportedProject(files, gameId) {
-  if (process.platform !== 'win32') {
-    // Windows only for now.
-    return Promise.resolve({supported: false, requiredFiles: []});
-  }
-
-  // Make sure we're able to support this mod.
   const supported = (gameId === GAME_ID) &&
     (files.find(file => path.basename(file).toLowerCase() === PROJECT_FILE) !== undefined);
   return Promise.resolve({
@@ -193,26 +214,22 @@ function testSupportedProject(files, gameId) {
 }
 
 function testSupportedNoProject(files, gameId) {
-  if ((process.platform !== 'win32')
-    || (gameId !== GAME_ID)
-    || (files.find(file => path.basename(file) === PROJECT_FILE) !== undefined)) {
-    // - We only support Windows for now due to the executable location.
-    // - Ensure we don't use this custom installer for other gameModes.
-    // - Ensure we don't have a project file.
-    return Promise.resolve({supported: false, requiredFiles: []});
+  //Ensure we don't have a project file
+  if ((gameId !== GAME_ID) || 
+    (files.find(file => path.basename(file) === PROJECT_FILE) !== undefined)) {
+      return Promise.resolve({supported: false, requiredFiles: []});
   }
 
   const filtered = files.filter(file => file.endsWith(path.sep));
-
-  // Filter files with the _portrait_roster.png suffix as it's safe to assume that those
-  //  are hero mods.
+  // Filter files with the _portrait_roster.png suffix - safe to assume those are hero mods.
   const portraits = files.filter(file => file.indexOf(HERO_PORTRAIT_SUFFIX) !== -1);
 
   // Mod is supported if the file structure matches the game's dir structure OR
   //  if we are able to find portraits within the mod's archive.
   const supported = ((filtered.find(file => _DIRECTORY_STRUCT.find(dir =>
-        file.indexOf(dir) !== -1) !== undefined) !== undefined)
-    || (portraits.length > 0));
+    file.indexOf(dir) !== -1) !== undefined) !== undefined)
+    || (portraits.length > 0)
+  );
 
   return Promise.resolve({
     supported,
@@ -225,8 +242,7 @@ function installNoProject(files, destinationPath) {
     _DIRECTORY_STRUCT.find(dir => path.dirname(file).indexOf(dir) !== -1) !== undefined;
 
   const matchParentDirs = (lhs, rhs) => {
-    // Checks whether both lhs and rhs have the same
-    //  parent directory.
+    // Checks whether both lhs and rhs have the same parent directory.
     const lhsParent = lhs.endsWith(path.sep)
       ? lhs.split(path.sep)
       : path.dirname(lhs).split(path.sep);
@@ -266,8 +282,7 @@ function installNoProject(files, destinationPath) {
     // Hero mods have certain directories (e.g. heroes/fx) which will match
     //  the root game's folder structure causing Vortex to wrongly add them to
     //  the wrong directory layer i.e. ../heroes/fx folder to ../fx, reason why
-    //  we need to check whether the file's parent directory matches the portrait
-    //  root.
+    //  we need to check whether the file's parent directory matches the portrait root.
     //  (this depends on how the mod author packaged his mod)
     return (portraits.length > 0)
       ? matchDirStructure(file) && (!matchParentDirs(portraits[0], file))
@@ -356,7 +371,7 @@ function getExecutable(discoveryPath) {
   }
 
   if ((discoveryPath === undefined) && (getDiscoveryPath() === undefined)) {
-    return GOG_EXE; //use GOG on early return since it is present in both versions
+    return GOG_EXE; //use GOG on early return since it is present in all versions
   }
 
   const discPath = (discoveryPath !== undefined)
@@ -384,6 +399,7 @@ function main(context) {
     queryModPath: () => 'mods',
     logo: 'gameart.jpg',
     executable: (discoveryPath) => getExecutable(discoveryPath),
+    requiresLauncher: requiresLauncher,
     requiredFiles: [
       GOG_EXE,
     ],
@@ -393,7 +409,7 @@ function main(context) {
     },
     details: {
       steamAppId: parseInt(STEAM_ID),
-      hashFiles: [GOG_EXE], // Both Steam and GOG builds have the GOG exec present.
+      hashFiles: [GOG_EXE], // All builds have the GOG exec present
     },
   });
 
