@@ -1,10 +1,12 @@
 const path = require('path');
 const { fs, log, util } = require('vortex-api');
 
-// Nexus Mods id for the game.
 const TW3KINDOMS_ID = 'totalwarthreekingdoms';
-
-// All BSRotN mods will be .pak files
+const STEAMAPP_ID = '779340';
+const EPICAPP_ID = '769f2fee68e9477180da900ccccbbcf0';
+const GOGAPP_ID = '1717887914';
+const EXEC = 'Three_Kingdoms.exe';
+const EXEC_LAUNCHER = 'Launcher.exe';
 const MOD_FILE_EXT = ".pack";
 
 let tools = [
@@ -31,8 +33,44 @@ let tools = [
 ]
 
 function findGame() {
-  return util.steam.findByAppId('779340')
-      .then(game => game.gamePath);
+  return () => util.GameStoreHelper.findByAppId([STEAMAPP_ID, EPICAPP_ID, GOGAPP_ID])
+    .then((game) => game.gamePath);
+}
+
+async function requiresLauncher(gamePath, store) {
+  if (store === 'epic') {
+    return Promise.resolve({
+        launcher: 'epic',
+        addInfo: {
+            appId: EPICAPP_ID,
+        },
+    });
+  } //*/
+  /*
+  if (store === 'steam') {
+    return Promise.resolve({
+        launcher: 'steam',
+    });
+  } //*/
+  return Promise.resolve(undefined);
+}
+
+function statCheckSync(gamePath, file) {
+  try {
+    fs.statSync(path.join(gamePath, file));
+    return true;
+  }
+  catch (err) {
+    return false;
+  }
+}
+
+//Get correct executable for game version
+function getExecutable(discoveryPath) {
+  if (statCheckSync(discoveryPath, EXEC_LAUNCHER)) {
+    return EXEC_LAUNCHER;
+  };
+  return EXEC;
 }
 
 function prepareForModding(discovery) {
@@ -63,7 +101,6 @@ function installContent(files) {
 }
 
 function testSupportedContent(files, gameId) {
-  // Make sure we're able to support this mod.
   const supported = (gameId === TW3KINDOMS_ID) &&
     (files.find(file => path.extname(file).toLowerCase() === MOD_FILE_EXT) !== undefined);
   return Promise.resolve({
@@ -73,26 +110,26 @@ function testSupportedContent(files, gameId) {
 }
 
 function main(context) {
-  const launcherPath = path.join('launcher', 'launcher.exe');
   context.registerGame({
     id: TW3KINDOMS_ID,
     name: 'Total War: Three Kingdoms',
+    shortName: 'TW 3 Kingdoms',
     mergeMods: true,
-    queryPath: findGame,
+    queryPath: findGame(),
     supportedTools: tools,
     queryModPath: () => 'data',
     logo: 'gameart.jpg',
-    executable: () => launcherPath,
+    executable: getExecutable,
     requiredFiles: [
-      launcherPath,
-      'Three_Kingdoms.exe'
+      EXEC
     ],
     setup: prepareForModding,
+    requiresLauncher: requiresLauncher,
     environment: {
-      SteamAPPId: '779340',
+      SteamAPPId: STEAMAPP_ID,
     },
     details: {
-      steamAppId: 779340,
+      steamAppId: +STEAMAPP_ID,
     },
   });
 
