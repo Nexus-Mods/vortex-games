@@ -1,141 +1,161 @@
-"use strict";
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
+var __create = Object.create;
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
 };
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-const path_1 = __importDefault(require("path"));
-const semver_1 = __importDefault(require("semver"));
-const vortex_api_1 = require("vortex-api");
-const GAME_ID = 'nomanssky';
-const STEAMAPP_ID = '275850';
-const XBOX_ID = 'HelloGames.NoMansSky';
-const MODTYPE_DEPRECATED_PAK = 'nomanssky-deprecated-pak';
-function purge(api) {
-    return __awaiter(this, void 0, void 0, function* () {
-        return new Promise((resolve, reject) => api.events.emit('purge-mods', true, (err) => err ? reject(err) : resolve()));
-    });
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
+
+// extensions/games/game-nomanssky/index.ts
+var import_path = __toESM(require("path"));
+var import_semver = __toESM(require("semver"));
+var import_vortex_api = require("vortex-api");
+var GAME_ID = "nomanssky";
+var STEAMAPP_ID = "275850";
+var XBOX_ID = "HelloGames.NoMansSky";
+var MODTYPE_DEPRECATED_PAK = "nomanssky-deprecated-pak";
+var BIN_PATH = "Binaries";
+var EXEC = import_path.default.join(BIN_PATH, "NMS.exe");
+async function purge(api) {
+  return new Promise((resolve, reject) => api.events.emit("purge-mods", true, (err) => err ? reject(err) : resolve()));
 }
-function deploy(api) {
-    return __awaiter(this, void 0, void 0, function* () {
-        return new Promise((resolve, reject) => api.events.emit('deploy-mods', (err) => err ? reject(err) : resolve()));
-    });
+async function deploy(api) {
+  return new Promise((resolve, reject) => api.events.emit("deploy-mods", (err) => err ? reject(err) : resolve()));
 }
 function findGame() {
-    return vortex_api_1.util.GameStoreHelper.findByAppId([STEAMAPP_ID, XBOX_ID])
-        .then(game => game.gamePath);
+  return import_vortex_api.util.GameStoreHelper.findByAppId([STEAMAPP_ID, XBOX_ID]).then((game) => game.gamePath);
 }
 function deprecatedModPath() {
-    return path_1.default.join('GAMEDATA', 'PCBANKS', 'MODS');
+  return import_path.default.join("GAMEDATA", "PCBANKS", "MODS");
 }
 function modPath() {
-    return path_1.default.join('GAMEDATA', 'MODS');
+  return import_path.default.join("GAMEDATA", "MODS");
 }
-function migrate101(api, oldVersion) {
-    return __awaiter(this, void 0, void 0, function* () {
-        if (semver_1.default.gte(oldVersion, '1.0.1')) {
-            return Promise.resolve();
-        }
-        const state = api.getState();
-        const mods = vortex_api_1.util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
-        const modIds = Object.keys(mods).filter(modId => mods[modId].type !== 'nomanssky-deprecated-pak');
-        const batched = modIds.map(modId => vortex_api_1.actions.setModType(GAME_ID, modId, MODTYPE_DEPRECATED_PAK));
-        if (batched.length > 0) {
-            try {
-                (0, vortex_api_1.log)('info', 'Migrating mods to deprecated PAK type.', { mods: batched.length });
-                yield api.awaitUI();
-                yield purge(api);
-                vortex_api_1.util.batchDispatch(api.store, batched);
-                yield new Promise(resolve => setTimeout(resolve, 1000));
-                yield deploy(api);
-            }
-            catch (err) {
-                (0, vortex_api_1.log)('error', 'Failed to migrate mods to deprecated PAK type.', { err });
-            }
-        }
-        return Promise.resolve();
-    });
+async function migrate101(api, oldVersion) {
+  if (import_semver.default.gte(oldVersion, "1.0.1")) {
+    return Promise.resolve();
+  }
+  const state = api.getState();
+  const mods = import_vortex_api.util.getSafe(state, ["persistent", "mods", GAME_ID], {});
+  const modIds = Object.keys(mods).filter((modId) => mods[modId].type !== "nomanssky-deprecated-pak");
+  const batched = modIds.map((modId) => import_vortex_api.actions.setModType(GAME_ID, modId, MODTYPE_DEPRECATED_PAK));
+  if (batched.length > 0) {
+    try {
+      (0, import_vortex_api.log)("info", "Migrating mods to deprecated PAK type.", { mods: batched.length });
+      await api.awaitUI();
+      await purge(api);
+      import_vortex_api.util.batchDispatch(api.store, batched);
+      await new Promise((resolve) => setTimeout(resolve, 1e3));
+      await deploy(api);
+    } catch (err) {
+      (0, import_vortex_api.log)("error", "Failed to migrate mods to deprecated PAK type.", { err });
+    }
+  }
+  return Promise.resolve();
 }
-function prepareForModding(api, discovery) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const pcbanks = path_1.default.join(discovery.path, 'GAMEDATA', 'PCBANKS');
-        const ensureDir = (dir) => vortex_api_1.fs.ensureDirWritableAsync(path_1.default.join(discovery.path, dir));
-        return Promise.all([ensureDir(modPath()), ensureDir(deprecatedModPath())])
-            .then(() => vortex_api_1.fs.renameAsync(path_1.default.join(pcbanks, 'DISABLEMODS.TXT'), path_1.default.join(pcbanks, 'ENABLEMODS.TXT'))
-            .catch(err => err.code === 'ENOENT' ? Promise.resolve() : Promise.reject(err)));
-    });
+async function prepareForModding(api, discovery) {
+  const pcbanks = import_path.default.join(discovery.path, "GAMEDATA", "PCBANKS");
+  const ensureDir = (dir) => import_vortex_api.fs.ensureDirWritableAsync(import_path.default.join(discovery.path, dir));
+  return Promise.all([ensureDir(modPath()), ensureDir(deprecatedModPath())]).then(() => import_vortex_api.fs.renameAsync(import_path.default.join(pcbanks, "DISABLEMODS.TXT"), import_path.default.join(pcbanks, "ENABLEMODS.TXT")).catch((err) => err.code === "ENOENT" ? Promise.resolve() : Promise.reject(err)));
 }
-function requiresLauncher(gamePath, store) {
-    return __awaiter(this, void 0, void 0, function* () {
-        if (store === 'xbox') {
-            return Promise.resolve({
-                launcher: 'xbox',
-                addInfo: {
-                    appId: XBOX_ID,
-                    parameters: [{ appExecName: 'NoMansSky' }],
-                },
-            });
-        }
-        else {
-            return Promise.resolve(undefined);
-        }
+async function requiresLauncher(gamePath, store) {
+  if (store === "xbox") {
+    return Promise.resolve({
+      launcher: "xbox",
+      addInfo: {
+        appId: XBOX_ID,
+        parameters: [{ appExecName: "NoMansSky" }]
+      }
     });
+  } else {
+    return Promise.resolve(void 0);
+  }
 }
 function getPakPath(api, game) {
-    const discovery = api.getState().settings.gameMode.discovered[game.id];
-    if (!discovery || !discovery.path) {
-        return '.';
-    }
-    const dataPath = path_1.default.join(discovery.path, deprecatedModPath());
-    return dataPath;
+  const discovery = api.getState().settings.gameMode.discovered[game.id];
+  if (!discovery || !discovery.path) {
+    return ".";
+  }
+  const dataPath = import_path.default.join(discovery.path, deprecatedModPath());
+  return dataPath;
 }
-function testDeprecatedPakMod(instructions) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const hasPak = instructions.some(inst => inst.source && inst.source.match(/\.pak$/i));
-        return Promise.resolve(hasPak);
-    });
+function getBinariesPath(api, game) {
+  const discovery = api.getState().settings.gameMode.discovered[game.id];
+  if (!discovery || !discovery.path) {
+    return ".";
+  }
+  const dataPath = import_path.default.join(discovery.path, BIN_PATH);
+  return dataPath;
 }
-function getGameVersion(gamePath) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const exeVersion = require('exe-version');
-        return Promise.resolve(exeVersion.getProductVersionLocalized(path_1.default.join(gamePath, 'Binaries', 'NMS.exe')));
-    });
+async function testDeprecatedPakMod(instructions) {
+  const hasPak = instructions.some((inst) => inst.source && inst.source.match(/\.pak$/i));
+  return Promise.resolve(hasPak);
+}
+async function testBinariesMod(instructions) {
+  const hasDll = instructions.some((inst) => inst.source && inst.source.match(/\.dll$/i));
+  return Promise.resolve(hasDll);
+}
+async function getGameVersion(gamePath) {
+  const exeVersion = require("exe-version");
+  return Promise.resolve(exeVersion.getProductVersionLocalized(import_path.default.join(gamePath, EXEC)));
 }
 function main(context) {
-    context.registerGame({
-        id: GAME_ID,
-        name: 'No Man\'s Sky',
-        mergeMods: true,
-        queryPath: findGame,
-        getGameVersion,
-        queryModPath: modPath,
-        logo: 'gameart.jpg',
-        executable: () => 'Binaries/NMS.exe',
-        requiredFiles: [
-            'Binaries/NMS.exe',
-        ],
-        requiresLauncher: requiresLauncher,
-        setup: (discovery) => prepareForModding(context.api, discovery),
-        environment: {
-            SteamAPPId: STEAMAPP_ID,
-        },
-        details: {
-            steamAppId: +STEAMAPP_ID,
-        },
-    });
-    context.registerModType(MODTYPE_DEPRECATED_PAK, 100, (gameId) => GAME_ID === gameId, (game) => getPakPath(context.api, game), testDeprecatedPakMod, { deploymentEssential: false, name: 'Deprecated PAK' });
-    context.registerMigration(old => migrate101(context.api, old));
-    return true;
+  context.registerGame({
+    id: GAME_ID,
+    name: "No Man's Sky",
+    mergeMods: true,
+    queryPath: findGame,
+    getGameVersion,
+    queryModPath: modPath,
+    logo: "gameart.jpg",
+    executable: () => EXEC,
+    requiredFiles: [
+      EXEC
+    ],
+    requiresLauncher,
+    setup: (discovery) => prepareForModding(context.api, discovery),
+    environment: {
+      SteamAPPId: STEAMAPP_ID
+    },
+    details: {
+      steamAppId: +STEAMAPP_ID
+    }
+  });
+  context.registerModType(
+    MODTYPE_DEPRECATED_PAK,
+    100,
+    (gameId) => GAME_ID === gameId,
+    (game) => getPakPath(context.api, game),
+    testDeprecatedPakMod,
+    { deploymentEssential: false, name: "Deprecated PAK" }
+  );
+  context.registerModType(
+    `${GAME_ID}-binaries`,
+    90,
+    (gameId) => GAME_ID === gameId,
+    (game) => getBinariesPath(context.api, game),
+    testBinariesMod,
+    { name: "Binaries (Engine Injector)" }
+  );
+  context.registerMigration((old) => migrate101(context.api, old));
+  return true;
 }
 module.exports = {
-    default: main,
+  default: main
 };
-//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiaW5kZXguanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyJpbmRleC50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiOzs7Ozs7Ozs7Ozs7OztBQUNBLGdEQUF3QjtBQUN4QixvREFBNEI7QUFDNUIsMkNBQTJEO0FBRTNELE1BQU0sT0FBTyxHQUFHLFdBQVcsQ0FBQztBQUM1QixNQUFNLFdBQVcsR0FBRyxRQUFRLENBQUM7QUFDN0IsTUFBTSxPQUFPLEdBQUcsc0JBQXNCLENBQUM7QUFDdkMsTUFBTSxzQkFBc0IsR0FBRywwQkFBMEIsQ0FBQztBQUUxRCxTQUFlLEtBQUssQ0FBQyxHQUF3Qjs7UUFDM0MsT0FBTyxJQUFJLE9BQU8sQ0FBTyxDQUFDLE9BQU8sRUFBRSxNQUFNLEVBQUUsRUFBRSxDQUMzQyxHQUFHLENBQUMsTUFBTSxDQUFDLElBQUksQ0FBQyxZQUFZLEVBQUUsSUFBSSxFQUFFLENBQUMsR0FBRyxFQUFFLEVBQUUsQ0FBQyxHQUFHLENBQUMsQ0FBQyxDQUFDLE1BQU0sQ0FBQyxHQUFHLENBQUMsQ0FBQyxDQUFDLENBQUMsT0FBTyxFQUFFLENBQUMsQ0FBQyxDQUFDO0lBQ2pGLENBQUM7Q0FBQTtBQUVELFNBQWUsTUFBTSxDQUFDLEdBQXdCOztRQUM1QyxPQUFPLElBQUksT0FBTyxDQUFPLENBQUMsT0FBTyxFQUFFLE1BQU0sRUFBRSxFQUFFLENBQzNDLEdBQUcsQ0FBQyxNQUFNLENBQUMsSUFBSSxDQUFDLGFBQWEsRUFBRSxDQUFDLEdBQUcsRUFBRSxFQUFFLENBQUMsR0FBRyxDQUFDLENBQUMsQ0FBQyxNQUFNLENBQUMsR0FBRyxDQUFDLENBQUMsQ0FBQyxDQUFDLE9BQU8sRUFBRSxDQUFDLENBQUMsQ0FBQztJQUM1RSxDQUFDO0NBQUE7QUFFRCxTQUFTLFFBQVE7SUFDZixPQUFPLGlCQUFJLENBQUMsZUFBZSxDQUFDLFdBQVcsQ0FBQyxDQUFDLFdBQVcsRUFBRSxPQUFPLENBQUMsQ0FBQztTQUM1RCxJQUFJLENBQUMsSUFBSSxDQUFDLEVB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LENBQUMsQ0FBQztJQUVILE9BQU8sQ0FBQyxlQUFlLENBQ3JCLHNCQUFzQixFQUN0QixHQUFHLEVBQ0gsQ0FBQyxNQUFNLEVBQUUsRUFBRSxDQUFDLE9BQU8sS0FBSyxNQUFNLEVBQzlCLENBQUMsSUFBaUIsRUFBRSxFQUFFLENBQUMsVUFBVSxDQUFDLE9BQU8sQ0FBQyxHQUFHLEVBQUUsSUFBSSxDQUFDLEVBQ3BELG9CQUEyQixFQUMzQixFQUFFLG1CQUFtQixFQUFFLEtBQUssRUFBRSxJQUFJLEVBQUUsZ0JBQWdCLEVBQUUsQ0FDdkQsQ0FBQztJQUVGLE9BQU8sQ0FBQyxpQkFBaUIsQ0FBQyxHQUFHLENBQUMsRUFBRSxDQUFDLFVBQVUsQ0FBQyxPQUFPLENBQUMsR0FBRyxFQUFFLEdBQUcsQ0FBUSxDQUFDLENBQUM7SUFFdEUsT0FBTyxJQUFJLENBQUM7QUFDZCxDQUFDO0FBRUQsTUFBTSxDQUFDLE9BQU8sR0FBRztJQUNmLE9BQU8sRUFBRSxJQUFJO0NBQ2QsQ0FBQyIsInNvdXJjZXNDb250ZW50IjpbIi8qIGVzbGludC1kaXNhYmxlICovXHJcbmltcG9ydCBwYXRoIGZyb20gJ3BhdGgnO1xyXG5pbXBvcnQgc2VtdmVyIGZyb20gJ3NlbXZlcic7XHJcbmltcG9ydCB7IGFjdGlvbnMsIGZzLCBsb2csIHR5cGVzLCB1dGlsIH0gZnJvbSAndm9ydGV4LWFwaSc7XHJcblxyXG5jb25zdCBHQU1FX0lEID0gJ25vbWFuc3NreSc7XHJcbmNvbnN0IFNURUFNQVBQX0lEID0gJzI3NTg1MCc7XHJcbmNvbnN0IFhCT1hfSUQgPSAnSGVsbG9HYW1lcy5Ob01hbnNTa3knO1xyXG5jb25zdCBNT0RUWVBFX0RFUFJFQ0FURURfUEFLID0gJ25vbWFuc3NreS1kZXByZWNhdGVkLXBhayc7XHJcblxyXG5hc3luYyBmdW5jdGlvbiBwdXJnZShhcGk6IHR5cGVzLklFeHRlbnNpb25BcGkpOiBQcm9taXNlPHZvaWQ+IHtcclxuICByZXR1cm4gbmV3IFByb21pc2U8dm9pZD4oKHJlc29sdmUsIHJlamVjdCkgPT5cclxuICAgIGFwaS5ldmVudHMuZW1pdCgncHVyZ2UtbW9kcycsIHRydWUsIChlcnIpID0+IGVyciA/IHJlamVjdChlcnIpIDogcmVzb2x2ZSgpKSk7XHJcbn1cclxuXHJcbmFzeW5jIGZ1bmN0aW9uIGRlcGxveShhcGk6IHR5cGVzLklFeHRlbnNpb25BcGkpOiBQcm9taXNlPHZvaWQ+IHtcclxuICByZXR1cm4gbmV3IFByb21pc2U8dm9pZD4oKHJlc29sdmUsIHJlamVjdCkgPT5cclxuICAgIGFwaS5ldmVudHMuZW1pdCgnZGVwbG95LW1vZHMnLCAoZXJyKSA9PiBlcnIgPyByZWplY3QoZXJyKSA6IHJlc29sdmUoKSkpO1xyXG59XHJcblxyXG5mdW5jdGlvbiBmaW5kR2FtZSgpIHtcclxuICByZXR1cm4gdXRpbC5HYW1lU3RvcmVIZWxwZXIuZmluZEJ5QXBwSWQoW1NURUFNQVBQX0lELCBYQk9YX0lEXSlcclxuICAgIC50aGVuKGdhbWUgPT4gZ2FtZS5nYW1lUGF0aCk7XHJcbn1cclxuXHJcbmZ1bmN0aW9uIGRlcHJlY2F0ZWRNb2RQYXRoKCkge1xyXG4gIHJldHVybiBwYXRoLmpvaW4oJ0dBTUVEQVRBJywgJ1BDQkFOS1MnLCAnTU9EUycpO1xyXG59XHJcblxyXG5mdW5jdGlvbiBtb2RQYXRoKCkge1xyXG4gIHJldHVybiBwYXRoLmpvaW4oJ0dBTUVEQVRBJywgJ01PRFMnKTtcclxufVxyXG5cclxuYXN5bmMgZnVuY3Rpb24gbWlncmF0ZTEwMShhcGk6IHR5cGVzLklFeHRlbnNpb25BcGksIG9sZFZlcnNpb246IHN0cmluZyk6IFByb21pc2U8dm9pZD4ge1xyXG4gIGlmIChzZW12ZXIuZ3RlKG9sZFZlcnNpb24sICcxLjAuMScpKSB7XHJcbiAgICByZXR1cm4gUHJvbWlzZS5yZXNvbHZlKCk7XHJcbiAgfVxyXG5cclxuICBjb25zdCBzdGF0ZSA9IGFwaS5nZXRTdGF0ZSgpO1xyXG4gIGNvbnN0IG1vZHM6IHsgW21vZElkOiBzdHJpbmddOiB0eXBlcy5JTW9kIH0gPSB1dGlsLmdldFNhZmUoc3RhdGUsIFsncGVyc2lzdGVudCcsICdtb2RzJywgR0FNRV9JRF0sIHt9KTtcclxuICBjb25zdCBtb2RJZHMgPSBPYmplY3Qua2V5cyhtb2RzKS5maWx0ZXIobW9kSWQgPT4gbW9kc1ttb2RJZF0udHlwZSAhPT0gJ25vbWFuc3NreS1kZXByZWNhdGVkLXBhaycpO1xyXG4gIGNvbnN0IGJhdGNoZWQgPSBtb2RJZHMubWFwKG1vZElkID0+IGFjdGlvbnMuc2V0TW9kVHlwZShHQU1FX0lELCBtb2RJZCwgTU9EVFlQRV9ERVBSRUNBVEVEX1BBSykpO1xyXG4gIGlmIChiYXRjaGVkLmxlbmd0aCA+IDApIHtcclxuICAgIHRyeSB7XHJcbiAgICAgIGxvZygnaW5mbycsICdNaWdyYXRpbmcgbW9kcyB0byBkZXByZWNhdGVkIFBBSyB0eXBlLicsIHsgbW9kczogYmF0Y2hlZC5sZW5ndGggfSk7XHJcbiAgICAgIGF3YWl0IGFwaS5hd2FpdFVJKCk7XHJcbiAgICAgIGF3YWl0IHB1cmdlKGFwaSk7XHJcbiAgICAgIHV0aWwuYmF0Y2hEaXNwYXRjaChhcGkuc3RvcmUsIGJhdGNoZWQpO1xyXG4gICAgICAvLyBIYWNreSBidXQgbmVjZXNzYXJ5IHRvIGVuc3VyZSB3ZSB3YWl0IGZvciB0aGUgc3RhdGUgdG8gdXBkYXRlLlxyXG4gICAgICBhd2FpdCBuZXcgUHJvbWlzZTx2b2lkPihyZXNvbHZlID0+IHNldFRpbWVvdXQocmVzb2x2ZSwgMTAwMCkpO1xyXG4gICAgICBhd2FpdCBkZXBsb3koYXBpKTtcclxuICAgIH0gY2F0Y2ggKGVycikge1xyXG4gICAgICBsb2coJ2Vycm9yJywgJ0ZhaWxlZCB0byBtaWdyYXRlIG1vZHMgdG8gZGVwcmVjYXRlZCBQQUsgdHlwZS4nLCB7IGVyciB9KTtcclxuICAgIH1cclxuICB9XHJcbiAgcmV0dXJuIFByb21pc2UucmVzb2x2ZSgpO1xyXG59XHJcblxyXG5hc3luYyBmdW5jdGlvbiBwcmVwYXJlRm9yTW9kZGluZyhhcGk6IHR5cGVzLklFeHRlbnNpb25BcGksIGRpc2NvdmVyeTogdHlwZXMuSURpc2NvdmVyeVJlc3VsdCkge1xyXG4gIGNvbnN0IHBjYmFua3MgPSBwYXRoLmpvaW4oZGlzY292ZXJ5LnBhdGgsICdHQU1FREFUQScsICdQQ0JBTktTJyk7XHJcbiAgY29uc3QgZW5zdXJlRGlyID0gKGRpcjogc3RyaW5nKSA9PiBmcy5lbnN1cmVEaXJXcml0YWJsZUFzeW5jKHBhdGguam9pbihkaXNjb3ZlcnkucGF0aCwgZGlyKSk7XHJcbiAgcmV0dXJuIFByb21pc2UuYWxsKFtlbnN1cmVEaXIobW9kUGF0aCgpKSwgZW5zdXJlRGlyKGRlcHJlY2F0ZWRNb2RQYXRoKCkpXSlcclxuICAgIC50aGVuKCgpID0+IGZzLnJlbmFtZUFzeW5jKHBhdGguam9pbihwY2JhbmtzLCAnRElTQUJMRU1PRFMuVFhUJyksIHBhdGguam9pbihwY2JhbmtzLCAnRU5BQkxFTU9EUy5UWFQnKSlcclxuICAgICAgLmNhdGNoKGVyciA9PiBlcnIuY29kZSA9PT0gJ0VOT0VOVCcgPyBQcm9taXNlLnJlc29sdmUoKSA6IFByb21pc2UucmVqZWN0KGVycikpKTtcclxufVxyXG5cclxuYXN5bmMgZnVuY3Rpb24gcmVxdWlyZXNMYXVuY2hlcihnYW1lUGF0aDogc3RyaW5nLCBzdG9yZT86IHN0cmluZykge1xyXG4gIGlmIChzdG9yZSA9PT0gJ3hib3gnKSB7XHJcbiAgICByZXR1cm4gUHJvbWlzZS5yZXNvbHZlKHtcclxuICAgICAgbGF1bmNoZXI6ICd4Ym94JyxcclxuICAgICAgYWRkSW5mbzoge1xyXG4gICAgICAgIGFwcElkOiBYQk9YX0lELFxyXG4gICAgICAgIHBhcmFtZXRlcnM6IFt7IGFwcEV4ZWNOYW1lOiAnTm9NYW5zU2t5JyB9XSxcclxuICAgICAgfSxcclxuICAgIH0pO1xyXG4gIH0gZWxzZSB7XHJcbiAgICByZXR1cm4gUHJvbWlzZS5yZXNvbHZlKHVuZGVmaW5lZCk7XHJcbiAgfVxyXG59XHJcblxyXG5mdW5jdGlvbiBnZXRQYWtQYXRoKGFwaTogdHlwZXMuSUV4dGVuc2lvbkFwaSwgZ2FtZTogdHlwZXMuSUdhbWUpIHtcclxuICBjb25zdCBkaXNjb3ZlcnkgPSBhcGkuZ2V0U3RhdGUoKS5zZXR0aW5ncy5nYW1lTW9kZS5kaXNjb3ZlcmVkW2dhbWUuaWRdO1xyXG4gIGlmICghZGlzY292ZXJ5IHx8ICFkaXNjb3ZlcnkucGF0aCkge1xyXG4gICAgcmV0dXJuICcuJztcclxuICB9XHJcbiAgY29uc3QgZGF0YVBhdGggPSBwYXRoLmpvaW4oZGlzY292ZXJ5LnBhdGgsIGRlcHJlY2F0ZWRNb2RQYXRoKCkpO1xyXG4gIHJldHVybiBkYXRhUGF0aDtcclxufVxyXG5cclxuYXN5bmMgZnVuY3Rpb24gdGVzdERlcHJlY2F0ZWRQYWtNb2QoaW5zdHJ1Y3Rpb25zOiB0eXBlcy5JSW5zdHJ1Y3Rpb25bXSk6IFByb21pc2U8Ym9vbGVhbj4ge1xyXG4gIGNvbnN0IGhhc1BhayA9IGluc3RydWN0aW9ucy5zb21lKGluc3QgPT4gaW5zdC5zb3VyY2UgJiYgaW5zdC5zb3VyY2UubWF0Y2goL1xcLnBhayQvaSkpO1xyXG4gIHJldHVybiBQcm9taXNlLnJlc29sdmUoaGFzUGFrKTtcclxufVxyXG5cclxuYXN5bmMgZnVuY3Rpb24gZ2V0R2FtZVZlcnNpb24oZ2FtZVBhdGg6IHN0cmluZykge1xyXG4gIGNvbnN0IGV4ZVZlcnNpb24gPSByZXF1aXJlKCdleGUtdmVyc2lvbicpO1xyXG4gIHJldHVybiBQcm9taXNlLnJlc29sdmUoZXhlVmVyc2lvbi5nZXRQcm9kdWN0VmVyc2lvbkxvY2FsaXplZChwYXRoLmpvaW4oZ2FtZVBhdGgsICdCaW5hcmllcycsICdOTVMuZXhlJykpKTtcclxufVxyXG5cclxuZnVuY3Rpb24gbWFpbihjb250ZXh0OiB0eXBlcy5JRXh0ZW5zaW9uQ29udGV4dCkge1xyXG4gIGNvbnRleHQucmVnaXN0ZXJHYW1lKHtcclxuICAgIGlkOiBHQU1FX0lELFxyXG4gICAgbmFtZTogJ05vIE1hblxcJ3MgU2t5JyxcclxuICAgIG1lcmdlTW9kczogdHJ1ZSxcclxuICAgIHF1ZXJ5UGF0aDogZmluZEdhbWUsXHJcbiAgICBnZXRHYW1lVmVyc2lvbixcclxuICAgIHF1ZXJ5TW9kUGF0aDogbW9kUGF0aCxcclxuICAgIGxvZ286ICdnYW1lYXJ0LmpwZycsXHJcbiAgICBleGVjdXRhYmxlOiAoKSA9PiAnQmluYXJpZXMvTk1TLmV4ZScsXHJcbiAgICByZXF1aXJlZEZpbGVzOiBbXHJcbiAgICAgICdCaW5hcmllcy9OTVMuZXhlJyxcclxuICAgIF0sXHJcbiAgICByZXF1aXJlc0xhdW5jaGVyOiByZXF1aXJlc0xhdW5jaGVyIGFzIGFueSxcclxuICAgIHNldHVwOiAoZGlzY292ZXJ5OiB0eXBlcy5JRGlzY292ZXJ5UmVzdWx0KSA9PiBwcmVwYXJlRm9yTW9kZGluZyhjb250ZXh0LmFwaSwgZGlzY292ZXJ5KSBhcyBhbnksXHJcbiAgICBlbnZpcm9ubWVudDoge1xyXG4gICAgICBTdGVhbUFQUElkOiBTVEVBTUFQUF9JRCxcclxuICAgIH0sXHJcbiAgICBkZXRhaWxzOiB7XHJcbiAgICAgIHN0ZWFtQXBwSWQ6ICtTVEVBTUFQUF9JRCxcclxuICAgIH0sXHJcbiAgfSk7XHJcblxyXG4gIGNvbnRleHQucmVnaXN0ZXJNb2RUeXBlKFxyXG4gICAgTU9EVFlQRV9ERVBSRUNBVEVEX1BBSyxcclxuICAgIDEwMCxcclxuICAgIChnYW1lSWQpID0+IEdBTUVfSUQgPT09IGdhbWVJZCxcclxuICAgIChnYW1lOiB0eXBlcy5JR2FtZSkgPT4gZ2V0UGFrUGF0aChjb250ZXh0LmFwaSwgZ2FtZSksXHJcbiAgICB0ZXN0RGVwcmVjYXRlZFBha01vZCBhcyBhbnksXHJcbiAgICB7IGRlcGxveW1lbnRFc3NlbnRpYWw6IGZhbHNlLCBuYW1lOiAnRGVwcmVjYXRlZCBQQUsnIH1cclxuICApO1xyXG5cclxuICBjb250ZXh0LnJlZ2lzdGVyTWlncmF0aW9uKG9sZCA9PiBtaWdyYXRlMTAxKGNvbnRleHQuYXBpLCBvbGQpIGFzIGFueSk7XHJcblxyXG4gIHJldHVybiB0cnVlO1xyXG59XHJcblxyXG5tb2R1bGUuZXhwb3J0cyA9IHtcclxuICBkZWZhdWx0OiBtYWluLFxyXG59O1xyXG4iXX0=
+//# sourceMappingURL=index.js.map
