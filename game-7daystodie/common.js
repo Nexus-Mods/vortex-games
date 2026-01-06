@@ -1,0 +1,41 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.DEFAULT_LAUNCHER_SETTINGS = exports.INVALID_LO_MOD_TYPES = exports.I18N_NAMESPACE = exports.LO_FILE_NAME = exports.GAME_ID = exports.MOD_INFO = void 0;
+exports.launcherSettingsFilePath = launcherSettingsFilePath;
+exports.loadOrderFilePath = loadOrderFilePath;
+exports.modsRelPath = modsRelPath;
+exports.gameExecutable = gameExecutable;
+const vortex_api_1 = require("vortex-api");
+const path_1 = __importDefault(require("path"));
+exports.MOD_INFO = 'modinfo.xml';
+exports.GAME_ID = '7daystodie';
+exports.LO_FILE_NAME = 'loadOrder.json';
+exports.I18N_NAMESPACE = `game-${exports.GAME_ID}`;
+exports.INVALID_LO_MOD_TYPES = ['collection', '7dtd-root-mod'];
+function launcherSettingsFilePath() {
+    return path_1.default.join(vortex_api_1.util.getVortexPath('appData'), '7DaysToDie', 'launchersettings.json');
+}
+function loadOrderFilePath(profileId) {
+    return path_1.default.join(vortex_api_1.util.getVortexPath('appData'), '7DaysToDie', profileId + '_' + exports.LO_FILE_NAME);
+}
+function modsRelPath() {
+    return 'Mods';
+}
+function gameExecutable() {
+    return '7DaysToDie.exe';
+}
+exports.DEFAULT_LAUNCHER_SETTINGS = {
+    ShowLauncher: false,
+    DefaultRunConfig: {
+        ExclusiveMode: false,
+        Renderer: "dx11",
+        UseGamesparks: true,
+        UseEAC: true,
+        UseNativeInput: false,
+        AdditionalParameters: ""
+    }
+};
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiY29tbW9uLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiY29tbW9uLnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiI7Ozs7OztBQVNBLDREQUVDO0FBRUQsOENBRUM7QUFFRCxrQ0FFQztBQUVELHdDQUVDO0FBdkJELDJDQUFrQztBQUNsQyxnREFBd0I7QUFFWCxRQUFBLFFBQVEsR0FBRyxhQUFhLENBQUM7QUFDekIsUUFBQSxPQUFPLEdBQUcsWUFBWSxDQUFDO0FBQ3ZCLFFBQUEsWUFBWSxHQUFHLGdCQUFnQixDQUFDO0FBQ2hDLFFBQUEsY0FBYyxHQUFHLFFBQVEsZUFBTyxFQUFFLENBQUM7QUFDbkMsUUFBQSxvQkFBb0IsR0FBRyxDQUFDLFlBQVksRUFBRSxlQUFlLENBQUMsQ0FBQztBQUVwRSxTQUFnQix3QkFBd0I7SUFDdEMsT0FBTyxjQUFJLENBQUMsSUFBSSxDQUFDLGlCQUFJLENBQUMsYUFBYSxDQUFDLFNBQVMsQ0FBQyxFQUFFLFlBQVksRUFBRSx1QkFBdUIsQ0FBQyxDQUFDO0FBQ3pGLENBQUM7QUFFRCxTQUFnQixpQkFBaUIsQ0FBQyxTQUFpQjtJQUNqRCxPQUFPLGNBQUksQ0FBQyxJQUFJLENBQUMsaUJBQUksQ0FBQyxhQUFhLENBQUMsU0FBUyxDQUFDLEVBQUUsWUFBWSxFQUFFLFNBQVMsR0FBRyxHQUFHLEdBQUcsb0JBQVksQ0FBQyxDQUFDO0FBQ2hHLENBQUM7QUFFRCxTQUFnQixXQUFXO0lBQ3pCLE9BQU8sTUFBTSxDQUFDO0FBQ2hCLENBQUM7QUFFRCxTQUFnQixjQUFjO0lBQzVCLE9BQU8sZ0JBQWdCLENBQUM7QUFDMUIsQ0FBQztBQUVZLFFBQUEseUJBQXlCLEdBQUc7SUFDdkMsWUFBWSxFQUFHLEtBQUs7SUFDcEIsZ0JBQWdCLEVBQUc7UUFDakIsYUFBYSxFQUFHLEtBQUs7UUFDckIsUUFBUSxFQUFHLE1BQU07UUFDakIsYUFBYSxFQUFHLElBQUk7UUFDcEIsTUFBTSxFQUFHLElBQUk7UUFDYixjQUFjLEVBQUcsS0FBSztRQUN0QixvQkFBb0IsRUFBRyxFQUFFO0tBQzFCO0NBQ0YsQ0FBQSIsInNvdXJjZXNDb250ZW50IjpbImltcG9ydCB7IHV0aWwgfSBmcm9tICd2b3J0ZXgtYXBpJztcclxuaW1wb3J0IHBhdGggZnJvbSAncGF0aCc7XHJcblxyXG5leHBvcnQgY29uc3QgTU9EX0lORk8gPSAnbW9kaW5mby54bWwnO1xyXG5leHBvcnQgY29uc3QgR0FNRV9JRCA9ICc3ZGF5c3RvZGllJztcclxuZXhwb3J0IGNvbnN0IExPX0ZJTEVfTkFNRSA9ICdsb2FkT3JkZXIuanNvbic7XHJcbmV4cG9ydCBjb25zdCBJMThOX05BTUVTUEFDRSA9IGBnYW1lLSR7R0FNRV9JRH1gO1xyXG5leHBvcnQgY29uc3QgSU5WQUxJRF9MT19NT0RfVFlQRVMgPSBbJ2NvbGxlY3Rpb24nLCAnN2R0ZC1yb290LW1vZCddO1xyXG5cclxuZXhwb3J0IGZ1bmN0aW9uIGxhdW5jaGVyU2V0dGluZ3NGaWxlUGF0aCgpOiBzdHJpbmcge1xyXG4gIHJldHVybiBwYXRoLmpvaW4odXRpbC5nZXRWb3J0ZXhQYXRoKCdhcHBEYXRhJyksICc3RGF5c1RvRGllJywgJ2xhdW5jaGVyc2V0dGluZ3MuanNvbicpO1xyXG59XHJcblxyXG5leHBvcnQgZnVuY3Rpb24gbG9hZE9yZGVyRmlsZVBhdGgocHJvZmlsZUlkOiBzdHJpbmcpOiBzdHJpbmcge1xyXG4gIHJldHVybiBwYXRoLmpvaW4odXRpbC5nZXRWb3J0ZXhQYXRoKCdhcHBEYXRhJyksICc3RGF5c1RvRGllJywgcHJvZmlsZUlkICsgJ18nICsgTE9fRklMRV9OQU1FKTtcclxufVxyXG5cclxuZXhwb3J0IGZ1bmN0aW9uIG1vZHNSZWxQYXRoKCkge1xyXG4gIHJldHVybiAnTW9kcyc7XHJcbn1cclxuXHJcbmV4cG9ydCBmdW5jdGlvbiBnYW1lRXhlY3V0YWJsZSgpIHtcclxuICByZXR1cm4gJzdEYXlzVG9EaWUuZXhlJztcclxufVxyXG5cclxuZXhwb3J0IGNvbnN0IERFRkFVTFRfTEFVTkNIRVJfU0VUVElOR1MgPSB7XHJcbiAgU2hvd0xhdW5jaGVyIDogZmFsc2UsXHJcbiAgRGVmYXVsdFJ1bkNvbmZpZyA6IHtcclxuICAgIEV4Y2x1c2l2ZU1vZGUgOiBmYWxzZSxcclxuICAgIFJlbmRlcmVyIDogXCJkeDExXCIsXHJcbiAgICBVc2VHYW1lc3BhcmtzIDogdHJ1ZSxcclxuICAgIFVzZUVBQyA6IHRydWUsXHJcbiAgICBVc2VOYXRpdmVJbnB1dCA6IGZhbHNlLFxyXG4gICAgQWRkaXRpb25hbFBhcmFtZXRlcnMgOiBcIlwiXHJcbiAgfVxyXG59Il19
