@@ -8,9 +8,10 @@ import { ILoadOrderEntry, IProps, LoadOrder } from './types';
 import { genProps, getPakFiles, toBlue } from './util';
 
 const STEAM_ID = '692850';
+const EPIC_ID = 'a2ac59c83b704e40b4ab3a9e963fef52';
 
 async function findGame() {
-  return util.GameStoreHelper.findByAppId([STEAM_ID])
+  return util.GameStoreHelper.findByAppId([STEAM_ID, EPIC_ID])
     .then(game => game.gamePath);
 }
 
