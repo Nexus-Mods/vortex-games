@@ -459,13 +459,13 @@ function testSMAPI(files, gameId) {
   });
 }
 
-async function installSMAPI(getDiscoveryPath, files, destinationPath) {
+async function installSMAPI(getDiscoveryPath: () => string, files: string[], destinationPath: string) {
   const folder = process.platform === 'win32'
     ? 'windows'
     : process.platform === 'linux'
       ? 'linux'
       : 'macos';
-  const fileHasCorrectPlatform = (file) => {
+  const fileHasCorrectPlatform = (file: string) => {
     const segments = file.split(path.sep).map(seg => seg.toLowerCase());
     return (segments.includes(folder));
   }
