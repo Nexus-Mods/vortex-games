@@ -3560,17 +3560,15 @@ function main(context) {
   context.once(() => {
     context.api.onStateChange(
       ["session", "base", "toolsRunning"],
-      async (prev, current) => {
+      (prev, current) => {
         const gameMode = import_vortex_api10.selectors.activeGameId(context.api.getState());
         if (gameMode === GAME_ID && Object.keys(current).length === 0) {
-          try {
-            await readStoredLO(context.api);
-          } catch (err) {
+          readStoredLO(context.api).catch((err) => {
             context.api.showErrorNotification("Failed to read load order", err, {
               message: "Please run the game before you start modding",
               allowReport: false
             });
-          }
+          });
         }
       }
     );
