@@ -3469,7 +3469,7 @@ var onProfileWillChange = (api) => {
   };
 };
 var onSettingsChange = (api, priorityManager2) => {
-  return async (prev, current) => {
+  return (prev, current) => {
     const state = api.getState();
     const activeProfile = import_vortex_api20.selectors.activeProfile(state);
     if (activeProfile?.gameId !== GAME_ID || priorityManager2 === void 0) {
@@ -3477,9 +3477,6 @@ var onSettingsChange = (api, priorityManager2) => {
     }
     const priorityType = import_vortex_api20.util.getSafe(state, getPriorityTypeBranch(), "prefix-based");
     priorityManager2().priorityType = priorityType;
-    api.events.on("purge-mods", () => {
-      IniStructure.getInstance().revertLOFile();
-    });
   };
 };
 function getScriptMergerTool(api) {

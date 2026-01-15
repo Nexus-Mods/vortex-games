@@ -167,7 +167,7 @@ export const onProfileWillChange = (api: types.IExtensionApi) => {
 }
 
 export const onSettingsChange = (api: types.IExtensionApi, priorityManager: () => PriorityManager) => {
-  return async (prev: string, current: any) => {
+  return (prev: string, current: any) => {
     const state = api.getState();
     const activeProfile = selectors.activeProfile(state);
     if (activeProfile?.gameId !== GAME_ID || priorityManager === undefined) {
@@ -176,9 +176,6 @@ export const onSettingsChange = (api: types.IExtensionApi, priorityManager: () =
 
     const priorityType = util.getSafe(state, getPriorityTypeBranch(), 'prefix-based');
     priorityManager().priorityType = priorityType;
-    api.events.on('purge-mods', () => {
-      IniStructure.getInstance().revertLOFile();
-    });
   }
 }
 
