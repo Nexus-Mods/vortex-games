@@ -1,12 +1,16 @@
 /* eslint-disable */
 import path from 'path';
 import { actions, fs, types, selectors, log, util } from 'vortex-api';
-import { NOTIF_ACTIVITY_CONFIG_MOD, GAME_ID, MOD_CONFIG, RGX_INVALID_CHARS_WINDOWS, MOD_TYPE_CONFIG, MOD_MANIFEST, getBundledMods } from './common';
+import {
+  NOTIF_ACTIVITY_CONFIG_MOD, GAME_ID, MOD_CONFIG,
+  RGX_INVALID_CHARS_WINDOWS, MOD_TYPE_CONFIG,
+  MOD_MANIFEST, SMAPI_INTERNAL_DIRECTORY, getBundledMods
+} from './common';
 import { setMergeConfigs } from './actions';
 import { IFileEntry } from './types';
 import { walkPath, defaultModsRelPath, deleteFolder } from './util';
 
-import { findSMAPIMod, findSMAPITool } from './SMAPI';
+import { getSMAPIMods, findSMAPITool } from './SMAPI';
 import { IEntry } from 'turbowalk';
 
 const syncWrapper = (api: types.IExtensionApi) => {
@@ -89,7 +93,13 @@ async function onSyncModConfigurations(api: types.IExtensionApi, silent?: boolea
       return segments[0];
     }
     const files = await walkPath(installPath);
+    const SMAPIModIds = getSMAPIMods(api).map(mod => mod.id);
+    const isSMAPI = (file: IEntry) => file.filePath.includes(SMAPI_INTERNAL_DIRECTORY) || SMAPIModIds.forEach(modId => file.filePath.includes(modId));
     const filtered = files.reduce((accum: IFileEntry[], file: IEntry) => {
+      if (isSMAPI(file)) {
+        // Do not touch SMAPI's internal config files
+        return accum;
+      }
       if (path.basename(file.filePath).toLowerCase() === MOD_CONFIG && !path.dirname(file.filePath).includes(mod.configModPath)) {
         const candidateName = resolveCandidateName(file);
         if (util.getSafe(profile, ['modState', candidateName, 'enabled'], false) === false) {

@@ -339,19 +339,17 @@ function main(context: types.IExtensionContext) {
 
   context.once(() => {
     context.api.onStateChange(['session', 'base', 'toolsRunning'],
-      async (prev: any, current: any) => {
+      (prev: any, current: any) => {
         // when a tool exits, re-read the load order from disk as it may have been
         // changed
         const gameMode = selectors.activeGameId(context.api.getState());
         if ((gameMode === GAME_ID) && (Object.keys(current).length === 0)) {
-          try {
-            await readStoredLO(context.api);
-          } catch (err) {
+          readStoredLO(context.api).catch(err => {
             context.api.showErrorNotification('Failed to read load order', err, {
               message: 'Please run the game before you start modding',
               allowReport: false,
             });
-          }
+          });
         }
       });
 

@@ -10,17 +10,19 @@ export function findSMAPITool(api: types.IExtensionApi): types.IDiscoveredTool |
   return !!tool?.path ? tool : undefined;
 }
 
-export function findSMAPIMod(api: types.IExtensionApi): types.IMod {
+export function getSMAPIMods(api: types.IExtensionApi): types.IMod[] {
   const state = api.getState();
   const profileId = selectors.lastActiveProfileForGame(state, GAME_ID);
   const profile = selectors.profileById(state, profileId);
   const isActive = (modId: string) => util.getSafe(profile, ['modState', modId, 'enabled'], false);
   const isSMAPI = (mod: types.IMod) =>
-    mod.type === 'SMAPI' && mod.attributes?.modId === 2400;
+    mod.type === 'SMAPI' && mod.attributes?.modId === SMAPI_MOD_ID;
   const mods: { [modId: string]: types.IMod } = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
-  const SMAPIMods: types.IMod[] = Object.values(mods).filter((mod: types.IMod) =>
-    isSMAPI(mod) && isActive(mod.id));
+  return Object.values(mods).filter((mod: types.IMod) => isSMAPI(mod) && isActive(mod.id));
+}
 
+export function findSMAPIMod(api: types.IExtensionApi): types.IMod {
+  const SMAPIMods = getSMAPIMods(api);
   return (SMAPIMods.length === 0)
     ? undefined
     : SMAPIMods.length > 1
