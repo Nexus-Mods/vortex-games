@@ -136,6 +136,18 @@ function toLOPrefix(context: types.IExtensionContext, mod: types.IMod): string {
     : 'ZZZZ-' + mod.id;
 }
 
+async function requiresLauncher(gamePath: string, store?: string) {
+ if (store === 'epic') {
+    return Promise.resolve({
+        launcher: 'epic',
+        addInfo: {
+            appId: EPIC_ID,
+        },
+    });
+  }
+  return Promise.resolve(undefined);
+}
+
 function main(context: types.IExtensionContext) {
   context.registerGame({
     id: GAME_ID,
@@ -152,6 +164,7 @@ function main(context: types.IExtensionContext) {
       'BloodstainedROTN/Binaries/Win64/BloodstainedRotN-Win64-Shipping.exe',
     ],
     setup: toBlue((discovery) => prepareForModding(context, discovery)),
+    requiresLauncher: requiresLauncher as any,
     environment: {
       SteamAPPId: STEAM_ID,
     },
