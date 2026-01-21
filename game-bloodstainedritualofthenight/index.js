@@ -288,6 +288,17 @@ function toLOPrefix(context, mod) {
   const loEntry = loadOrder.find((loEntry2) => loEntry2.id === mod.id);
   return loEntry?.data?.prefix !== void 0 ? loEntry.data.prefix + "-" + mod.id : "ZZZZ-" + mod.id;
 }
+async function requiresLauncher(gamePath, store) {
+  if (store === "epic") {
+    return Promise.resolve({
+      launcher: "epic",
+      addInfo: {
+        appId: EPIC_ID
+      }
+    });
+  }
+  return Promise.resolve(void 0);
+}
 function main(context) {
   context.registerGame({
     id: GAME_ID,
@@ -304,6 +315,7 @@ function main(context) {
       "BloodstainedROTN/Binaries/Win64/BloodstainedRotN-Win64-Shipping.exe"
     ],
     setup: toBlue((discovery) => prepareForModding(context, discovery)),
+    requiresLauncher,
     environment: {
       SteamAPPId: STEAM_ID
     },
