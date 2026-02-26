@@ -1,11 +1,15 @@
-import { IFileInfo } from '@nexusmods/nexus-api';
+import type { IFileInfo } from '@nexusmods/nexus-api';
+import type { ILookupResult, IQuery } from 'modmeta-db';
+import type { types } from 'vortex-api';
+
 import * as https from 'https';
-import { ILookupResult, IQuery } from 'modmeta-db';
 import * as semver from 'semver';
-import { log, types } from 'vortex-api';
+import { log } from 'vortex-api';
+
+import type { ISMAPIIOQuery, ISMAPIResult } from './types';
+
 import { GAME_ID } from './common';
 import { SMAPI_IO_API_VERSION } from './constants';
-import { ISMAPIIOQuery, ISMAPIResult } from './types';
 import { coerce, semverCompare } from './util';
 
 const SMAPI_HOST = 'smapi.io';

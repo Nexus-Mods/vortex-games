@@ -1,12 +1,12 @@
-import { types, selectors } from 'vortex-api';
-
-import DependencyManager from './DependencyManager';
+import type { types} from 'vortex-api';
 
 import { coerce, gte } from 'semver';
+import { selectors } from 'vortex-api';
 
-import { downloadSMAPI, findSMAPIMod } from './SMAPI';
+import type DependencyManager from './DependencyManager';
 
 import { GAME_ID } from './common';
+import { downloadSMAPI, findSMAPIMod } from './SMAPI';
 
 export async function testSMAPIOutdated(api: types.IExtensionApi,
                                         depManager: DependencyManager)

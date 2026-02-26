@@ -21,7 +21,10 @@ export function registerConfigMod(context: types.IExtensionContext) {
   context.registerAction('mod-icons', 999, 'swap', {}, 'Sync Mod Configurations',
     () => syncWrapper(context.api),
     () => {
-      const state = context.api.store.getState();
+      const state = context.api.store?.getState();
+      if (state === undefined) {
+        return false;
+      }
       const gameMode = selectors.activeGameId(state);
       return (gameMode === GAME_ID);
     });
@@ -42,7 +45,7 @@ async function onSyncModConfigurations(api: types.IExtensionApi, silent?: boolea
   if (profile?.gameId !== GAME_ID || shouldSuppressSync(api)) {
     return;
   }
-  const smapiTool: types.IDiscoveredTool = findSMAPITool(api);
+  const smapiTool = findSMAPITool(api);
   if (!smapiTool?.path) {
     return;
   }
@@ -67,7 +70,7 @@ async function onSyncModConfigurations(api: types.IExtensionApi, silent?: boolea
     }
 
     if (result.action === 'Enable') {
-      api.store.dispatch(setMergeConfigs(profile.id, true));
+      api.store?.dispatch(setMergeConfigs(profile.id, true));
     }
   }
 
@@ -160,7 +163,7 @@ export async function addModConfig(api: types.IExtensionApi, files: IFileEntry[]
   const discovery = selectors.discoveryByGame(state, GAME_ID);
   const isInstallPath = modsPath !== undefined;
   modsPath = modsPath ?? path.join(discovery.path, defaultModsRelPath());
-  const smapiTool: types.IDiscoveredTool = findSMAPITool(api);
+  const smapiTool = findSMAPITool(api);
   if (smapiTool === undefined) {
     return;
   }
@@ -172,7 +175,7 @@ export async function addModConfig(api: types.IExtensionApi, files: IFileEntry[]
       // Don't touch the internal SMAPI configuration files.
       continue;
     }
-    api.sendNotification({
+    api.sendNotification?.({
       type: 'activity',
       id: NOTIF_ACTIVITY_CONFIG_MOD,
       title: 'Importing config files...',
@@ -197,7 +200,7 @@ export async function addModConfig(api: types.IExtensionApi, files: IFileEntry[]
     }
   }
 
-  api.dismissNotification(NOTIF_ACTIVITY_CONFIG_MOD);
+  api.dismissNotification?.(NOTIF_ACTIVITY_CONFIG_MOD);
   setConfigModAttribute(api, configMod.mod.id, Array.from(new Set(newConfigAttributes)));
 }
 
@@ -211,7 +214,7 @@ export async function ensureConfigMod(api: types.IExtensionApi): Promise<types.I
     const profile = selectors.activeProfile(state);
     const modName = configModName(profile.name);
     const mod = await createConfigMod(api, modName, profile);
-    api.store.dispatch(actions.setModEnabled(profile.id, mod.id, true));
+    api.store?.dispatch(actions.setModEnabled(profile.id, mod.id, true));
     return Promise.resolve(mod);
   }
 }
@@ -347,14 +350,17 @@ export async function onRevertFiles(api: types.IExtensionApi, profileId: string)
 }
 
 export async function onAddedFiles(api: types.IExtensionApi, profileId: string, files: IFileEntry[]) {
-  const state = api.store.getState();
+  const state = api.store?.getState();
+  if (state === undefined) {
+    return;
+  }
   const profile = selectors.profileById(state, profileId);
   if (profile?.gameId !== GAME_ID) {
     // don't care about any other games
     return;
   }
 
-  const smapiTool: types.IDiscoveredTool = findSMAPITool(api);
+  const smapiTool = findSMAPITool(api);
   if (smapiTool === undefined) {
     // Very important not to add any files if Vortex has no knowledge of SMAPI's location.
     //  this is to avoid pulling SMAPI configuration files into one of the mods installed by Vortex.
@@ -384,7 +390,7 @@ function extractConfigModAttributes(state: types.IState, configModId: string): a
 }
 
 function setConfigModAttribute(api: types.IExtensionApi, configModId: string, attributes: string[]) {
-  api.store.dispatch(actions.setModAttribute(GAME_ID, configModId, 'configMod', attributes));
+  api.store?.dispatch(actions.setModAttribute(GAME_ID, configModId, 'configMod', attributes));
 }
 
 function removeConfigModAttributes(api: types.IExtensionApi, configMod: types.IMod, attributes: string[]) {
@@ -397,7 +403,7 @@ async function addConfigFiles(api: types.IExtensionApi, profileId: string, files
   if (files.length === 0) {
     return Promise.resolve();
   }
-  api.sendNotification({
+  api.sendNotification?.({
     type: 'activity',
     id: NOTIF_ACTIVITY_CONFIG_MOD,
     title: 'Importing config files...',
@@ -440,11 +446,12 @@ async function addRegularFiles(api: types.IExtensionApi, profileId: string, file
         await fs.copyAsync(entry.filePath, targetPath);
         await fs.removeAsync(entry.filePath);
       } catch (err) {
-        if (!err.message.includes('are the same file')) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (!message.includes('are the same file')) {
           // should we be reporting this to the user? This is a completely
           // automated process and if it fails more often than not the
           // user probably doesn't care
-          log('error', 'failed to re-import added file to mod', err.message);
+          log('error', 'failed to re-import added file to mod', message);
         }
       }
     }
