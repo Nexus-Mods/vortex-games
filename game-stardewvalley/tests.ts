@@ -1,6 +1,6 @@
 import type { types} from 'vortex-api';
 
-import { coerce, gte } from 'semver';
+import { coerce as semverCoerce, gte } from 'semver';
 import { selectors } from 'vortex-api';
 
 import type DependencyManager from './DependencyManager';
@@ -8,29 +8,44 @@ import type DependencyManager from './DependencyManager';
 import { GAME_ID } from './common';
 import { downloadSMAPI, findSMAPIMod } from './SMAPI';
 
+/**
+ * Extension-level runtime tests shown in Vortex diagnostics.
+ *
+ * Current test validates whether active mods require a newer SMAPI version than
+ * the one currently installed/enabled.
+ */
+
 export async function testSMAPIOutdated(api: types.IExtensionApi,
                                         depManager: DependencyManager)
                                         : Promise<types.ITestResult> {
   const state = api.getState();
   const activeGameId = selectors.activeGameId(state);
   if (activeGameId !== GAME_ID) {
-    return Promise.resolve(undefined);
+    return Promise.resolve(undefined as any);
   }
 
   let currentSMAPIVersion = findSMAPIMod(api)?.attributes?.version;
   if (currentSMAPIVersion === undefined) {
     // SMAPI isn't installed or enabled.
-    return Promise.resolve(undefined);
+    return Promise.resolve(undefined as any);
   }
 
   const isSmapiOutdated = async () => {
     currentSMAPIVersion = findSMAPIMod(api)?.attributes?.version;
+    if (currentSMAPIVersion === undefined) {
+      return false;
+    }
+    const installedVersion = currentSMAPIVersion;
     const enabledManifests = await depManager.getManifests();
     const incompatibleModIds: string[] = [];
     for (const [id, manifests] of Object.entries(enabledManifests)) {
       const incompatible = manifests.filter((iter) => {
         if (iter.MinimumApiVersion !== undefined) {
-          return !gte(currentSMAPIVersion, coerce(iter.MinimumApiVersion ?? '0.0.0'));
+          const minApiVersion = semverCoerce(iter.MinimumApiVersion ?? '0.0.0');
+          if (minApiVersion === null) {
+            return false;
+          }
+          return !gte(installedVersion, minApiVersion);
         }
         return false;
       });
@@ -54,5 +69,5 @@ export async function testSMAPIOutdated(api: types.IExtensionApi,
       onRecheck: () => isSmapiOutdated(),
       severity: 'warning' as types.ProblemSeverity,
     }) as any
-    : Promise.resolve(undefined);
+    : Promise.resolve(undefined as any);
 }

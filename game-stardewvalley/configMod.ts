@@ -13,6 +13,18 @@ import { walkPath, defaultModsRelPath, deleteFolder } from './util';
 import { getSMAPIMods, findSMAPITool } from './SMAPI';
 import { IEntry } from 'turbowalk';
 
+/**
+ * Configuration file sync subsystem for Stardew Valley.
+ *
+ * This module manages the synthetic "configuration mod" used to preserve
+ * generated `config.json` files across mod updates/reinstalls.
+ *
+ * Main entry points:
+ * - `registerConfigMod` (UI action registration)
+ * - `onAddedFiles` / `onWillEnableMods` (runtime hooks)
+ * - `onRevertFiles` (restore configs to owning mods)
+ */
+
 const syncWrapper = (api: types.IExtensionApi) => {
   onSyncModConfigurations(api);
 }
@@ -54,6 +66,9 @@ async function onSyncModConfigurations(api: types.IExtensionApi, silent?: boolea
     if (silent) {
       return;
     }
+    if (api.showDialog === undefined) {
+      return;
+    }
     const result = await api.showDialog('info', 'Mod Configuration Sync', {
       bbcode: 'Many Stardew Valley mods generate their own configuration files during game play. By default the generated files are, '
         + 'ingested by their respective mods.[br][/br][br][/br]'
@@ -93,7 +108,7 @@ async function onSyncModConfigurations(api: types.IExtensionApi, silent?: boolea
     const resolveCandidateName = (file: IEntry): string => {
       const relPath = path.relative(installPath, file.filePath);
       const segments = relPath.split(path.sep);
-      return segments[0];
+      return segments[0] ?? '';
     }
     const files = await walkPath(installPath);
     const SMAPIModIds = getSMAPIMods(api).map(mod => mod.id);
@@ -105,6 +120,9 @@ async function onSyncModConfigurations(api: types.IExtensionApi, silent?: boolea
       }
       if (path.basename(file.filePath).toLowerCase() === MOD_CONFIG && !path.dirname(file.filePath).includes(mod.configModPath)) {
         const candidateName = resolveCandidateName(file);
+        if (candidateName === '') {
+          return accum;
+        }
         if (util.getSafe(profile, ['modState', candidateName, 'enabled'], false) === false) {
           return accum;
         }
@@ -115,7 +133,7 @@ async function onSyncModConfigurations(api: types.IExtensionApi, silent?: boolea
     await addModConfig(api, filtered, installPath);
     await eventPromise(api, 'deploy-mods');
   } catch (err) {
-    api.showErrorNotification('Failed to sync mod configurations', err);
+    api.showErrorNotification?.('Failed to sync mod configurations', err);
   }
 }
 
@@ -131,25 +149,25 @@ type ConfigMod = {
   mod: types.IMod;
   configModPath: string;
 }
-async function initialize(api: types.IExtensionApi): Promise<ConfigMod> {
+async function initialize(api: types.IExtensionApi): Promise<ConfigMod | undefined> {
   const state = api.getState();
   const profile = selectors.activeProfile(state);
   if (profile?.gameId !== GAME_ID) {
-    return Promise.resolve(undefined);
+    return undefined;
   }
   const mergeConfigs = util.getSafe(state, ['settings', 'SDV', 'mergeConfigs', profile.id], false);
   if (!mergeConfigs) {
-    return Promise.resolve(undefined);
+    return undefined;
   }
 
   try {
     const mod = await ensureConfigMod(api);
     const installationPath = selectors.installPathForGame(state, GAME_ID);
     const configModPath = path.join(installationPath, mod.installationPath);
-    return Promise.resolve({ configModPath, mod });
+    return { configModPath, mod };
   } catch (err) {
-    api.showErrorNotification('Failed to resolve config mod path', err);
-    return Promise.resolve(undefined);
+    api.showErrorNotification?.('Failed to resolve config mod path', err);
+    return undefined;
   }
 }
 
@@ -162,7 +180,13 @@ export async function addModConfig(api: types.IExtensionApi, files: IFileEntry[]
   const state = api.getState();
   const discovery = selectors.discoveryByGame(state, GAME_ID);
   const isInstallPath = modsPath !== undefined;
-  modsPath = modsPath ?? path.join(discovery.path, defaultModsRelPath());
+  const resolvedModsPath = modsPath
+    ?? ((discovery?.path !== undefined)
+      ? path.join(discovery.path, defaultModsRelPath())
+      : undefined);
+  if (resolvedModsPath === undefined) {
+    return;
+  }
   const smapiTool = findSMAPITool(api);
   if (smapiTool === undefined) {
     return;
@@ -170,6 +194,10 @@ export async function addModConfig(api: types.IExtensionApi, files: IFileEntry[]
   const configModAttributes: string[] = extractConfigModAttributes(state, configMod.mod.id);
   let newConfigAttributes = Array.from(new Set(configModAttributes));
   for (const file of files) {
+    const primaryCandidate = file.candidates[0];
+    if (primaryCandidate === undefined) {
+      continue;
+    }
     const segments = file.filePath.toLowerCase().split(path.sep).filter(seg => !!seg);
     if (segments.includes('smapi_internal')) {
       // Don't touch the internal SMAPI configuration files.
@@ -179,24 +207,24 @@ export async function addModConfig(api: types.IExtensionApi, files: IFileEntry[]
       type: 'activity',
       id: NOTIF_ACTIVITY_CONFIG_MOD,
       title: 'Importing config files...',
-      message: file.candidates[0],
+      message: primaryCandidate,
     });
     
-    if (!configModAttributes.includes(file.candidates[0])) {
-      newConfigAttributes.push(file.candidates[0]);
+    if (!configModAttributes.includes(primaryCandidate)) {
+      newConfigAttributes.push(primaryCandidate);
     }
     try {
-      const installRelPath = path.relative(modsPath, file.filePath);
+      const installRelPath = path.relative(resolvedModsPath, file.filePath);
       const segments = installRelPath.split(path.sep);
       const relPath = isInstallPath ? segments.slice(1).join(path.sep) : installRelPath;
       const targetPath = path.join(configMod.configModPath, relPath);
       const targetDir = path.extname(targetPath) !== '' ? path.dirname(targetPath) : targetPath;
       await fs.ensureDirWritableAsync(targetDir);
-      log('debug', 'importing config file from', { source: file.filePath, destination: targetPath, modId: file.candidates[0] });
+      log('debug', 'importing config file from', { source: file.filePath, destination: targetPath, modId: primaryCandidate });
       await fs.copyAsync(file.filePath, targetPath, { overwrite: true });
       await fs.removeAsync(file.filePath);
     } catch (err) {
-      api.showErrorNotification('Failed to write mod config', err);
+      api.showErrorNotification?.('Failed to write mod config', err);
     }
   }
 
@@ -212,6 +240,9 @@ export async function ensureConfigMod(api: types.IExtensionApi): Promise<types.I
     return Promise.resolve(modInstalled);
   } else {
     const profile = selectors.activeProfile(state);
+    if ((profile === undefined) || (profile.gameId !== GAME_ID)) {
+      return Promise.reject(new Error('No active Stardew Valley profile'));
+    }
     const modName = configModName(profile.name);
     const mod = await createConfigMod(api, modName, profile);
     api.store?.dispatch(actions.setModEnabled(profile.id, mod.id, true));
@@ -308,7 +339,7 @@ export async function onWillEnableMods(api: types.IExtensionApi, profileId: stri
     try {
       await applyToModConfig(api, () => deleteFolder(path.dirname(modConfigFilePath)));
     } catch (err) {
-      api.showErrorNotification('Failed to write mod config', err);
+      api.showErrorNotification?.('Failed to write mod config', err);
       return;
     }
   }
@@ -322,11 +353,14 @@ export async function applyToModConfig(api: types.IExtensionApi, cb: () => Promi
   //  re-introducing it (this is to avoid ECD)
   try {
     const configMod = await initialize(api);
+    if (configMod === undefined) {
+      return;
+    }
     await api.emitAndAwait('deploy-single-mod', GAME_ID, configMod.mod.id, false);
     await cb();
     await api.emitAndAwait('deploy-single-mod', GAME_ID, configMod.mod.id, true); 
   } catch (err) {
-    api.showErrorNotification('Failed to write mod config', err);
+    api.showErrorNotification?.('Failed to write mod config', err);
   }
 }
 
@@ -420,22 +454,29 @@ async function addRegularFiles(api: types.IExtensionApi, profileId: string, file
   const state = api.getState();
   const game = util.getGame(GAME_ID);
   const discovery = selectors.discoveryByGame(state, GAME_ID);
+  if ((game.getModPaths === undefined) || (discovery?.path === undefined)) {
+    return Promise.resolve();
+  }
   const modPaths = game.getModPaths(discovery.path);
   const installPath = selectors.installPathForGame(state, GAME_ID);
   for (const entry of files) {
     if (entry.candidates.length === 1) {
-      const mod = util.getSafe(state.persistent.mods,
-        [GAME_ID, entry.candidates[0]],
-        undefined);
-      if (!isModCandidateValid(mod, entry)) {
-        return Promise.resolve();
+      const candidateId = entry.candidates[0];
+      if (candidateId === undefined) {
+        continue;
       }
-      const from = modPaths[mod.type ?? ''];
+      const mod = util.getSafe(state.persistent.mods,
+        [GAME_ID, candidateId],
+        undefined) as unknown as types.IMod | undefined;
+      if (!isModCandidateValid(mod, entry)) {
+        continue;
+      }
+      const from = modPaths[mod.type];
       if (from === undefined) {
         // How is this even possible? regardless it's not this
         //  function's job to report this.
         log('error', 'failed to resolve mod path for mod type', mod.type);
-        return Promise.resolve();
+        continue;
       }
       const relPath = path.relative(from, entry.filePath);
       const targetPath = path.join(installPath, mod.id, relPath);
@@ -458,8 +499,8 @@ async function addRegularFiles(api: types.IExtensionApi, profileId: string, file
   }
 }
 
-const isModCandidateValid = (mod, entry) => {
-  if (mod?.id === undefined || mod.type === 'sdvrootfolder') {
+const isModCandidateValid = (mod: types.IMod | undefined, entry: IFileEntry): mod is types.IMod => {
+  if ((mod === undefined) || (mod.id === undefined) || (mod.type === 'sdvrootfolder')) {
     // There is no reliable way to ascertain whether a new file entry
     //  actually belongs to a root modType as some of these mods will act
     //  as replacement mods. This obviously means that if the game has
@@ -484,7 +525,7 @@ const isModCandidateValid = (mod, entry) => {
   const modFolderName = ((modsSegIdx !== -1) && (segments.length > modsSegIdx + 1))
     ? segments[modsSegIdx + 1] : undefined;
 
-  let bundledMods = util.getSafe(mod, ['attributes', 'smapiBundledMods'], []);
+  let bundledMods: string[] = util.getSafe(mod, ['attributes', 'smapiBundledMods'], [] as string[]);
   bundledMods = bundledMods.length > 0 ? bundledMods : getBundledMods();
   if (segments.includes('content')) {
     // SMAPI is not supposed to overwrite the game's content directly.

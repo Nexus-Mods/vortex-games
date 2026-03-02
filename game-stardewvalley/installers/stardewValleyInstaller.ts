@@ -62,7 +62,7 @@ export async function installStardewValley(api: types.IExtensionApi,
   let parseError: unknown;
 
   await dependencyManager.scanManifests(true);
-  let mods: IModInfo[] = await Promise.all(manifestFiles.map(async manifestFile => {
+  const scannedMods = await Promise.all(manifestFiles.map(async manifestFile => {
     const rootFolder = path.dirname(manifestFile);
     const rootSegments = rootFolder.toLowerCase().split(path.sep);
     const manifestIndex = manifestFile.toLowerCase().indexOf(MANIFEST_FILE);
@@ -95,10 +95,10 @@ export async function installStardewValley(api: types.IExtensionApi,
     }
   }));
 
-  mods = mods.filter(x => x !== undefined);
+  const mods: IModInfo[] = scannedMods.filter((mod): mod is IModInfo => mod !== undefined);
 
   if (mods.length === 0) {
-    api.showErrorNotification(
+    api.showErrorNotification?.(
       'The mod manifest is invalid and can\'t be read. You can try to install the mod anyway via right-click -> "Unpack (as-is)"',
       parseError ?? new Error('Unknown manifest parse error'), {
       allowReport: false,

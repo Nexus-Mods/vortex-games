@@ -7,6 +7,11 @@ import { fs, util } from 'vortex-api';
 
 import type { ISDVModManifest } from './types';
 
+/**
+ * Shared utility helpers for manifest parsing, semantic version comparison,
+ * and safe directory traversal operations.
+ */
+
 export function defaultModsRelPath(): string {
   return 'Mods';
 }
@@ -32,7 +37,7 @@ export function coerce(input: string): semver.SemVer {
   try {
     return new semver.SemVer(input);
   } catch (err) {
-    return semver.coerce(input);
+    return semver.coerce(input) ?? new semver.SemVer('0.0.0');
   }
 }
 

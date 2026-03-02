@@ -6,6 +6,15 @@ import { actions, selectors, util } from 'vortex-api';
 import { GAME_ID } from './common';
 import { SMAPI_MOD_ID, SMAPI_URL } from './constants';
 
+/**
+ * SMAPI integration helpers.
+ *
+ * Responsibilities:
+ * - identify discovered SMAPI tool/mod entries
+ * - deploy SMAPI and set it as primary tool when available
+ * - download/install/update SMAPI through Nexus APIs
+ */
+
 export function findSMAPITool(api: types.IExtensionApi): types.IDiscoveredTool | undefined {
   const state = api.getState();
   const discovery = selectors.discoveryByGame(state, GAME_ID);
@@ -29,7 +38,7 @@ export function findSMAPIMod(api: types.IExtensionApi): types.IMod | undefined {
   return (SMAPIMods.length === 0)
     ? undefined
     : SMAPIMods.length > 1
-      ? SMAPIMods.reduce((prev, iter) => {
+      ? SMAPIMods.reduce<types.IMod | undefined>((prev, iter) => {
         if (prev === undefined) {
           return iter;
         }
@@ -64,6 +73,9 @@ export async function downloadSMAPI(api: types.IExtensionApi, update?: boolean) 
   }
 
   try {
+    if (api.ext?.nexusGetModFiles === undefined) {
+      throw new util.ProcessCanceled('Nexus API unavailable');
+    }
     const modFiles = await api.ext.nexusGetModFiles(GAME_ID, SMAPI_MOD_ID);
 
     const fileTime = (input: any) => Number.parseInt(input.uploaded_time, 10);
@@ -94,7 +106,7 @@ export async function downloadSMAPI(api: types.IExtensionApi, update?: boolean) 
 
     await deploySMAPI(api);
   } catch (err) {
-    api.showErrorNotification('Failed to download/install SMAPI', err);
+    api.showErrorNotification?.('Failed to download/install SMAPI', err);
     util.opn(SMAPI_URL).catch(() => null);
   } finally {
     api.dismissNotification?.('smapi-installing');

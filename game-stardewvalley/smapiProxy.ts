@@ -14,6 +14,11 @@ import { coerce, semverCompare } from './util';
 
 const SMAPI_HOST = 'smapi.io';
 
+/**
+ * Adapter for querying SMAPI.io compatibility metadata and translating results
+ * into Vortex modmeta lookup responses.
+ */
+
 class SMAPIProxy {
   private mAPI: types.IExtensionApi;
   private mOptions: https.RequestOptions;
@@ -31,30 +36,31 @@ class SMAPIProxy {
   }
 
   public async find(query: IQuery): Promise<ILookupResult[]> {
-    if (query.name !== undefined) {
-      const res = await this.findByNames([{ id: query.name }]);
-      if ((res.length === 0) || (res[0].metadata?.main === undefined)) {
-        return [];
-      }
-      const key = this.makeKey(query);
-      if (res[0].metadata.nexusID !== undefined) {
-        return await this.lookupOnNexus(
-          query, res[0].metadata.nexusID, res[0].metadata.main.version);
-      } else {
-        return [
-          { key, value: {
-            gameId: GAME_ID,
-            fileMD5: undefined,
-            fileName: query.name,
-            fileSizeBytes: 0,
-            fileVersion: '',
-            sourceURI: res[0].metadata.main?.url,
-          } },
-        ];
-      }
-    } else {
+    const queryName = query.name;
+    if (queryName === undefined) {
       return [];
     }
+
+    const res = await this.findByNames([{ id: queryName }]);
+    const firstResult = res[0];
+    const main = firstResult?.metadata?.main;
+    if ((firstResult === undefined) || (main === undefined)) {
+      return [];
+    }
+
+    const key = this.makeKey(query);
+    if (firstResult.metadata.nexusID !== undefined) {
+      return this.lookupOnNexus(query, firstResult.metadata.nexusID, main.version);
+    }
+
+    return [{ key, value: {
+      gameId: GAME_ID,
+      fileMD5: '',
+      fileName: queryName,
+      fileSizeBytes: 0,
+      fileVersion: '',
+      sourceURI: main.url ?? '',
+    } }];
   }
 
   public async findByNames(query: ISMAPIIOQuery[]): Promise<ISMAPIResult[]> {
@@ -93,13 +99,15 @@ class SMAPIProxy {
 
   private async lookupOnNexus(query: IQuery,
                               nexusId: number,
-                              version: string)
+                              version?: string)
                               : Promise<ILookupResult[]> {
-    await this.mAPI.ext.ensureLoggedIn();
+    if (this.mAPI.ext?.ensureLoggedIn !== undefined) {
+      await this.mAPI.ext.ensureLoggedIn();
+    }
 
     const files: IFileInfo[] = await this.mAPI.ext.nexusGetModFiles?.(GAME_ID, nexusId) ?? [];
 
-    const versionPattern = `>=${version}`;
+    const versionPattern = version !== undefined ? `>=${version}` : '*';
 
     const file = files
       .filter(iter => semver.satisfies(coerce(iter.version), versionPattern))
@@ -111,13 +119,13 @@ class SMAPIProxy {
     return [{
       key: this.makeKey(query),
       value: {
-        fileMD5: undefined,
-        fileName: file.file_name,
+        fileMD5: '',
+        fileName: file.file_name ?? '',
         fileSizeBytes: file.size * 1024,
-        fileVersion: file.version,
+        fileVersion: file.version ?? '',
         gameId: GAME_ID,
         sourceURI: `nxm://${GAME_ID}/mods/${nexusId}/files/${file.file_id}`,
-        logicalFileName: query.name.toLowerCase(),
+        logicalFileName: (query.name ?? '').toLowerCase(),
         source: 'nexus',
         domainName: GAME_ID,
         details: {
