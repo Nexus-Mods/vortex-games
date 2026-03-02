@@ -81,17 +81,17 @@ __export(SMAPI_exports, {
 });
 function findSMAPITool(api) {
   const state = api.getState();
-  const discovery = import_vortex_api6.selectors.discoveryByGame(state, GAME_ID);
+  const discovery = import_vortex_api8.selectors.discoveryByGame(state, GAME_ID);
   const tool = discovery?.tools?.["smapi"];
-  return !!tool?.path ? tool : void 0;
+  return tool?.path ? tool : void 0;
 }
 function getSMAPIMods(api) {
   const state = api.getState();
-  const profileId = import_vortex_api6.selectors.lastActiveProfileForGame(state, GAME_ID);
-  const profile = import_vortex_api6.selectors.profileById(state, profileId);
-  const isActive = (modId) => import_vortex_api6.util.getSafe(profile, ["modState", modId, "enabled"], false);
+  const profileId = import_vortex_api8.selectors.lastActiveProfileForGame(state, GAME_ID);
+  const profile = import_vortex_api8.selectors.profileById(state, profileId);
+  const isActive = (modId) => import_vortex_api8.util.getSafe(profile, ["modState", modId, "enabled"], false);
   const isSMAPI = (mod) => mod.type === "SMAPI" && mod.attributes?.modId === SMAPI_MOD_ID;
-  const mods = import_vortex_api6.util.getSafe(state, ["persistent", "mods", GAME_ID], {});
+  const mods = import_vortex_api8.util.getSafe(state, ["persistent", "mods", GAME_ID], {});
   return Object.values(mods).filter((mod) => isSMAPI(mod) && isActive(mod.id));
 }
 function findSMAPIMod(api) {
@@ -104,17 +104,17 @@ function findSMAPIMod(api) {
   }, void 0) : SMAPIMods[0];
 }
 async function deploySMAPI(api) {
-  await import_vortex_api6.util.toPromise((cb) => api.events.emit("deploy-mods", cb));
-  await import_vortex_api6.util.toPromise((cb) => api.events.emit("start-quick-discovery", () => cb(null)));
-  const discovery = import_vortex_api6.selectors.discoveryByGame(api.getState(), GAME_ID);
+  await import_vortex_api8.util.toPromise((cb) => api.events.emit("deploy-mods", cb));
+  await import_vortex_api8.util.toPromise((cb) => api.events.emit("start-quick-discovery", () => cb(null)));
+  const discovery = import_vortex_api8.selectors.discoveryByGame(api.getState(), GAME_ID);
   const tool = discovery?.tools?.["smapi"];
-  if (tool) {
-    api.store.dispatch(import_vortex_api6.actions.setPrimaryTool(GAME_ID, tool.id));
+  if (tool && api.store !== void 0) {
+    api.store.dispatch(import_vortex_api8.actions.setPrimaryTool(GAME_ID, tool.id));
   }
 }
 async function downloadSMAPI(api, update) {
-  api.dismissNotification("smapi-missing");
-  api.sendNotification({
+  api.dismissNotification?.("smapi-missing");
+  api.sendNotification?.({
     id: "smapi-installing",
     message: update ? "Updating SMAPI" : "Installing SMAPI",
     type: "activity",
@@ -129,34 +129,34 @@ async function downloadSMAPI(api, update) {
     const fileTime = (input) => Number.parseInt(input.uploaded_time, 10);
     const file = modFiles.filter((file2) => file2.category_id === 1).sort((lhs, rhs) => fileTime(lhs) - fileTime(rhs))[0];
     if (file === void 0) {
-      throw new import_vortex_api6.util.ProcessCanceled("No SMAPI main file found");
+      throw new import_vortex_api8.util.ProcessCanceled("No SMAPI main file found");
     }
     const dlInfo = {
       game: GAME_ID,
       name: "SMAPI"
     };
     const nxmUrl = `nxm://${GAME_ID}/mods/${SMAPI_MOD_ID}/files/${file.file_id}`;
-    const dlId = await import_vortex_api6.util.toPromise((cb) => api.events.emit("start-download", [nxmUrl], dlInfo, void 0, cb, void 0, { allowInstall: false }));
-    const modId = await import_vortex_api6.util.toPromise((cb) => api.events.emit("start-install-download", dlId, { allowAutoEnable: false }, cb));
-    const profileId = import_vortex_api6.selectors.lastActiveProfileForGame(api.getState(), GAME_ID);
-    await import_vortex_api6.actions.setModsEnabled(api, profileId, [modId], true, {
+    const dlId = await import_vortex_api8.util.toPromise((cb) => api.events.emit("start-download", [nxmUrl], dlInfo, void 0, cb, void 0, { allowInstall: false }));
+    const modId = await import_vortex_api8.util.toPromise((cb) => api.events.emit("start-install-download", dlId, { allowAutoEnable: false }, cb));
+    const profileId = import_vortex_api8.selectors.lastActiveProfileForGame(api.getState(), GAME_ID);
+    await import_vortex_api8.actions.setModsEnabled(api, profileId, [modId], true, {
       allowAutoDeploy: false,
       installed: true
     });
     await deploySMAPI(api);
   } catch (err) {
     api.showErrorNotification("Failed to download/install SMAPI", err);
-    import_vortex_api6.util.opn(SMAPI_URL).catch(() => null);
+    import_vortex_api8.util.opn(SMAPI_URL).catch(() => null);
   } finally {
-    api.dismissNotification("smapi-installing");
+    api.dismissNotification?.("smapi-installing");
   }
 }
-var import_vortex_api6, import_semver;
+var import_semver, import_vortex_api8;
 var init_SMAPI = __esm({
   "extensions/games/game-stardewvalley/SMAPI.ts"() {
-    import_vortex_api6 = require("vortex-api");
-    init_common();
     import_semver = require("semver");
+    import_vortex_api8 = require("vortex-api");
+    init_common();
     init_constants();
   }
 });
@@ -167,11 +167,11 @@ __export(index_exports, {
   default: () => index_default
 });
 module.exports = __toCommonJS(index_exports);
-var import_bluebird = __toESM(require("bluebird"));
+var import_bluebird4 = __toESM(require("bluebird"));
 var import_react3 = __toESM(require("react"));
 var semver3 = __toESM(require("semver"));
 var import_turbowalk3 = __toESM(require("turbowalk"));
-var import_vortex_api10 = require("vortex-api");
+var import_vortex_api12 = require("vortex-api");
 var winapi = __toESM(require("winapi-bindings"));
 
 // extensions/games/game-stardewvalley/CompatibilityIcon.tsx
@@ -208,8 +208,8 @@ function CompatibilityIcon(props) {
   return /* @__PURE__ */ import_react.default.createElement(
     import_vortex_api.tooltip.Icon,
     {
-      name: icon,
       className: `sdv-compatibility-${status}`,
+      name: icon,
       tooltip: mod.attributes?.compatibilityMessage ?? t("No information")
     }
   );
@@ -261,15 +261,19 @@ function semverCompare(lhs, rhs) {
   }
 }
 async function walkPath(dirPath, walkOptions) {
-  walkOptions = !!walkOptions ? { ...walkOptions, skipHidden: true, skipInaccessible: true, skipLinks: true } : { skipLinks: true, skipHidden: true, skipInaccessible: true };
+  walkOptions = walkOptions ? { ...walkOptions, skipHidden: true, skipInaccessible: true, skipLinks: true } : { skipLinks: true, skipHidden: true, skipInaccessible: true };
   const walkResults = [];
-  return new Promise(async (resolve, reject) => {
+  try {
     await (0, import_turbowalk.default)(dirPath, (entries) => {
       walkResults.push(...entries);
       return Promise.resolve();
-    }, walkOptions).catch((err) => err.code === "ENOENT" ? Promise.resolve() : Promise.reject(err));
-    return resolve(walkResults);
-  });
+    }, walkOptions);
+  } catch (err) {
+    if (err.code !== "ENOENT") {
+      throw err;
+    }
+  }
+  return walkResults;
 }
 async function deleteFolder(dirPath, walkOptions) {
   try {
@@ -293,7 +297,7 @@ var DependencyManager = class {
   }
   async getManifests() {
     await this.scanManifests();
-    return this.mManifests;
+    return this.mManifests ?? {};
   }
   async refresh() {
     if (this.mLoading) {
@@ -327,7 +331,8 @@ var DependencyManager = class {
             try {
               manifest = await parseManifest(entry.filePath);
             } catch (err) {
-              (0, import_vortex_api3.log)("error", "failed to parse manifest", { error: err.message, manifest: entry.filePath });
+              const message = err instanceof Error ? err.message : String(err);
+              (0, import_vortex_api3.log)("error", "failed to parse manifest", { error: message, manifest: entry.filePath });
               continue;
             }
             const list = accum[iter.id] ?? [];
@@ -348,25 +353,237 @@ var DependencyManager = class {
   }
 };
 
+// extensions/games/game-stardewvalley/installers/rootFolderInstaller.ts
+var import_bluebird = __toESM(require("bluebird"));
+var import_path2 = __toESM(require("path"));
+init_common();
+var PTRN_CONTENT = import_path2.default.sep + "Content" + import_path2.default.sep;
+function testRootFolder(files, gameId) {
+  const filtered = files.filter((file) => file.endsWith(import_path2.default.sep)).map((file) => import_path2.default.join("fakeDir", file));
+  const contentDir = filtered.find((file) => file.endsWith(PTRN_CONTENT));
+  const supported = gameId === GAME_ID && contentDir !== void 0;
+  return import_bluebird.default.resolve({ supported, requiredFiles: [] });
+}
+function installRootFolder(files, destinationPath) {
+  const contentFile = files.find((file) => import_path2.default.join("fakeDir", file).endsWith(PTRN_CONTENT));
+  const idx = contentFile.indexOf(PTRN_CONTENT) + 1;
+  const rootDir = import_path2.default.basename(contentFile.substring(0, idx));
+  const filtered = files.filter((file) => !file.endsWith(import_path2.default.sep) && file.indexOf(rootDir) !== -1 && import_path2.default.extname(file) !== ".txt");
+  const instructions = filtered.map((file) => {
+    return {
+      type: "copy",
+      source: file,
+      destination: file.substr(idx)
+    };
+  });
+  return import_bluebird.default.resolve({ instructions });
+}
+
+// extensions/games/game-stardewvalley/installers/smapiInstaller.ts
+var import_bluebird2 = __toESM(require("bluebird"));
+var import_path3 = __toESM(require("path"));
+var import_vortex_api4 = require("vortex-api");
+init_common();
+var { SevenZip } = import_vortex_api4.util;
+var SMAPI_EXE = "StardewModdingAPI.exe";
+var SMAPI_DLL = "SMAPI.Installer.dll";
+var SMAPI_DATA = ["windows-install.dat", "install.dat"];
+function isSMAPIModType(instructions) {
+  const smapiData = instructions.find((inst) => inst.type === "copy" && inst.source.endsWith(SMAPI_EXE));
+  return import_bluebird2.default.resolve(smapiData !== void 0);
+}
+function testSMAPI(files, gameId) {
+  const supported = gameId === GAME_ID && files.find((file) => import_path3.default.basename(file) === SMAPI_DLL) !== void 0;
+  return import_bluebird2.default.resolve({
+    supported,
+    requiredFiles: []
+  });
+}
+async function installSMAPI(getDiscoveryPath, files, destinationPath) {
+  const folder = process.platform === "win32" ? "windows" : process.platform === "linux" ? "linux" : "macos";
+  const fileHasCorrectPlatform = (file) => {
+    const segments = file.split(import_path3.default.sep).map((seg) => seg.toLowerCase());
+    return segments.includes(folder);
+  };
+  const dataFile = files.find((file) => {
+    const isCorrectPlatform = fileHasCorrectPlatform(file);
+    return isCorrectPlatform && SMAPI_DATA.includes(import_path3.default.basename(file).toLowerCase());
+  });
+  if (dataFile === void 0) {
+    return Promise.reject(new import_vortex_api4.util.DataInvalid("Failed to find the SMAPI data files - download appears to be corrupted; please re-download SMAPI and try again"));
+  }
+  let data = "";
+  try {
+    data = await import_vortex_api4.fs.readFileAsync(import_path3.default.join(getDiscoveryPath(), "Stardew Valley.deps.json"), { encoding: "utf8" });
+  } catch (err) {
+    (0, import_vortex_api4.log)("error", "failed to parse SDV dependencies", err);
+  }
+  const updatedFiles = [];
+  const szip = new SevenZip();
+  await szip.extractFull(import_path3.default.join(destinationPath, dataFile), destinationPath);
+  await import_vortex_api4.util.walk(destinationPath, (iter, stats) => {
+    const relPath = import_path3.default.relative(destinationPath, iter);
+    if (!files.includes(relPath) && stats.isFile() && !files.includes(relPath + import_path3.default.sep)) updatedFiles.push(relPath);
+    const segments = relPath.toLocaleLowerCase().split(import_path3.default.sep);
+    const modsFolderIdx = segments.indexOf("mods");
+    if (modsFolderIdx !== -1 && segments.length > modsFolderIdx + 1) {
+      _SMAPI_BUNDLED_MODS.push(segments[modsFolderIdx + 1]);
+    }
+    return import_bluebird2.default.resolve();
+  });
+  const smapiExe = updatedFiles.find((file) => file.toLowerCase().endsWith(SMAPI_EXE.toLowerCase()));
+  if (smapiExe === void 0) {
+    return Promise.reject(new import_vortex_api4.util.DataInvalid(`Failed to extract ${SMAPI_EXE} - download appears to be corrupted; please re-download SMAPI and try again`));
+  }
+  const idx = smapiExe.indexOf(import_path3.default.basename(smapiExe));
+  const instructions = updatedFiles.map((file) => {
+    return {
+      type: "copy",
+      source: file,
+      destination: import_path3.default.join(file.substr(idx))
+    };
+  });
+  instructions.push({
+    type: "attribute",
+    key: "smapiBundledMods",
+    value: getBundledMods()
+  });
+  instructions.push({
+    type: "generatefile",
+    data,
+    destination: "StardewModdingAPI.deps.json"
+  });
+  return Promise.resolve({ instructions });
+}
+
+// extensions/games/game-stardewvalley/installers/stardewValleyInstaller.ts
+var import_bluebird3 = __toESM(require("bluebird"));
+var import_path4 = __toESM(require("path"));
+var import_vortex_api5 = require("vortex-api");
+init_common();
+var PTRN_CONTENT2 = import_path4.default.sep + "Content" + import_path4.default.sep;
+var MANIFEST_FILE = "manifest.json";
+function isValidManifest(filePath) {
+  const segments = filePath.toLowerCase().split(import_path4.default.sep);
+  const isManifestFile = segments[segments.length - 1] === MANIFEST_FILE;
+  const isLocale = segments.includes("locale");
+  return isManifestFile && !isLocale;
+}
+function testSupported(files, gameId) {
+  const supported = gameId === GAME_ID && files.find(isValidManifest) !== void 0 && files.find((file) => {
+    const testFile = import_path4.default.join("fakeDir", file);
+    return testFile.endsWith(PTRN_CONTENT2);
+  }) === void 0;
+  return import_bluebird3.default.resolve({ supported, requiredFiles: [] });
+}
+async function installStardewValley(api, dependencyManager, files, destinationPath) {
+  const manifestFiles = files.filter(isValidManifest);
+  let parseError;
+  await dependencyManager.scanManifests(true);
+  let mods = await Promise.all(manifestFiles.map(async (manifestFile) => {
+    const rootFolder = import_path4.default.dirname(manifestFile);
+    const rootSegments = rootFolder.toLowerCase().split(import_path4.default.sep);
+    const manifestIndex = manifestFile.toLowerCase().indexOf(MANIFEST_FILE);
+    const filterFunc = (file) => {
+      const isFile = !file.endsWith(import_path4.default.sep) && import_path4.default.extname(import_path4.default.basename(file)) !== "";
+      const fileSegments = file.toLowerCase().split(import_path4.default.sep);
+      const isInRootFolder = rootSegments.length > 0 ? fileSegments?.[rootSegments.length - 1] === rootSegments[rootSegments.length - 1] : true;
+      return isInRootFolder && isFile;
+    };
+    try {
+      const manifest = await parseManifest(import_path4.default.join(destinationPath, manifestFile));
+      const modFiles = files.filter(filterFunc);
+      return {
+        manifest,
+        rootFolder,
+        manifestIndex,
+        modFiles
+      };
+    } catch (err) {
+      const parsedErr = err instanceof Error ? err : new Error(String(err));
+      (0, import_vortex_api5.log)("warn", "Failed to parse manifest", { manifestFile, error: parsedErr.message });
+      parseError = parsedErr;
+      return void 0;
+    }
+  }));
+  mods = mods.filter((x) => x !== void 0);
+  if (mods.length === 0) {
+    api.showErrorNotification(
+      `The mod manifest is invalid and can't be read. You can try to install the mod anyway via right-click -> "Unpack (as-is)"`,
+      parseError ?? new Error("Unknown manifest parse error"),
+      {
+        allowReport: false
+      }
+    );
+  }
+  return import_bluebird3.default.map(mods, (mod) => {
+    const modName = mod.rootFolder !== "." ? mod.rootFolder : mod.manifest.Name ?? mod.rootFolder;
+    if (modName === void 0) {
+      return [];
+    }
+    const dependencies = mod.manifest.Dependencies || [];
+    const instructions = [];
+    for (const file of mod.modFiles) {
+      const destination = import_path4.default.join(modName, file.substr(mod.manifestIndex));
+      instructions.push({
+        type: "copy",
+        source: file,
+        destination
+      });
+    }
+    const addRuleForDependency = (dep) => {
+      if (dep.UniqueID === void 0 || dep.UniqueID.toLowerCase() === "yourname.yourotherspacksandmods") {
+        return;
+      }
+      const versionMatch = dep.MinimumVersion !== void 0 ? `>=${dep.MinimumVersion}` : "*";
+      const rule = {
+        // treating all dependencies as recommendations because the dependency information
+        // provided by some mod authors is a bit hit-and-miss and Vortex fairly aggressively
+        // enforces requirements
+        // type: (dep.IsRequired ?? true) ? 'requires' : 'recommends',
+        type: "recommends",
+        reference: {
+          logicalFileName: dep.UniqueID.toLowerCase(),
+          versionMatch
+        },
+        extra: {
+          onlyIfFulfillable: true,
+          automatic: true
+        }
+      };
+      instructions.push({
+        type: "rule",
+        rule
+      });
+    };
+    return instructions;
+  }).then((data) => {
+    const instructions = data.reduce((accum, iter) => accum.concat(iter), []);
+    return Promise.resolve({ instructions });
+  });
+}
+
+// extensions/games/game-stardewvalley/reducers.ts
+var import_vortex_api6 = require("vortex-api");
+
 // extensions/games/game-stardewvalley/actions.ts
 var import_redux_act = require("redux-act");
 var setRecommendations = (0, import_redux_act.createAction)("SET_SDV_RECOMMENDATIONS", (enabled) => enabled);
 var setMergeConfigs = (0, import_redux_act.createAction)("SET_SDV_MERGE_CONFIGS", (profileId, enabled) => ({ profileId, enabled }));
 
 // extensions/games/game-stardewvalley/reducers.ts
-var import_vortex_api4 = require("vortex-api");
 var sdvReducers = {
   reducers: {
     [setRecommendations]: (state, payload) => {
-      return import_vortex_api4.util.setSafe(state, ["useRecommendations"], payload);
+      return import_vortex_api6.util.setSafe(state, ["useRecommendations"], payload);
     },
     [setMergeConfigs]: (state, payload) => {
       const { profileId, enabled } = payload;
-      return import_vortex_api4.util.setSafe(state, ["mergeConfigs", profileId], enabled);
+      return import_vortex_api6.util.setSafe(state, ["mergeConfigs", profileId], enabled);
     }
   },
   defaults: {
-    useRecommendations: void 0
+    useRecommendations: false
   }
 };
 var reducers_default = sdvReducers;
@@ -374,7 +591,7 @@ var reducers_default = sdvReducers;
 // extensions/games/game-stardewvalley/smapiProxy.ts
 var https = __toESM(require("https"));
 var semver2 = __toESM(require("semver"));
-var import_vortex_api5 = require("vortex-api");
+var import_vortex_api7 = require("vortex-api");
 init_common();
 init_constants();
 var SMAPI_HOST = "smapi.io";
@@ -432,7 +649,7 @@ var SMAPIProxy = class {
             const parsed = JSON.parse(textual);
             resolve(parsed);
           } catch (err) {
-            (0, import_vortex_api5.log)("error", "failed to parse smapi response", textual);
+            (0, import_vortex_api7.log)("error", "failed to parse smapi response", textual);
             reject(err);
           }
         });
@@ -481,13 +698,13 @@ var SMAPIProxy = class {
 var smapiProxy_default = SMAPIProxy;
 
 // extensions/games/game-stardewvalley/tests.ts
-var import_vortex_api7 = require("vortex-api");
 var import_semver2 = require("semver");
-init_SMAPI();
+var import_vortex_api9 = require("vortex-api");
 init_common();
+init_SMAPI();
 async function testSMAPIOutdated(api, depManager) {
   const state = api.getState();
-  const activeGameId = import_vortex_api7.selectors.activeGameId(state);
+  const activeGameId = import_vortex_api9.selectors.activeGameId(state);
   if (activeGameId !== GAME_ID) {
     return Promise.resolve(void 0);
   }
@@ -542,7 +759,7 @@ var import_react2 = __toESM(require("react"));
 var import_react_bootstrap = require("react-bootstrap");
 var import_react_i18next = require("react-i18next");
 var import_react_redux = require("react-redux");
-var import_vortex_api8 = require("vortex-api");
+var import_vortex_api10 = require("vortex-api");
 init_common();
 function Settings(props) {
   const { onMergeConfigToggle } = props;
@@ -559,20 +776,20 @@ function Settings(props) {
   const { t } = (0, import_react_i18next.useTranslation)();
   const mergeEnabled = mergeConfigs?.[profileId];
   return /* @__PURE__ */ import_react2.default.createElement("form", null, /* @__PURE__ */ import_react2.default.createElement(import_react_bootstrap.FormGroup, { controlId: "default-enable" }, /* @__PURE__ */ import_react2.default.createElement(import_react_bootstrap.Panel, null, /* @__PURE__ */ import_react2.default.createElement(import_react_bootstrap.Panel.Body, null, /* @__PURE__ */ import_react2.default.createElement(import_react_bootstrap.ControlLabel, null, t("Stardew Valley")), /* @__PURE__ */ import_react2.default.createElement(
-    import_vortex_api8.Toggle,
+    import_vortex_api10.Toggle,
     {
       checked: useRecommendations,
-      onToggle: setUseRecommendations,
-      disabled: true
+      disabled: true,
+      onToggle: setUseRecommendations
     },
     t("Use recommendations from the mod manifests"),
-    /* @__PURE__ */ import_react2.default.createElement(import_vortex_api8.More, { id: "sdv_use_recommendations", name: "SDV Use Recommendations" }, t("If checked, when you install a mod for Stardew Valley you may get suggestions for installing further mods, required or recommended by it.This information could be wrong or incomplete so please carefully consider before accepting them."))
-  ), /* @__PURE__ */ import_react2.default.createElement(import_vortex_api8.Toggle, { checked: mergeEnabled, onToggle: setMergeConfigSetting }, t("Manage SDV mod configuration files"), /* @__PURE__ */ import_react2.default.createElement(import_vortex_api8.More, { id: "sdv_mod_configuration", name: "SDV Mod Configuration" }, t(
+    /* @__PURE__ */ import_react2.default.createElement(import_vortex_api10.More, { id: "sdv_use_recommendations", name: "SDV Use Recommendations" }, t("If checked, when you install a mod for Stardew Valley you may get suggestions for installing further mods, required or recommended by it.This information could be wrong or incomplete so please carefully consider before accepting them."))
+  ), /* @__PURE__ */ import_react2.default.createElement(import_vortex_api10.Toggle, { checked: mergeEnabled, onToggle: setMergeConfigSetting }, t("Manage SDV mod configuration files"), /* @__PURE__ */ import_react2.default.createElement(import_vortex_api10.More, { id: "sdv_mod_configuration", name: "SDV Mod Configuration" }, t(
     'Vortex by default is configured to attempt to pull-in newly created files (mod configuration json files for example) created externally (by the game itself or tools) into their respective mod folders.\n\nUnfortunately the configuration files are lost during mod updates when using this method.\n\nToggling this functionality creates a separate mod configuration "override" folder where all of your mod configuration files will be stored. This allows you to manage your mod configuration files on their own, regardless of mod updates. '
   )))))));
 }
 function mapStateToProps(state) {
-  const profileId = import_vortex_api8.selectors.lastActiveProfileForGame(state, GAME_ID);
+  const profileId = import_vortex_api10.selectors.lastActiveProfileForGame(state, GAME_ID);
   return {
     profileId
   };
@@ -580,8 +797,8 @@ function mapStateToProps(state) {
 var Settings_default = Settings;
 
 // extensions/games/game-stardewvalley/configMod.ts
-var import_path2 = __toESM(require("path"));
-var import_vortex_api9 = require("vortex-api");
+var import_path5 = __toESM(require("path"));
+var import_vortex_api11 = require("vortex-api");
 init_common();
 init_SMAPI();
 var syncWrapper = (api) => {
@@ -596,8 +813,11 @@ function registerConfigMod(context) {
     "Sync Mod Configurations",
     () => syncWrapper(context.api),
     () => {
-      const state = context.api.store.getState();
-      const gameMode = import_vortex_api9.selectors.activeGameId(state);
+      const state = context.api.store?.getState();
+      if (state === void 0) {
+        return false;
+      }
+      const gameMode = import_vortex_api11.selectors.activeGameId(state);
       return gameMode === GAME_ID;
     }
   );
@@ -605,14 +825,14 @@ function registerConfigMod(context) {
 var shouldSuppressSync = (api) => {
   const state = api.getState();
   const suppressOnActivities = ["installing_dependencies"];
-  const isActivityRunning = (activity) => import_vortex_api9.util.getSafe(state, ["session", "base", "activity", activity], []).length > 0;
+  const isActivityRunning = (activity) => import_vortex_api11.util.getSafe(state, ["session", "base", "activity", activity], []).length > 0;
   const suppressingActivities = suppressOnActivities.filter((activity) => isActivityRunning(activity));
   const suppressing = suppressingActivities.length > 0;
   return suppressing;
 };
 async function onSyncModConfigurations(api, silent) {
   const state = api.getState();
-  const profile = import_vortex_api9.selectors.activeProfile(state);
+  const profile = import_vortex_api11.selectors.activeProfile(state);
   if (profile?.gameId !== GAME_ID || shouldSuppressSync(api)) {
     return;
   }
@@ -620,7 +840,7 @@ async function onSyncModConfigurations(api, silent) {
   if (!smapiTool?.path) {
     return;
   }
-  const mergeConfigs = import_vortex_api9.util.getSafe(state, ["settings", "SDV", "mergeConfigs", profile.id], false);
+  const mergeConfigs = import_vortex_api11.util.getSafe(state, ["settings", "SDV", "mergeConfigs", profile.id], false);
   if (!mergeConfigs) {
     if (silent) {
       return;
@@ -635,7 +855,7 @@ async function onSyncModConfigurations(api, silent) {
       return;
     }
     if (result.action === "Enable") {
-      api.store.dispatch(setMergeConfigs(profile.id, true));
+      api.store?.dispatch(setMergeConfigs(profile.id, true));
     }
   }
   const eventPromise = (api2, eventType) => new Promise((resolve, reject) => {
@@ -648,10 +868,10 @@ async function onSyncModConfigurations(api, silent) {
       return;
     }
     await eventPromise(api, "purge-mods");
-    const installPath = import_vortex_api9.selectors.installPathForGame(api.getState(), GAME_ID);
+    const installPath = import_vortex_api11.selectors.installPathForGame(api.getState(), GAME_ID);
     const resolveCandidateName = (file) => {
-      const relPath = import_path2.default.relative(installPath, file.filePath);
-      const segments = relPath.split(import_path2.default.sep);
+      const relPath = import_path5.default.relative(installPath, file.filePath);
+      const segments = relPath.split(import_path5.default.sep);
       return segments[0];
     };
     const files = await walkPath(installPath);
@@ -661,9 +881,9 @@ async function onSyncModConfigurations(api, silent) {
       if (isSMAPI(file)) {
         return accum;
       }
-      if (import_path2.default.basename(file.filePath).toLowerCase() === MOD_CONFIG && !import_path2.default.dirname(file.filePath).includes(mod.configModPath)) {
+      if (import_path5.default.basename(file.filePath).toLowerCase() === MOD_CONFIG && !import_path5.default.dirname(file.filePath).includes(mod.configModPath)) {
         const candidateName = resolveCandidateName(file);
-        if (import_vortex_api9.util.getSafe(profile, ["modState", candidateName, "enabled"], false) === false) {
+        if (import_vortex_api11.util.getSafe(profile, ["modState", candidateName, "enabled"], false) === false) {
           return accum;
         }
         accum.push({ filePath: file.filePath, candidates: [candidateName] });
@@ -684,18 +904,18 @@ function configModName(profileName) {
 }
 async function initialize(api) {
   const state = api.getState();
-  const profile = import_vortex_api9.selectors.activeProfile(state);
+  const profile = import_vortex_api11.selectors.activeProfile(state);
   if (profile?.gameId !== GAME_ID) {
     return Promise.resolve(void 0);
   }
-  const mergeConfigs = import_vortex_api9.util.getSafe(state, ["settings", "SDV", "mergeConfigs", profile.id], false);
+  const mergeConfigs = import_vortex_api11.util.getSafe(state, ["settings", "SDV", "mergeConfigs", profile.id], false);
   if (!mergeConfigs) {
     return Promise.resolve(void 0);
   }
   try {
     const mod = await ensureConfigMod(api);
-    const installationPath = import_vortex_api9.selectors.installPathForGame(state, GAME_ID);
-    const configModPath = import_path2.default.join(installationPath, mod.installationPath);
+    const installationPath = import_vortex_api11.selectors.installPathForGame(state, GAME_ID);
+    const configModPath = import_path5.default.join(installationPath, mod.installationPath);
     return Promise.resolve({ configModPath, mod });
   } catch (err) {
     api.showErrorNotification("Failed to resolve config mod path", err);
@@ -708,9 +928,9 @@ async function addModConfig(api, files, modsPath) {
     return;
   }
   const state = api.getState();
-  const discovery = import_vortex_api9.selectors.discoveryByGame(state, GAME_ID);
+  const discovery = import_vortex_api11.selectors.discoveryByGame(state, GAME_ID);
   const isInstallPath = modsPath !== void 0;
-  modsPath = modsPath ?? import_path2.default.join(discovery.path, defaultModsRelPath());
+  modsPath = modsPath ?? import_path5.default.join(discovery.path, defaultModsRelPath());
   const smapiTool = findSMAPITool(api);
   if (smapiTool === void 0) {
     return;
@@ -718,11 +938,11 @@ async function addModConfig(api, files, modsPath) {
   const configModAttributes = extractConfigModAttributes(state, configMod.mod.id);
   let newConfigAttributes = Array.from(new Set(configModAttributes));
   for (const file of files) {
-    const segments = file.filePath.toLowerCase().split(import_path2.default.sep).filter((seg) => !!seg);
+    const segments = file.filePath.toLowerCase().split(import_path5.default.sep).filter((seg) => !!seg);
     if (segments.includes("smapi_internal")) {
       continue;
     }
-    api.sendNotification({
+    api.sendNotification?.({
       type: "activity",
       id: NOTIF_ACTIVITY_CONFIG_MOD,
       title: "Importing config files...",
@@ -732,33 +952,33 @@ async function addModConfig(api, files, modsPath) {
       newConfigAttributes.push(file.candidates[0]);
     }
     try {
-      const installRelPath = import_path2.default.relative(modsPath, file.filePath);
-      const segments2 = installRelPath.split(import_path2.default.sep);
-      const relPath = isInstallPath ? segments2.slice(1).join(import_path2.default.sep) : installRelPath;
-      const targetPath = import_path2.default.join(configMod.configModPath, relPath);
-      const targetDir = import_path2.default.extname(targetPath) !== "" ? import_path2.default.dirname(targetPath) : targetPath;
-      await import_vortex_api9.fs.ensureDirWritableAsync(targetDir);
-      (0, import_vortex_api9.log)("debug", "importing config file from", { source: file.filePath, destination: targetPath, modId: file.candidates[0] });
-      await import_vortex_api9.fs.copyAsync(file.filePath, targetPath, { overwrite: true });
-      await import_vortex_api9.fs.removeAsync(file.filePath);
+      const installRelPath = import_path5.default.relative(modsPath, file.filePath);
+      const segments2 = installRelPath.split(import_path5.default.sep);
+      const relPath = isInstallPath ? segments2.slice(1).join(import_path5.default.sep) : installRelPath;
+      const targetPath = import_path5.default.join(configMod.configModPath, relPath);
+      const targetDir = import_path5.default.extname(targetPath) !== "" ? import_path5.default.dirname(targetPath) : targetPath;
+      await import_vortex_api11.fs.ensureDirWritableAsync(targetDir);
+      (0, import_vortex_api11.log)("debug", "importing config file from", { source: file.filePath, destination: targetPath, modId: file.candidates[0] });
+      await import_vortex_api11.fs.copyAsync(file.filePath, targetPath, { overwrite: true });
+      await import_vortex_api11.fs.removeAsync(file.filePath);
     } catch (err) {
       api.showErrorNotification("Failed to write mod config", err);
     }
   }
-  api.dismissNotification(NOTIF_ACTIVITY_CONFIG_MOD);
+  api.dismissNotification?.(NOTIF_ACTIVITY_CONFIG_MOD);
   setConfigModAttribute(api, configMod.mod.id, Array.from(new Set(newConfigAttributes)));
 }
 async function ensureConfigMod(api) {
   const state = api.getState();
-  const mods = import_vortex_api9.util.getSafe(state, ["persistent", "mods", GAME_ID], {});
+  const mods = import_vortex_api11.util.getSafe(state, ["persistent", "mods", GAME_ID], {});
   const modInstalled = Object.values(mods).find((iter) => iter.type === MOD_TYPE_CONFIG);
   if (modInstalled !== void 0) {
     return Promise.resolve(modInstalled);
   } else {
-    const profile = import_vortex_api9.selectors.activeProfile(state);
+    const profile = import_vortex_api11.selectors.activeProfile(state);
     const modName = configModName(profile.name);
     const mod = await createConfigMod(api, modName, profile);
-    api.store.dispatch(import_vortex_api9.actions.setModEnabled(profile.id, mod.id, true));
+    api.store?.dispatch(import_vortex_api11.actions.setModEnabled(profile.id, mod.id, true));
     return Promise.resolve(mod);
   }
 }
@@ -791,7 +1011,7 @@ async function createConfigMod(api, modName, profile) {
 }
 async function onWillEnableMods(api, profileId, modIds, enabled, options) {
   const state = api.getState();
-  const profile = import_vortex_api9.selectors.profileById(state, profileId);
+  const profile = import_vortex_api11.selectors.profileById(state, profileId);
   if (profile?.gameId !== GAME_ID) {
     return;
   }
@@ -815,28 +1035,28 @@ async function onWillEnableMods(api, profileId, modIds, enabled, options) {
   if (relevant.length === 0) {
     return;
   }
-  const installPath = import_vortex_api9.selectors.installPathForGame(state, GAME_ID);
+  const installPath = import_vortex_api11.selectors.installPathForGame(state, GAME_ID);
   if (enabled) {
     await onSyncModConfigurations(api);
     return;
   }
-  const mods = import_vortex_api9.util.getSafe(state, ["persistent", "mods", GAME_ID], {});
+  const mods = import_vortex_api11.util.getSafe(state, ["persistent", "mods", GAME_ID], {});
   for (const id of relevant) {
     const mod = mods[id];
     if (!mod?.installationPath) {
       continue;
     }
-    const modPath = import_path2.default.join(installPath, mod.installationPath);
+    const modPath = import_path5.default.join(installPath, mod.installationPath);
     const files = await walkPath(modPath, { skipLinks: true, skipHidden: true, skipInaccessible: true });
-    const manifestFile = files.find((file) => import_path2.default.basename(file.filePath) === MOD_MANIFEST);
+    const manifestFile = files.find((file) => import_path5.default.basename(file.filePath) === MOD_MANIFEST);
     if (manifestFile === void 0) {
       continue;
     }
-    const relPath = import_path2.default.relative(modPath, import_path2.default.dirname(manifestFile.filePath));
-    const modConfigFilePath = import_path2.default.join(configMod.configModPath, relPath, MOD_CONFIG);
-    await import_vortex_api9.fs.copyAsync(modConfigFilePath, import_path2.default.join(modPath, relPath, MOD_CONFIG), { overwrite: true }).catch((err) => null);
+    const relPath = import_path5.default.relative(modPath, import_path5.default.dirname(manifestFile.filePath));
+    const modConfigFilePath = import_path5.default.join(configMod.configModPath, relPath, MOD_CONFIG);
+    await import_vortex_api11.fs.copyAsync(modConfigFilePath, import_path5.default.join(modPath, relPath, MOD_CONFIG), { overwrite: true }).catch((err) => null);
     try {
-      await applyToModConfig(api, () => deleteFolder(import_path2.default.dirname(modConfigFilePath)));
+      await applyToModConfig(api, () => deleteFolder(import_path5.default.dirname(modConfigFilePath)));
     } catch (err) {
       api.showErrorNotification("Failed to write mod config", err);
       return;
@@ -856,7 +1076,7 @@ async function applyToModConfig(api, cb) {
 }
 async function onRevertFiles(api, profileId) {
   const state = api.getState();
-  const profile = import_vortex_api9.selectors.profileById(state, profileId);
+  const profile = import_vortex_api11.selectors.profileById(state, profileId);
   if (profile?.gameId !== GAME_ID) {
     return;
   }
@@ -872,8 +1092,11 @@ async function onRevertFiles(api, profileId) {
   return;
 }
 async function onAddedFiles(api, profileId, files) {
-  const state = api.store.getState();
-  const profile = import_vortex_api9.selectors.profileById(state, profileId);
+  const state = api.store?.getState();
+  if (state === void 0) {
+    return;
+  }
+  const profile = import_vortex_api11.selectors.profileById(state, profileId);
   if (profile?.gameId !== GAME_ID) {
     return;
   }
@@ -882,12 +1105,12 @@ async function onAddedFiles(api, profileId, files) {
     return;
   }
   const isSMAPIFile = (file) => {
-    const segments = file.filePath.toLowerCase().split(import_path2.default.sep).filter((seg) => !!seg);
+    const segments = file.filePath.toLowerCase().split(import_path5.default.sep).filter((seg) => !!seg);
     return segments.includes("smapi_internal");
   };
-  const mergeConfigs = import_vortex_api9.util.getSafe(state, ["settings", "SDV", "mergeConfigs", profile.id], false);
+  const mergeConfigs = import_vortex_api11.util.getSafe(state, ["settings", "SDV", "mergeConfigs", profile.id], false);
   const result = files.reduce((accum, file) => {
-    if (mergeConfigs && !isSMAPIFile(file) && import_path2.default.basename(file.filePath).toLowerCase() === MOD_CONFIG) {
+    if (mergeConfigs && !isSMAPIFile(file) && import_path5.default.basename(file.filePath).toLowerCase() === MOD_CONFIG) {
       accum.configs.push(file);
     } else {
       accum.regulars.push(file);
@@ -900,10 +1123,10 @@ async function onAddedFiles(api, profileId, files) {
   ]);
 }
 function extractConfigModAttributes(state, configModId) {
-  return import_vortex_api9.util.getSafe(state, ["persistent", "mods", GAME_ID, configModId, "attributes", "configMod"], []);
+  return import_vortex_api11.util.getSafe(state, ["persistent", "mods", GAME_ID, configModId, "attributes", "configMod"], []);
 }
 function setConfigModAttribute(api, configModId, attributes) {
-  api.store.dispatch(import_vortex_api9.actions.setModAttribute(GAME_ID, configModId, "configMod", attributes));
+  api.store?.dispatch(import_vortex_api11.actions.setModAttribute(GAME_ID, configModId, "configMod", attributes));
 }
 function removeConfigModAttributes(api, configMod, attributes) {
   const existing = extractConfigModAttributes(api.getState(), configMod.id);
@@ -914,7 +1137,7 @@ async function addConfigFiles(api, profileId, files) {
   if (files.length === 0) {
     return Promise.resolve();
   }
-  api.sendNotification({
+  api.sendNotification?.({
     type: "activity",
     id: NOTIF_ACTIVITY_CONFIG_MOD,
     title: "Importing config files...",
@@ -927,13 +1150,13 @@ async function addRegularFiles(api, profileId, files) {
     return Promise.resolve();
   }
   const state = api.getState();
-  const game = import_vortex_api9.util.getGame(GAME_ID);
-  const discovery = import_vortex_api9.selectors.discoveryByGame(state, GAME_ID);
+  const game = import_vortex_api11.util.getGame(GAME_ID);
+  const discovery = import_vortex_api11.selectors.discoveryByGame(state, GAME_ID);
   const modPaths = game.getModPaths(discovery.path);
-  const installPath = import_vortex_api9.selectors.installPathForGame(state, GAME_ID);
+  const installPath = import_vortex_api11.selectors.installPathForGame(state, GAME_ID);
   for (const entry of files) {
     if (entry.candidates.length === 1) {
-      const mod = import_vortex_api9.util.getSafe(
+      const mod = import_vortex_api11.util.getSafe(
         state.persistent.mods,
         [GAME_ID, entry.candidates[0]],
         void 0
@@ -943,18 +1166,19 @@ async function addRegularFiles(api, profileId, files) {
       }
       const from = modPaths[mod.type ?? ""];
       if (from === void 0) {
-        (0, import_vortex_api9.log)("error", "failed to resolve mod path for mod type", mod.type);
+        (0, import_vortex_api11.log)("error", "failed to resolve mod path for mod type", mod.type);
         return Promise.resolve();
       }
-      const relPath = import_path2.default.relative(from, entry.filePath);
-      const targetPath = import_path2.default.join(installPath, mod.id, relPath);
+      const relPath = import_path5.default.relative(from, entry.filePath);
+      const targetPath = import_path5.default.join(installPath, mod.id, relPath);
       try {
-        await import_vortex_api9.fs.ensureDirWritableAsync(import_path2.default.dirname(targetPath));
-        await import_vortex_api9.fs.copyAsync(entry.filePath, targetPath);
-        await import_vortex_api9.fs.removeAsync(entry.filePath);
+        await import_vortex_api11.fs.ensureDirWritableAsync(import_path5.default.dirname(targetPath));
+        await import_vortex_api11.fs.copyAsync(entry.filePath, targetPath);
+        await import_vortex_api11.fs.removeAsync(entry.filePath);
       } catch (err) {
-        if (!err.message.includes("are the same file")) {
-          (0, import_vortex_api9.log)("error", "failed to re-import added file to mod", err.message);
+        const message = err instanceof Error ? err.message : String(err);
+        if (!message.includes("are the same file")) {
+          (0, import_vortex_api11.log)("error", "failed to re-import added file to mod", message);
         }
       }
     }
@@ -967,10 +1191,10 @@ var isModCandidateValid = (mod, entry) => {
   if (mod.type !== "SMAPI") {
     return true;
   }
-  const segments = entry.filePath.toLowerCase().split(import_path2.default.sep).filter((seg) => !!seg);
+  const segments = entry.filePath.toLowerCase().split(import_path5.default.sep).filter((seg) => !!seg);
   const modsSegIdx = segments.indexOf("mods");
   const modFolderName = modsSegIdx !== -1 && segments.length > modsSegIdx + 1 ? segments[modsSegIdx + 1] : void 0;
-  let bundledMods = import_vortex_api9.util.getSafe(mod, ["attributes", "smapiBundledMods"], []);
+  let bundledMods = import_vortex_api11.util.getSafe(mod, ["attributes", "smapiBundledMods"], []);
   bundledMods = bundledMods.length > 0 ? bundledMods : getBundledMods();
   if (segments.includes("content")) {
     return false;
@@ -979,19 +1203,15 @@ var isModCandidateValid = (mod, entry) => {
 };
 
 // extensions/games/game-stardewvalley/index.ts
-var path3 = require("path");
+var path6 = require("path");
 var { clipboard } = require("electron");
-var rjson = require("relaxed-json");
-var { SevenZip } = import_vortex_api10.util;
 var { deploySMAPI: deploySMAPI2, downloadSMAPI: downloadSMAPI2, findSMAPIMod: findSMAPIMod2 } = (init_SMAPI(), __toCommonJS(SMAPI_exports));
-var { GAME_ID: GAME_ID2, _SMAPI_BUNDLED_MODS: _SMAPI_BUNDLED_MODS2, getBundledMods: getBundledMods2, MOD_TYPE_CONFIG: MOD_TYPE_CONFIG2 } = (init_common(), __toCommonJS(common_exports));
-var MANIFEST_FILE = "manifest.json";
-var PTRN_CONTENT = path3.sep + "Content" + path3.sep;
-var SMAPI_EXE = "StardewModdingAPI.exe";
-var SMAPI_DLL = "SMAPI.Installer.dll";
-var SMAPI_DATA = ["windows-install.dat", "install.dat"];
+var { GAME_ID: GAME_ID2, MOD_TYPE_CONFIG: MOD_TYPE_CONFIG2 } = (init_common(), __toCommonJS(common_exports));
 function toBlue(func) {
-  return (...args) => import_bluebird.default.resolve(func(...args));
+  return (...args) => import_bluebird4.default.resolve(func(...args));
+}
+function errorMessage(err) {
+  return err instanceof Error ? err.message : String(err);
 }
 var StardewValley = class {
   /*********
@@ -1038,13 +1258,20 @@ var StardewValley = class {
      * which is slow and only happens manually.
      */
     this.queryPath = toBlue(async () => {
-      const game = await import_vortex_api10.util.GameStoreHelper.findByAppId(["413150", "1453375253", "ConcernedApe.StardewValleyPC"]);
-      if (game)
+      const game = await import_vortex_api12.util.GameStoreHelper.findByAppId([
+        "413150",
+        "1453375253",
+        "ConcernedApe.StardewValleyPC"
+      ]).catch(() => void 0);
+      if (game !== void 0) {
         return game.gamePath;
-      for (const defaultPath of this.defaultPaths) {
-        if (await this.getPathExistsAsync(defaultPath))
-          return defaultPath;
       }
+      for (const defaultPath of this.defaultPaths) {
+        if (await this.getPathExistsAsync(defaultPath)) {
+          return defaultPath;
+        }
+      }
+      throw new Error("Stardew Valley install path not found");
     });
     /**
      * Optional setup function. If this game requires some form of setup before it can be modded (like
@@ -1054,11 +1281,11 @@ var StardewValley = class {
      */
     this.setup = toBlue(async (discovery) => {
       try {
-        await import_vortex_api10.fs.ensureDirWritableAsync(path3.join(discovery.path, defaultModsRelPath()));
+        await import_vortex_api12.fs.ensureDirWritableAsync(path6.join(discovery.path, defaultModsRelPath()));
       } catch (err) {
         return Promise.reject(err);
       }
-      const smapiPath = path3.join(discovery.path, SMAPI_EXE);
+      const smapiPath = path6.join(discovery.path, SMAPI_EXE);
       const smapiFound = await this.getPathExistsAsync(smapiPath);
       if (!smapiFound) {
         this.recommendSmapi();
@@ -1103,8 +1330,8 @@ var StardewValley = class {
     const smapiMod = findSMAPIMod2(this.context.api);
     const title = smapiMod ? "SMAPI is not deployed" : "SMAPI is not installed";
     const actionTitle = smapiMod ? "Deploy" : "Get SMAPI";
-    const action = () => (smapiMod ? deploySMAPI2(this.context.api) : downloadSMAPI2(this.context.api)).then(() => this.context.api.dismissNotification("smapi-missing"));
-    this.context.api.sendNotification({
+    const action = () => (smapiMod ? deploySMAPI2(this.context.api) : downloadSMAPI2(this.context.api)).then(() => this.context.api.dismissNotification?.("smapi-missing"));
+    this.context.api.sendNotification?.({
       id: "smapi-missing",
       type: "warning",
       title,
@@ -1124,9 +1351,9 @@ var StardewValley = class {
    * Asynchronously check whether a file or directory path exists.
    * @param {string} path - The file or directory path.
    */
-  async getPathExistsAsync(path4) {
+  async getPathExistsAsync(path7) {
     try {
-      await import_vortex_api10.fs.statAsync(path4);
+      await import_vortex_api12.fs.statAsync(path7);
       return true;
     } catch (err) {
       return false;
@@ -1150,214 +1377,29 @@ var StardewValley = class {
     }
   }
 };
-function testRootFolder(files, gameId) {
-  const filtered = files.filter((file) => file.endsWith(path3.sep)).map((file) => path3.join("fakeDir", file));
-  const contentDir = filtered.find((file) => file.endsWith(PTRN_CONTENT));
-  const supported = gameId === GAME_ID2 && contentDir !== void 0;
-  return import_bluebird.default.resolve({ supported, requiredFiles: [] });
-}
-function installRootFolder(files, destinationPath) {
-  const contentFile = files.find((file) => path3.join("fakeDir", file).endsWith(PTRN_CONTENT));
-  const idx = contentFile.indexOf(PTRN_CONTENT) + 1;
-  const rootDir = path3.basename(contentFile.substring(0, idx));
-  const filtered = files.filter((file) => !file.endsWith(path3.sep) && file.indexOf(rootDir) !== -1 && path3.extname(file) !== ".txt");
-  const instructions = filtered.map((file) => {
-    return {
-      type: "copy",
-      source: file,
-      destination: file.substr(idx)
-    };
-  });
-  return import_bluebird.default.resolve({ instructions });
-}
-function isValidManifest(filePath) {
-  const segments = filePath.toLowerCase().split(path3.sep);
-  const isManifestFile = segments[segments.length - 1] === MANIFEST_FILE;
-  const isLocale = segments.includes("locale");
-  return isManifestFile && !isLocale;
-}
-function testSupported(files, gameId) {
-  const supported = gameId === GAME_ID2 && files.find(isValidManifest) !== void 0 && files.find((file) => {
-    const testFile = path3.join("fakeDir", file);
-    return testFile.endsWith(PTRN_CONTENT);
-  }) === void 0;
-  return import_bluebird.default.resolve({ supported, requiredFiles: [] });
-}
-async function install(api, dependencyManager, files, destinationPath) {
-  const manifestFiles = files.filter(isValidManifest);
-  let parseError;
-  await dependencyManager.scanManifests(true);
-  let mods = await Promise.all(manifestFiles.map(async (manifestFile) => {
-    const rootFolder = path3.dirname(manifestFile);
-    const rootSegments = rootFolder.toLowerCase().split(path3.sep);
-    const manifestIndex = manifestFile.toLowerCase().indexOf(MANIFEST_FILE);
-    const filterFunc = (file) => {
-      const isFile = !file.endsWith(path3.sep) && path3.extname(path3.basename(file)) !== "";
-      const fileSegments = file.toLowerCase().split(path3.sep);
-      const isInRootFolder = rootSegments.length > 0 ? fileSegments?.[rootSegments.length - 1] === rootSegments[rootSegments.length - 1] : true;
-      return isInRootFolder && isFile;
-    };
-    try {
-      const manifest = await parseManifest(path3.join(destinationPath, manifestFile));
-      const modFiles = files.filter(filterFunc);
-      return {
-        manifest,
-        rootFolder,
-        manifestIndex,
-        modFiles
-      };
-    } catch (err) {
-      (0, import_vortex_api10.log)("warn", "Failed to parse manifest", { manifestFile, error: err.message });
-      parseError = err;
-      return void 0;
-    }
-  }));
-  mods = mods.filter((x) => x !== void 0);
-  if (mods.length === 0) {
-    api.showErrorNotification(
-      `The mod manifest is invalid and can't be read. You can try to install the mod anyway via right-click -> "Unpack (as-is)"`,
-      parseError,
-      {
-        allowReport: false
-      }
-    );
-  }
-  return import_bluebird.default.map(mods, (mod) => {
-    const modName = mod.rootFolder !== "." ? mod.rootFolder : mod.manifest.Name ?? mod.rootFolder;
-    if (modName === void 0) {
-      return [];
-    }
-    const dependencies = mod.manifest.Dependencies || [];
-    const instructions = [];
-    for (const file of mod.modFiles) {
-      const destination = path3.join(modName, file.substr(mod.manifestIndex));
-      instructions.push({
-        type: "copy",
-        source: file,
-        destination
-      });
-    }
-    const addRuleForDependency = (dep) => {
-      if (dep.UniqueID === void 0 || dep.UniqueID.toLowerCase() === "yourname.yourotherspacksandmods") {
-        return;
-      }
-      const versionMatch = dep.MinimumVersion !== void 0 ? `>=${dep.MinimumVersion}` : "*";
-      const rule = {
-        // treating all dependencies as recommendations because the dependency information
-        // provided by some mod authors is a bit hit-and-miss and Vortex fairly aggressively
-        // enforces requirements
-        // type: (dep.IsRequired ?? true) ? 'requires' : 'recommends',
-        type: "recommends",
-        reference: {
-          logicalFileName: dep.UniqueID.toLowerCase(),
-          versionMatch
-        },
-        extra: {
-          onlyIfFulfillable: true,
-          automatic: true
-        }
-      };
-      instructions.push({
-        type: "rule",
-        rule
-      });
-    };
-    return instructions;
-  }).then((data) => {
-    const instructions = [].concat(data).reduce((accum, iter) => accum.concat(iter), []);
-    return Promise.resolve({ instructions });
-  });
-}
-function isSMAPIModType(instructions) {
-  const smapiData = instructions.find((inst) => inst.type === "copy" && inst.source.endsWith(SMAPI_EXE));
-  return import_bluebird.default.resolve(smapiData !== void 0);
-}
-function testSMAPI(files, gameId) {
-  const supported = gameId === GAME_ID2 && files.find((file) => path3.basename(file) === SMAPI_DLL) !== void 0;
-  return import_bluebird.default.resolve({
-    supported,
-    requiredFiles: []
-  });
-}
-async function installSMAPI(getDiscoveryPath, files, destinationPath) {
-  const folder = process.platform === "win32" ? "windows" : process.platform === "linux" ? "linux" : "macos";
-  const fileHasCorrectPlatform = (file) => {
-    const segments = file.split(path3.sep).map((seg) => seg.toLowerCase());
-    return segments.includes(folder);
-  };
-  const dataFile = files.find((file) => {
-    const isCorrectPlatform = fileHasCorrectPlatform(file);
-    return isCorrectPlatform && SMAPI_DATA.includes(path3.basename(file).toLowerCase());
-  });
-  if (dataFile === void 0) {
-    return Promise.reject(new import_vortex_api10.util.DataInvalid("Failed to find the SMAPI data files - download appears to be corrupted; please re-download SMAPI and try again"));
-  }
-  let data = "";
-  try {
-    data = await import_vortex_api10.fs.readFileAsync(path3.join(getDiscoveryPath(), "Stardew Valley.deps.json"), { encoding: "utf8" });
-  } catch (err) {
-    (0, import_vortex_api10.log)("error", "failed to parse SDV dependencies", err);
-  }
-  const updatedFiles = [];
-  const szip = new SevenZip();
-  await szip.extractFull(path3.join(destinationPath, dataFile), destinationPath);
-  await import_vortex_api10.util.walk(destinationPath, (iter, stats) => {
-    const relPath = path3.relative(destinationPath, iter);
-    if (!files.includes(relPath) && stats.isFile() && !files.includes(relPath + path3.sep)) updatedFiles.push(relPath);
-    const segments = relPath.toLocaleLowerCase().split(path3.sep);
-    const modsFolderIdx = segments.indexOf("mods");
-    if (modsFolderIdx !== -1 && segments.length > modsFolderIdx + 1) {
-      _SMAPI_BUNDLED_MODS2.push(segments[modsFolderIdx + 1]);
-    }
-    return import_bluebird.default.resolve();
-  });
-  const smapiExe = updatedFiles.find((file) => file.toLowerCase().endsWith(SMAPI_EXE.toLowerCase()));
-  if (smapiExe === void 0) {
-    return Promise.reject(new import_vortex_api10.util.DataInvalid(`Failed to extract ${SMAPI_EXE} - download appears to be corrupted; please re-download SMAPI and try again`));
-  }
-  const idx = smapiExe.indexOf(path3.basename(smapiExe));
-  const instructions = updatedFiles.map((file) => {
-    return {
-      type: "copy",
-      source: file,
-      destination: path3.join(file.substr(idx))
-    };
-  });
-  instructions.push({
-    type: "attribute",
-    key: "smapiBundledMods",
-    value: getBundledMods2()
-  });
-  instructions.push({
-    type: "generatefile",
-    data,
-    destination: "StardewModdingAPI.deps.json"
-  });
-  return Promise.resolve({ instructions });
-}
 async function showSMAPILog(api, basePath, logFile) {
-  const logData = await import_vortex_api10.fs.readFileAsync(path3.join(basePath, logFile), { encoding: "utf-8" });
+  const logData = await import_vortex_api12.fs.readFileAsync(path6.join(basePath, logFile), { encoding: "utf-8" });
   await api.showDialog("info", "SMAPI Log", {
     text: 'Your SMAPI log is displayed below. To share it, click "Copy & Share" which will copy it to your clipboard and open the SMAPI log sharing website. Next, paste your code into the text box and press "save & parse log". You can now share a link to this page with others so they can see your log file.\n\n' + logData
   }, [{
     label: "Copy & Share log",
     action: () => {
       const timestamp = (/* @__PURE__ */ new Date()).toISOString().replace(/^.+T([^\.]+).+/, "$1");
-      clipboard.writeText(`[${timestamp} INFO Vortex] Log exported by Vortex ${import_vortex_api10.util.getApplication().version}.
+      clipboard.writeText(`[${timestamp} INFO Vortex] Log exported by Vortex ${import_vortex_api12.util.getApplication().version}.
 ` + logData);
-      return import_vortex_api10.util.opn("https://smapi.io/log").catch((err) => void 0);
+      return import_vortex_api12.util.opn("https://smapi.io/log").catch((err) => void 0);
     }
   }, { label: "Close", action: () => void 0 }]);
 }
 async function onShowSMAPILog(api) {
-  const basePath = path3.join(import_vortex_api10.util.getVortexPath("appData"), "stardewvalley", "errorlogs");
+  const basePath = path6.join(import_vortex_api12.util.getVortexPath("appData"), "stardewvalley", "errorlogs");
   try {
     await showSMAPILog(api, basePath, "SMAPI-crash.txt");
   } catch (err) {
     try {
       await showSMAPILog(api, basePath, "SMAPI-latest.txt");
     } catch (err2) {
-      api.sendNotification({ type: "info", title: "No SMAPI logs found.", message: "", displayMS: 5e3 });
+      api.sendNotification?.({ type: "info", title: "No SMAPI logs found.", message: "", displayMS: 5e3 });
     }
   }
 }
@@ -1368,7 +1410,7 @@ function getModManifests(modPath) {
   }
   return (0, import_turbowalk3.default)(modPath, async (entries) => {
     for (const entry of entries) {
-      if (path3.basename(entry.filePath) === "manifest.json") {
+      if (path6.basename(entry.filePath) === "manifest.json") {
         manifests.push(entry.filePath);
       }
     }
@@ -1380,6 +1422,10 @@ function updateConflictInfo(api, smapi, gameId, modId) {
     return Promise.resolve();
   }
   const now = Date.now();
+  const store = api.store;
+  if (store === void 0) {
+    return Promise.resolve();
+  }
   if (now - (mod.attributes?.lastSMAPIQuery ?? 0) < SMAPI_QUERY_FREQUENCY) {
     return Promise.resolve();
   }
@@ -1413,40 +1459,44 @@ function updateConflictInfo(api, smapi, gameId, modId) {
   return smapi.findByNames(query).then((results) => {
     const worstStatus = results.sort((lhs, rhs) => compatibilityPrio(lhs) - compatibilityPrio(rhs));
     if (worstStatus.length > 0) {
-      api.store.dispatch(import_vortex_api10.actions.setModAttributes(gameId, modId, {
+      store.dispatch(import_vortex_api12.actions.setModAttributes(gameId, modId, {
         lastSMAPIQuery: now,
         compatibilityStatus: worstStatus[0].metadata.compatibilityStatus,
         compatibilityMessage: worstStatus[0].metadata.compatibilitySummary,
         compatibilityUpdate: worstStatus[0].suggestedUpdate?.version
       }));
     } else {
-      (0, import_vortex_api10.log)("debug", "no manifest");
-      api.store.dispatch(import_vortex_api10.actions.setModAttribute(gameId, modId, "lastSMAPIQuery", now));
+      (0, import_vortex_api12.log)("debug", "no manifest");
+      store.dispatch(import_vortex_api12.actions.setModAttribute(gameId, modId, "lastSMAPIQuery", now));
     }
   }).catch((err) => {
-    (0, import_vortex_api10.log)("warn", "error reading manifest", err.message);
-    api.store.dispatch(import_vortex_api10.actions.setModAttribute(gameId, modId, "lastSMAPIQuery", now));
+    (0, import_vortex_api12.log)("warn", "error reading manifest", errorMessage(err));
+    store.dispatch(import_vortex_api12.actions.setModAttribute(gameId, modId, "lastSMAPIQuery", now));
   });
 }
 function init(context) {
   let dependencyManager;
+  const store = context.api.store;
+  if (store === void 0) {
+    (0, import_vortex_api12.log)("error", "stardewvalley failed to initialize: redux store unavailable");
+    return;
+  }
   const getDiscoveryPath = () => {
-    const state = context.api.store.getState();
-    const discovery = import_vortex_api10.util.getSafe(state, ["settings", "gameMode", "discovered", GAME_ID2], void 0);
-    if (discovery === void 0 || discovery.path === void 0) {
-      (0, import_vortex_api10.log)("error", "stardewvalley was not discovered");
-      return void 0;
+    const state = store.getState();
+    const discoveryPath = import_vortex_api12.util.getSafe(state, ["settings", "gameMode", "discovered", GAME_ID2, "path"], void 0);
+    if (discoveryPath === void 0) {
+      (0, import_vortex_api12.log)("error", "stardewvalley was not discovered");
+      throw new Error("Stardew Valley was not discovered");
     }
-    return discovery.path;
+    return discoveryPath;
   };
   const getSMAPIPath = (game) => {
-    const state = context.api.store.getState();
-    const discovery = state.settings.gameMode.discovered[game.id];
-    return discovery.path;
+    const state = store.getState();
+    return import_vortex_api12.util.getSafe(state, ["settings", "gameMode", "discovered", game.id, "path"], "");
   };
   const manifestExtractor = toBlue(
     async (modInfo, modPath) => {
-      if (import_vortex_api10.selectors.activeGameId(context.api.getState()) !== GAME_ID2) {
+      if (import_vortex_api12.selectors.activeGameId(context.api.getState()) !== GAME_ID2) {
         return Promise.resolve({});
       }
       const manifests = await getModManifests(modPath);
@@ -1455,7 +1505,7 @@ function init(context) {
           try {
             return await parseManifest(manifest);
           } catch (err) {
-            (0, import_vortex_api10.log)("warn", "Failed to parse manifest", { manifestFile: manifest, error: err.message });
+            (0, import_vortex_api12.log)("warn", "Failed to parse manifest", { manifestFile: manifest, error: errorMessage(err) });
             return void 0;
           }
         }
@@ -1487,27 +1537,27 @@ function init(context) {
     onMergeConfigToggle: async (profileId, enabled) => {
       if (!enabled) {
         await onRevertFiles(context.api, profileId);
-        context.api.sendNotification({ type: "info", message: "Mod configs returned to their respective mods", displayMS: 5e3 });
+        context.api.sendNotification?.({ type: "info", message: "Mod configs returned to their respective mods", displayMS: 5e3 });
       }
-      context.api.store.dispatch(setMergeConfigs(profileId, enabled));
+      store.dispatch(setMergeConfigs(profileId, enabled));
       return Promise.resolve();
     }
-  }), () => import_vortex_api10.selectors.activeGameId(context.api.getState()) === GAME_ID2, 150);
-  context.registerInstaller("smapi-installer", 30, testSMAPI, (files, dest) => import_bluebird.default.resolve(installSMAPI(getDiscoveryPath, files, dest)));
+  }), () => import_vortex_api12.selectors.activeGameId(context.api.getState()) === GAME_ID2, 150);
+  context.registerInstaller("smapi-installer", 30, testSMAPI, (files, dest) => import_bluebird4.default.resolve(installSMAPI(getDiscoveryPath, files, dest)));
   context.registerInstaller("sdvrootfolder", 50, testRootFolder, installRootFolder);
   context.registerInstaller(
     "stardew-valley-installer",
     50,
     testSupported,
-    (files, destinationPath) => import_bluebird.default.resolve(install(context.api, dependencyManager, files, destinationPath))
+    (files, destinationPath) => import_bluebird4.default.resolve(installStardewValley(context.api, dependencyManager, files, destinationPath))
   );
   context.registerModType("SMAPI", 30, (gameId) => gameId === GAME_ID2, getSMAPIPath, isSMAPIModType);
   context.registerModType(
     MOD_TYPE_CONFIG2,
     30,
     (gameId) => gameId === GAME_ID2,
-    () => path3.join(getDiscoveryPath(), defaultModsRelPath()),
-    () => import_bluebird.default.resolve(false)
+    () => path6.join(getDiscoveryPath(), defaultModsRelPath()),
+    () => import_bluebird4.default.resolve(false)
   );
   context.registerModType(
     "sdvrootfolder",
@@ -1516,10 +1566,10 @@ function init(context) {
     () => getDiscoveryPath(),
     (instructions) => {
       const copyInstructions = instructions.filter((instr) => instr.type === "copy");
-      const hasManifest = copyInstructions.find((instr) => instr.destination.endsWith(MANIFEST_FILE));
-      const hasModsFolder = copyInstructions.find((instr) => instr.destination.startsWith(defaultModsRelPath() + path3.sep)) !== void 0;
-      const hasContentFolder = copyInstructions.find((instr) => instr.destination.startsWith("Content" + path3.sep)) !== void 0;
-      return hasManifest ? import_bluebird.default.resolve(hasContentFolder && hasModsFolder) : import_bluebird.default.resolve(hasContentFolder);
+      const hasManifest = copyInstructions.some((instr) => instr.destination?.endsWith(MANIFEST_FILE) === true);
+      const hasModsFolder = copyInstructions.some((instr) => instr.destination?.startsWith(defaultModsRelPath() + path6.sep) === true);
+      const hasContentFolder = copyInstructions.some((instr) => instr.destination?.startsWith("Content" + path6.sep) === true);
+      return hasManifest ? import_bluebird4.default.resolve(hasContentFolder && hasModsFolder) : import_bluebird4.default.resolve(hasContentFolder);
     }
   );
   registerConfigMod(context);
@@ -1533,8 +1583,8 @@ function init(context) {
       onShowSMAPILog(context.api);
     },
     () => {
-      const state = context.api.store.getState();
-      const gameMode = import_vortex_api10.selectors.activeGameId(state);
+      const state = store.getState();
+      const gameMode = import_vortex_api12.selectors.activeGameId(state);
       return gameMode === GAME_ID2;
     }
   );
@@ -1542,7 +1592,7 @@ function init(context) {
   context.registerTableAttribute("mods", {
     id: "sdv-compatibility",
     position: 100,
-    condition: () => import_vortex_api10.selectors.activeGameId(context.api.getState()) === GAME_ID2,
+    condition: () => import_vortex_api12.selectors.activeGameId(context.api.getState()) === GAME_ID2,
     placement: "table",
     calc: (mod) => mod.attributes?.compatibilityStatus,
     customRenderer: (mod, detailCell, t) => {
@@ -1559,17 +1609,17 @@ function init(context) {
   context.registerTest(
     "sdv-incompatible-mods",
     "gamemode-activated",
-    () => import_bluebird.default.resolve(testSMAPIOutdated(context.api, dependencyManager))
+    () => import_bluebird4.default.resolve(testSMAPIOutdated(context.api, dependencyManager))
   );
   context.once(() => {
     const proxy = new smapiProxy_default(context.api);
-    context.api.setStylesheet("sdv", path3.join(__dirname, "sdvstyle.scss"));
+    context.api.setStylesheet("sdv", path6.join(__dirname, "sdvstyle.scss"));
     context.api.addMetaServer("smapi.io", {
       url: "",
       loopbackCB: (query) => {
-        return import_bluebird.default.resolve(proxy.find(query)).catch((err) => {
-          (0, import_vortex_api10.log)("error", "failed to look up smapi meta info", err.message);
-          return import_bluebird.default.resolve([]);
+        return import_bluebird4.default.resolve(proxy.find(query)).catch((err) => {
+          (0, import_vortex_api12.log)("error", "failed to look up smapi meta info", errorMessage(err));
+          return import_bluebird4.default.resolve([]);
         });
       },
       cacheDurationSec: 86400,
@@ -1580,27 +1630,27 @@ function init(context) {
     context.api.onAsync("will-enable-mods", (profileId, modIds, enabled, options) => onWillEnableMods(context.api, profileId, modIds, enabled, options));
     context.api.onAsync("did-deploy", async (profileId) => {
       const state = context.api.getState();
-      const profile = import_vortex_api10.selectors.profileById(state, profileId);
+      const profile = import_vortex_api12.selectors.profileById(state, profileId);
       if (profile?.gameId !== GAME_ID2) {
         return Promise.resolve();
       }
       const smapiMod = findSMAPIMod2(context.api);
-      const primaryTool = import_vortex_api10.util.getSafe(state, ["settings", "interface", "primaryTool", GAME_ID2], void 0);
+      const primaryTool = import_vortex_api12.util.getSafe(state, ["settings", "interface", "primaryTool", GAME_ID2], void 0);
       if (smapiMod && primaryTool === void 0) {
-        context.api.store.dispatch(import_vortex_api10.actions.setPrimaryTool(GAME_ID2, "smapi"));
+        store.dispatch(import_vortex_api12.actions.setPrimaryTool(GAME_ID2, "smapi"));
       }
       return Promise.resolve();
     });
     context.api.onAsync("did-purge", async (profileId) => {
       const state = context.api.getState();
-      const profile = import_vortex_api10.selectors.profileById(state, profileId);
+      const profile = import_vortex_api12.selectors.profileById(state, profileId);
       if (profile?.gameId !== GAME_ID2) {
         return Promise.resolve();
       }
       const smapiMod = findSMAPIMod2(context.api);
-      const primaryTool = import_vortex_api10.util.getSafe(state, ["settings", "interface", "primaryTool", GAME_ID2], void 0);
+      const primaryTool = import_vortex_api12.util.getSafe(state, ["settings", "interface", "primaryTool", GAME_ID2], void 0);
       if (smapiMod && primaryTool === "smapi") {
-        context.api.store.dispatch(import_vortex_api10.actions.setPrimaryTool(GAME_ID2, void 0));
+        store.dispatch(import_vortex_api12.actions.setPrimaryTool(GAME_ID2, void 0));
       }
       return Promise.resolve();
     });
@@ -1608,18 +1658,18 @@ function init(context) {
       if (gameId !== GAME_ID2) {
         return;
       }
-      updateConflictInfo(context.api, proxy, gameId, modId).then(() => (0, import_vortex_api10.log)("debug", "added compatibility info", { modId })).catch((err) => (0, import_vortex_api10.log)("error", "failed to add compatibility info", { modId, error: err.message }));
+      updateConflictInfo(context.api, proxy, gameId, modId).then(() => (0, import_vortex_api12.log)("debug", "added compatibility info", { modId })).catch((err) => (0, import_vortex_api12.log)("error", "failed to add compatibility info", { modId, error: errorMessage(err) }));
     });
     context.api.events.on("gamemode-activated", (gameMode) => {
       if (gameMode !== GAME_ID2) {
         return;
       }
       const state = context.api.getState();
-      (0, import_vortex_api10.log)("debug", "updating SDV compatibility info");
+      (0, import_vortex_api12.log)("debug", "updating SDV compatibility info");
       Promise.all(Object.keys(state.persistent.mods[gameMode] ?? {}).map((modId) => updateConflictInfo(context.api, proxy, gameMode, modId))).then(() => {
-        (0, import_vortex_api10.log)("debug", "done updating compatibility info");
+        (0, import_vortex_api12.log)("debug", "done updating compatibility info");
       }).catch((err) => {
-        (0, import_vortex_api10.log)("error", "failed to update conflict info", err.message);
+        (0, import_vortex_api12.log)("error", "failed to update conflict info", errorMessage(err));
       });
     });
   });
