@@ -1,5 +1,8 @@
-/* eslint-disable */
-import { log, types } from 'vortex-api';
+/**
+ * Boots and wires the Stardew Valley extension feature modules.
+ */
+import { log } from 'vortex-api';
+import type { types } from 'vortex-api';
 
 // Core identifiers and shared state wiring.
 import { GAME_ID } from './common';
@@ -17,16 +20,8 @@ import { registerUi } from './registration/registerUi';
 import { registerRuntimeEvents } from './runtime/registerRuntimeEvents';
 import { selectDiscoveredToolPath, selectSdvDiscoveryPath } from './state/selectors';
 
-/**
- * Stardew Valley extension bootstrap.
- *
- * This file intentionally stays small and acts as a composition root that wires
- * together focused modules.
- *
- * See `README.md` in this folder for a high-level module map aimed at
- * contributors unfamiliar with Vortex internals.
- */
-function init(context: types.IExtensionContext): void {
+/** Registers all Stardew Valley game, installer, runtime, and UI integrations. */
+export default function init(context: types.IExtensionContext): void {
   // Vortex features rely on the Redux store; stop early if unavailable.
   const store = context.api.store;
   if (store === undefined) {
@@ -61,11 +56,9 @@ function init(context: types.IExtensionContext): void {
 
   // Register user-facing UI (settings, actions, table columns).
   registerUi(context);
-  // Register archive matchers/installers used during mod installation.
+  // Register different mod installers (SMAPI, root folder, config mod) and their matching logic.
   registerInstallers(context, getGameInstallPath, dependencyManager);
-  // Register SDV mod type matchers and deployment roots.
   registerModTypes(context, getGameInstallPath, getSMAPIPath);
-  // Register config-file sync action/flows.
   registerConfigMod(context);
 
   // Register metadata extraction from manifest.json during install.
@@ -75,5 +68,3 @@ function init(context: types.IExtensionContext): void {
   registerTests(context, dependencyManager);
   registerRuntimeEvents(context, dependencyManager);
 }
-
-export default init;
