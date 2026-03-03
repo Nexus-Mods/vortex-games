@@ -1,5 +1,5 @@
 /* eslint-disable */
-import { log, types, util } from 'vortex-api';
+import { log, types } from 'vortex-api';
 
 // Core identifiers and shared state wiring.
 import { GAME_ID } from './common';
@@ -15,6 +15,7 @@ import { registerModTypes } from './registration/registerModTypes';
 import { registerTests } from './registration/registerTests';
 import { registerUi } from './registration/registerUi';
 import { registerRuntimeEvents } from './runtime/registerRuntimeEvents';
+import { selectDiscoveredToolPath, selectSdvDiscoveryPath } from './state/selectors';
 
 /**
  * Stardew Valley extension bootstrap.
@@ -25,7 +26,7 @@ import { registerRuntimeEvents } from './runtime/registerRuntimeEvents';
  * See `README.md` in this folder for a high-level module map aimed at
  * contributors unfamiliar with Vortex internals.
  */
-function init(context: types.IExtensionContext) {
+function init(context: types.IExtensionContext): void {
   // Vortex features rely on the Redux store; stop early if unavailable.
   const store = context.api.store;
   if (store === undefined) {
@@ -36,22 +37,22 @@ function init(context: types.IExtensionContext) {
   // Tracks active mod manifests for dependency and compatibility checks.
   const dependencyManager = new DependencyManager(context.api);
 
-  // Reads the discovered game install folder from Vortex state.
-  const getDiscoveryPath = (): string => {
+  // Reads the game's install folder from Vortex state.
+  const getGameInstallPath = (): string => {
     const state = store.getState();
-    const discoveryPath = util.getSafe(state, ['settings', 'gameMode', 'discovered', GAME_ID, 'path'], undefined);
-    if (discoveryPath === undefined) {
+    const gameInstallPath = selectSdvDiscoveryPath(state);
+    if (gameInstallPath === undefined) {
       log('error', 'stardewvalley was not discovered');
       throw new Error('Stardew Valley was not discovered');
     }
 
-    return discoveryPath;
+    return gameInstallPath;
   };
 
   // Reads where Vortex discovered the SMAPI tool for this game.
-  const getSMAPIPath = (game: types.IGame) => {
+  const getSMAPIPath = (game: types.IGame): string => {
     const state = store.getState();
-    return util.getSafe(state, ['settings', 'gameMode', 'discovered', game.id, 'path'], '');
+    return selectDiscoveredToolPath(state, game.id);
   };
 
   // Register the game definition and SDV-specific reducer state.
@@ -61,9 +62,9 @@ function init(context: types.IExtensionContext) {
   // Register user-facing UI (settings, actions, table columns).
   registerUi(context);
   // Register archive matchers/installers used during mod installation.
-  registerInstallers(context, getDiscoveryPath, dependencyManager);
+  registerInstallers(context, getGameInstallPath, dependencyManager);
   // Register SDV mod type matchers and deployment roots.
-  registerModTypes(context, getDiscoveryPath, getSMAPIPath);
+  registerModTypes(context, getGameInstallPath, getSMAPIPath);
   // Register config-file sync action/flows.
   registerConfigMod(context);
 

@@ -3,12 +3,17 @@ import path from 'path';
 import { actions, fs, types, selectors, log, util } from 'vortex-api';
 import {
   NOTIF_ACTIVITY_CONFIG_MOD, GAME_ID, MOD_CONFIG,
-  RGX_INVALID_CHARS_WINDOWS, MOD_TYPE_CONFIG,
+  RGX_INVALID_CHARS_WINDOWS, MOD_TYPE_CONFIG, MOD_TYPE_ROOT, MOD_TYPE_SMAPI,
   MOD_MANIFEST, SMAPI_INTERNAL_DIRECTORY, getBundledMods
 } from './common';
 import { setMergeConfigs } from './actions';
 import { IFileEntry } from './types';
 import { walkPath, defaultModsRelPath, deleteFolder } from './util';
+import {
+  selectConfigModAttributes,
+  selectMergeConfigsEnabled,
+  selectSdvMods,
+} from './state/selectors';
 
 import { getSMAPIMods, findSMAPITool } from './SMAPI';
 import { IEntry } from 'turbowalk';
@@ -51,6 +56,12 @@ const shouldSuppressSync = (api: types.IExtensionApi) => {
   return suppressing;
 }
 
+function isSmapiInternalPath(filePath: string): boolean {
+  const segments = filePath.toLowerCase().split(path.sep).filter(seg => !!seg);
+  const normalizedInternalDir = SMAPI_INTERNAL_DIRECTORY.toLowerCase().replace(/[-_]/g, '');
+  return segments.some(segment => segment.replace(/[-_]/g, '') === normalizedInternalDir);
+}
+
 async function onSyncModConfigurations(api: types.IExtensionApi, silent?: boolean): Promise<void> {
   const state = api.getState();
   const profile = selectors.activeProfile(state);
@@ -61,7 +72,7 @@ async function onSyncModConfigurations(api: types.IExtensionApi, silent?: boolea
   if (!smapiTool?.path) {
     return;
   }
-  const mergeConfigs = util.getSafe(state, ['settings', 'SDV', 'mergeConfigs', profile.id], false);
+  const mergeConfigs = selectMergeConfigsEnabled(state, profile.id);
   if (!mergeConfigs) {
     if (silent) {
       return;
@@ -112,7 +123,8 @@ async function onSyncModConfigurations(api: types.IExtensionApi, silent?: boolea
     }
     const files = await walkPath(installPath);
     const SMAPIModIds = getSMAPIMods(api).map(mod => mod.id);
-    const isSMAPI = (file: IEntry) => file.filePath.includes(SMAPI_INTERNAL_DIRECTORY) || SMAPIModIds.forEach(modId => file.filePath.includes(modId));
+    const isSMAPI = (file: IEntry) => isSmapiInternalPath(file.filePath)
+      || SMAPIModIds.some(modId => file.filePath.includes(modId));
     const filtered = files.reduce((accum: IFileEntry[], file: IEntry) => {
       if (isSMAPI(file)) {
         // Do not touch SMAPI's internal config files
@@ -155,7 +167,7 @@ async function initialize(api: types.IExtensionApi): Promise<ConfigMod | undefin
   if (profile?.gameId !== GAME_ID) {
     return undefined;
   }
-  const mergeConfigs = util.getSafe(state, ['settings', 'SDV', 'mergeConfigs', profile.id], false);
+  const mergeConfigs = selectMergeConfigsEnabled(state, profile.id);
   if (!mergeConfigs) {
     return undefined;
   }
@@ -234,7 +246,7 @@ export async function addModConfig(api: types.IExtensionApi, files: IFileEntry[]
 
 export async function ensureConfigMod(api: types.IExtensionApi): Promise<types.IMod> {
   const state = api.getState();
-  const mods: { [modId: string]: types.IMod } = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
+  const mods: { [modId: string]: types.IMod } = selectSdvMods(state);
   const modInstalled = Object.values(mods).find(iter => iter.type === MOD_TYPE_CONFIG);
   if (modInstalled !== undefined) {
     return Promise.resolve(modInstalled);
@@ -280,7 +292,11 @@ async function createConfigMod(api: types.IExtensionApi, modName: string, profil
   });
 }
 
-export async function onWillEnableMods(api: types.IExtensionApi, profileId: string, modIds: string[], enabled: boolean, options?: any) {
+export async function onWillEnableMods(api: types.IExtensionApi,
+                                       profileId: string,
+                                       modIds: string[],
+                                       enabled: boolean,
+                                       options?: any): Promise<void> {
   const state = api.getState();
   const profile = selectors.profileById(state, profileId);
   if (profile?.gameId !== GAME_ID) {
@@ -306,7 +322,7 @@ export async function onWillEnableMods(api: types.IExtensionApi, profileId: stri
 
   if (options?.installed || options?.willBeReplaced) {
     // Do nothing, the mods are being re-installed.
-    return Promise.resolve();
+    return;
   }
 
   const attrib = extractConfigModAttributes(state, configMod.mod.id);
@@ -321,7 +337,7 @@ export async function onWillEnableMods(api: types.IExtensionApi, profileId: stri
     return;
   }
 
-  const mods: { [modId: string]: types.IMod } = util.getSafe(state, ['persistent', 'mods', GAME_ID], {});
+  const mods: { [modId: string]: types.IMod } = selectSdvMods(state);
   for (const id of relevant) {
     const mod = mods[id];
     if (!mod?.installationPath) {
@@ -383,7 +399,9 @@ export async function onRevertFiles(api: types.IExtensionApi, profileId: string)
   return;
 }
 
-export async function onAddedFiles(api: types.IExtensionApi, profileId: string, files: IFileEntry[]) {
+export async function onAddedFiles(api: types.IExtensionApi,
+                                   profileId: string,
+                                   files: IFileEntry[]): Promise<void> {
   const state = api.store?.getState();
   if (state === undefined) {
     return;
@@ -400,11 +418,8 @@ export async function onAddedFiles(api: types.IExtensionApi, profileId: string, 
     //  this is to avoid pulling SMAPI configuration files into one of the mods installed by Vortex.
     return;
   }
-  const isSMAPIFile = (file: IFileEntry) => {
-    const segments = file.filePath.toLowerCase().split(path.sep).filter(seg => !!seg);
-    return segments.includes('smapi_internal');
-  };
-  const mergeConfigs = util.getSafe(state, ['settings', 'SDV', 'mergeConfigs', profile.id], false);
+  const isSMAPIFile = (file: IFileEntry) => isSmapiInternalPath(file.filePath);
+  const mergeConfigs = selectMergeConfigsEnabled(state, profile.id);
   const result = files.reduce((accum, file) => {
     if (mergeConfigs && !isSMAPIFile(file) && path.basename(file.filePath).toLowerCase() === MOD_CONFIG) {
       accum.configs.push(file);
@@ -413,14 +428,14 @@ export async function onAddedFiles(api: types.IExtensionApi, profileId: string, 
     }
     return accum;
   }, { configs: [] as IFileEntry[], regulars: [] as IFileEntry[] });
-  return Promise.all([
+  await Promise.all([
     addConfigFiles(api, profileId, result.configs),
     addRegularFiles(api, profileId, result.regulars)
   ]);
 }
 
-function extractConfigModAttributes(state: types.IState, configModId: string): any {
-  return util.getSafe(state, ['persistent', 'mods', GAME_ID, configModId, 'attributes', 'configMod'], []);
+function extractConfigModAttributes(state: types.IState, configModId: string): string[] {
+  return selectConfigModAttributes(state, configModId);
 }
 
 function setConfigModAttribute(api: types.IExtensionApi, configModId: string, attributes: string[]) {
@@ -500,7 +515,7 @@ async function addRegularFiles(api: types.IExtensionApi, profileId: string, file
 }
 
 const isModCandidateValid = (mod: types.IMod | undefined, entry: IFileEntry): mod is types.IMod => {
-  if ((mod === undefined) || (mod.id === undefined) || (mod.type === 'sdvrootfolder')) {
+  if ((mod === undefined) || (mod.id === undefined) || (mod.type === MOD_TYPE_ROOT)) {
     // There is no reliable way to ascertain whether a new file entry
     //  actually belongs to a root modType as some of these mods will act
     //  as replacement mods. This obviously means that if the game has
@@ -514,7 +529,7 @@ const isModCandidateValid = (mod: types.IMod | undefined, entry: IFileEntry): mo
     return false;
   }
 
-  if (mod.type !== 'SMAPI') {
+  if (mod.type !== MOD_TYPE_SMAPI) {
     // Other mod types do not require further validation - it should be fine
     //  to add this entry.
     return true;
